@@ -1,0 +1,262 @@
+{
+  "schema": 1,
+  "gstreamer": [
+    {
+      "name": "gstreamer",
+      "version": "1.28.2",
+      "url": "https://gstreamer.freedesktop.org/src/gstreamer/gstreamer-1.28.2.tar.xz",
+      "sha256": "ce5cd44d4ffeafdcc3dddaa072b2179c0b7cb1abf4e6c5d18d4375f8a39fe491"
+    },
+    {
+      "name": "gst-plugins-base",
+      "version": "1.28.2",
+      "url": "https://gstreamer.freedesktop.org/src/gst-plugins-base/gst-plugins-base-1.28.2.tar.xz",
+      "sha256": "4db76b3619280037a4047de7d9dbb38613a4272dcc40efb333257124635a888d"
+    },
+    {
+      "name": "gst-plugins-bad",
+      "version": "1.28.2",
+      "url": "https://gstreamer.freedesktop.org/src/gst-plugins-bad/gst-plugins-bad-1.28.2.tar.xz",
+      "sha256": "6467e3964828f4d7d08bfe1fbb4d76287a1c8fa76674e59e101a149c020fefd7"
+    },
+    {
+      "name": "gst-plugins-good",
+      "version": "1.28.2",
+      "url": "https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.28.2.tar.xz",
+      "sha256": "1ace2d8ec74f632d82eab5006753a27fe0c2402db4ca94d63271e494b62f50bf"
+    }
+  ],
+  "dlstreamer": {
+    "url": "https://github.com/open-edge-platform/dlstreamer.git",
+    "tag": "v2026.2.0",
+    "commit": "ad3f68259b650f1c1aaec694d80cdfcd1055045a",
+    "analytics_patch": "dependencies/patches/0020-gst-analytics.patch",
+    "analytics_patch_sha256": "7f6fd7e52e455389490c6be3e22e7bec4ea201c705bf3962400bc10b830d942d"
+  },
+  "rocm": {
+    "version": "7.2.0",
+    "repository": "https://repo.radeon.com/rocm/apt/7.2/",
+    "packages": [
+      {
+        "Package": "migraphx",
+        "Version": "2.15.0.70200-43~24.04",
+        "Filename": "pool/main/m/migraphx/migraphx_2.15.0.70200-43~24.04_amd64.deb",
+        "Size": "68106238",
+        "SHA256": "b06d48c3097bfb9063eb0da6fc47d79309f2cb0b5ebd7170c7d375aef4f4f9a0"
+      },
+      {
+        "Package": "migraphx-dev",
+        "Version": "2.15.0.70200-43~24.04",
+        "Filename": "pool/main/m/migraphx-dev/migraphx-dev_2.15.0.70200-43~24.04_amd64.deb",
+        "Size": "186218",
+        "SHA256": "d99155727eae05a41f631c179dc1092724c1be256172b31aa5c487247c192072"
+      },
+      {
+        "Package": "hip-runtime-amd",
+        "Version": "7.2.26015.70200-43~24.04",
+        "Filename": "pool/main/h/hip-runtime-amd/hip-runtime-amd_7.2.26015.70200-43~24.04_amd64.deb",
+        "Size": "13364448",
+        "SHA256": "6c84126532d302ecc40ab837cc3042e9dd5f72b319f08772127bed7ca6275037"
+      },
+      {
+        "Package": "hip-dev",
+        "Version": "7.2.26015.70200-43~24.04",
+        "Filename": "pool/main/h/hip-dev/hip-dev_7.2.26015.70200-43~24.04_amd64.deb",
+        "Size": "372784",
+        "SHA256": "a85545d7b05b2d70837ce8a2bc7ea942a45300daed122ff7b2e317b1c8e8e14f"
+      },
+      {
+        "Package": "hsa-rocr",
+        "Version": "1.18.0.70200-43~24.04",
+        "Filename": "pool/main/h/hsa-rocr/hsa-rocr_1.18.0.70200-43~24.04_amd64.deb",
+        "Size": "1660276",
+        "SHA256": "4741b1d34698a426ad9736a675bf9c8456e7239bce5cc03d6a33dbe9dc50776b"
+      },
+      {
+        "Package": "hsa-rocr-dev",
+        "Version": "1.18.0.70200-43~24.04",
+        "Filename": "pool/main/h/hsa-rocr-dev/hsa-rocr-dev_1.18.0.70200-43~24.04_amd64.deb",
+        "Size": "139464",
+        "SHA256": "f48f974a5df1930591e6bcc153c4e6430509f8363dff56829e48b64ac97aab98"
+      },
+      {
+        "Package": "comgr",
+        "Version": "3.0.0.70200-43~24.04",
+        "Filename": "pool/main/c/comgr/comgr_3.0.0.70200-43~24.04_amd64.deb",
+        "Size": "58019192",
+        "SHA256": "fbb1719379fff8b5a8013b3b88a179fe0598d75ff75cf33daa237c78711df3a9"
+      },
+      {
+        "Package": "rocm-core",
+        "Version": "7.2.0.70200-43~24.04",
+        "Filename": "pool/main/r/rocm-core/rocm-core_7.2.0.70200-43~24.04_amd64.deb",
+        "Size": "32690",
+        "SHA256": "2e00e742653cc2ae271113793e0a1106e6a23d229a2a6f596dc90f5820ac4f46"
+      },
+      {
+        "Package": "rocprofiler-register",
+        "Version": "0.6.0.70200-43~24.04",
+        "Filename": "pool/main/r/rocprofiler-register/rocprofiler-register_0.6.0.70200-43~24.04_amd64.deb",
+        "Size": "242886",
+        "SHA256": "3f2bb2f8af06d06f730f8acaea746b05433e9b1c3bc5f0d6dba085b9c469bd1b"
+      },
+      {
+        "Package": "rocminfo",
+        "Version": "1.0.0.70200-43~24.04",
+        "Filename": "pool/main/r/rocminfo/rocminfo_1.0.0.70200-43~24.04_amd64.deb",
+        "Size": "28536",
+        "SHA256": "3ae0dea128f27545e423a0c86101282e487d9e94f7dbb09d7220dd844713de05"
+      },
+      {
+        "Package": "half",
+        "Version": "1.12.0.70200-43~24.04",
+        "Filename": "pool/main/h/half/half_1.12.0.70200-43~24.04_amd64.deb",
+        "Size": "19464",
+        "SHA256": "a2d832972f2ef5ef0841e193c4c9286401498c001c3a4096b4047faedde3684c"
+      },
+      {
+        "Package": "miopen-hip",
+        "Version": "3.5.1.70200-43~24.04",
+        "Filename": "pool/main/m/miopen-hip/miopen-hip_3.5.1.70200-43~24.04_amd64.deb",
+        "Size": "307930150",
+        "SHA256": "6c3105d785a7c339783920663dc51a240ff29a711d99e54ccf0d3848b9c83fd4"
+      },
+      {
+        "Package": "rocblas",
+        "Version": "5.2.0.70200-43~24.04",
+        "Filename": "pool/main/r/rocblas/rocblas_5.2.0.70200-43~24.04_amd64.deb",
+        "Size": "166770168",
+        "SHA256": "737275bf8630063d02981ed17cbc155b9b1b6c296379757a39d78ee0e5fcbc13"
+      },
+      {
+        "Package": "hipblaslt",
+        "Version": "1.2.1.70200-43~24.04",
+        "Filename": "pool/main/h/hipblaslt/hipblaslt_1.2.1.70200-43~24.04_amd64.deb",
+        "Size": "1611419932",
+        "SHA256": "b34184c1dc0a590b6f2b149f423891fd416730deacfd4e4991cc328aa95d60f4"
+      },
+      {
+        "Package": "rocm-device-libs",
+        "Version": "1.0.0.70200-43~24.04",
+        "Filename": "pool/main/r/rocm-device-libs/rocm-device-libs_1.0.0.70200-43~24.04_amd64.deb",
+        "Size": "728288",
+        "SHA256": "cfcb24438de2d181f16ce568d0dfac877164c2dab3784007d5a159fbac708e29"
+      },
+      {
+        "Package": "rocm-llvm",
+        "Version": "22.0.0.26014.70200-43~24.04",
+        "Filename": "pool/main/r/rocm-llvm/rocm-llvm_22.0.0.26014.70200-43~24.04_amd64.deb",
+        "Size": "544602228",
+        "SHA256": "c36ef1ad37e626c09e4a491782ae0f959f33d181dec9445d1a75556f52b39c02"
+      }
+    ]
+  },
+  "ubuntu": {
+    "suite": "noble",
+    "packages": [
+      {
+        "name": "bison",
+        "version": "2:3.8.2+dfsg-1ubuntu0.24.04.1",
+        "filename": "bison_2%3a3.8.2+dfsg-1ubuntu0.24.04.1_amd64.deb",
+        "sha256": "9d75084d1293f68f3c1a2ee677dea5baa4e010bac2d4c455d8e23177e97aa353"
+      },
+      {
+        "name": "flex",
+        "version": "2.6.4-8.2build1",
+        "filename": "flex_2.6.4-8.2build1_amd64.deb",
+        "sha256": "c5604f55827b50e3f568b4731b7799f86b147454c867be02bc141d9d8ce561ff"
+      },
+      {
+        "name": "libfl2",
+        "version": "2.6.4-8.2build1",
+        "filename": "libfl2_2.6.4-8.2build1_amd64.deb",
+        "sha256": "098db71e672ded6e8194eec7132a2ca31dee49022848c7b0f77ce912d99cb445"
+      },
+      {
+        "name": "libjson-glib-1.0-0",
+        "version": "1.8.0-2build2",
+        "filename": "libjson-glib-1.0-0_1.8.0-2build2_amd64.deb",
+        "sha256": "4310fbbd91785adf38d3e0f0d6a94527430c077af8773eb83ec02a1fcbcba089"
+      },
+      {
+        "name": "libjson-glib-dev",
+        "version": "1.8.0-2build2",
+        "filename": "libjson-glib-dev_1.8.0-2build2_amd64.deb",
+        "sha256": "e28dfc12339565a48b5ed115f3933b3b0f7b860364a527a4ac2a333ca9426bff"
+      },
+      {
+        "name": "libopencv-core-dev",
+        "version": "4.6.0+dfsg-13.1ubuntu1",
+        "filename": "libopencv-core-dev_4.6.0+dfsg-13.1ubuntu1_amd64.deb",
+        "sha256": "7d75d19f2f88016f8272aca044f593d0c7932f9e8485be08dbe0973edc7797e9"
+      },
+      {
+        "name": "libopencv-core406t64",
+        "version": "4.6.0+dfsg-13.1ubuntu1",
+        "filename": "libopencv-core406t64_4.6.0+dfsg-13.1ubuntu1_amd64.deb",
+        "sha256": "22c2c50541f11f02ffedde3cb3047a2476b8afae7662c559204e9b02efb7b17c"
+      },
+      {
+        "name": "libopencv-imgproc-dev",
+        "version": "4.6.0+dfsg-13.1ubuntu1",
+        "filename": "libopencv-imgproc-dev_4.6.0+dfsg-13.1ubuntu1_amd64.deb",
+        "sha256": "fca9c2836aa990ff4ad7cd9b0fcbd260d0f8b300e81dc61b99e320d854be6ea9"
+      },
+      {
+        "name": "libopencv-imgproc406t64",
+        "version": "4.6.0+dfsg-13.1ubuntu1",
+        "filename": "libopencv-imgproc406t64_4.6.0+dfsg-13.1ubuntu1_amd64.deb",
+        "sha256": "406b188e044ae15d98746cd1baae4e9085344f40ccb89dc141dfcb6819f6a71d"
+      },
+      {
+        "name": "libtbb-dev",
+        "version": "2021.11.0-2ubuntu2",
+        "filename": "libtbb-dev_2021.11.0-2ubuntu2_amd64.deb",
+        "sha256": "c57e2ffc96ced3f918f7695fa75ff827e0e83d1a306d3de9cb930414013b55b8"
+      },
+      {
+        "name": "libtbb12",
+        "version": "2021.11.0-2ubuntu2",
+        "filename": "libtbb12_2021.11.0-2ubuntu2_amd64.deb",
+        "sha256": "78e2c79f5749fc5c55b32f9745e07d5c3480be574fd4d64bb0325cbec4206b06"
+      },
+      {
+        "name": "libtbbmalloc2",
+        "version": "2021.11.0-2ubuntu2",
+        "filename": "libtbbmalloc2_2021.11.0-2ubuntu2_amd64.deb",
+        "sha256": "3de9b639d4abe5d8f0e0adbb7e26e32bf9de9473b19155d76a3a24c88b62cfea"
+      },
+      {
+        "name": "libva-dev",
+        "version": "2.20.0-2ubuntu0.2",
+        "filename": "libva-dev_2.20.0-2ubuntu0.2_amd64.deb",
+        "sha256": "eb5db2ea52d6da9e28821ca260235dc1ef7520e05276b6856a9145ba0267474c"
+      },
+      {
+        "name": "libva-drm2",
+        "version": "2.20.0-2ubuntu0.2",
+        "filename": "libva-drm2_2.20.0-2ubuntu0.2_amd64.deb",
+        "sha256": "7919c889e0bc8221dcfb595bc0707959354a5404cc1d9b818f85fc43914ca0d4"
+      },
+      {
+        "name": "libva2",
+        "version": "2.20.0-2ubuntu0.2",
+        "filename": "libva2_2.20.0-2ubuntu0.2_amd64.deb",
+        "sha256": "a8ff8d3d16dba715cd24d67c0f8787016194fcee0dee20344a92d057577c0b40"
+      },
+      {
+        "name": "nlohmann-json3-dev",
+        "version": "3.11.3-1",
+        "filename": "nlohmann-json3-dev_3.11.3-1_all.deb",
+        "sha256": "85e4e95dc4bdc6034d593e1933ee88e085319fee36cae83c178e8ddc1a66e8fd"
+      }
+    ]
+  },
+  "python": {
+    "meson": "1.12.1",
+    "ninja": "1.13.2",
+    "openvino": "2026.2.0",
+    "numpy": "2.4.6",
+    "openvino-telemetry": "2025.2.0"
+  }
+}

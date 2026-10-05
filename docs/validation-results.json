@@ -1,0 +1,260 @@
+{
+  "schema": 1,
+  "validation_date": "2026-10-05",
+  "hardware": {
+    "apu": "Ryzen AI 9 HX 370",
+    "gpu": "Radeon 890M",
+    "arch": "gfx1150",
+    "vpe": "6.1.0"
+  },
+  "software": {
+    "kernel": "6.17.0-1032-oem",
+    "mesa": "25.2.8",
+    "rocm": "7.2.0",
+    "migraphx": "2.15.0",
+    "gstreamer": "1.28.2",
+    "dlstreamer": "v2026.2.0",
+    "onnxruntime_reference": "1.24.4",
+    "libva": "2.20.0-2ubuntu0.2",
+    "linux_firmware_package": "20240318.git3b128b60.0ubuntu3.1",
+    "mesa_package": "25.2.8-0ubuntu0.24.04.2",
+    "compiled_model_sha256": "2eb0bc70bb922d7724b6ad617315fb37ecbd1935910f0639747208dbf0f0c5b4"
+  },
+  "dependency_cache": {
+    "passed": true,
+    "checked": 36
+  },
+  "ctest": {
+    "passed": 6,
+    "failed": 0,
+    "tests": [
+      "runtime-contract",
+      "gst-contract",
+      "dlstreamer-metadata-stress",
+      "va-hip-vpe-gate",
+      "preproc-reference",
+      "import-lifetime"
+    ]
+  },
+  "pipeline": {
+    "schema": 1,
+    "dlstreamer": true,
+    "frames_in": 30,
+    "frames_out": 30,
+    "detections": 180,
+    "identity_violations": 0,
+    "fps": 16.7925,
+    "p95_ms": 9.94164,
+    "p99_ms": 10.0229,
+    "buffer_identity_passed": true,
+    "copy_audit_present": true,
+    "copy_audit_passed": true,
+    "copy_violations": 0,
+    "readback_bytes": 216120,
+    "pipeline_zero_copy_verified": true
+  },
+  "cpu_reference": {
+    "passed": true,
+    "cpu_count": 6,
+    "gpu_count": 6,
+    "tolerances": {
+      "min_iou": 0.9,
+      "max_confidence_delta": 0.05
+    },
+    "matches": [
+      {
+        "label": "person",
+        "iou": 0.9927950310559006,
+        "confidence_delta": 0.002327442169189453,
+        "passed": true
+      },
+      {
+        "label": "person",
+        "iou": 0.9958714331176408,
+        "confidence_delta": 0.001264333724975586,
+        "passed": true
+      },
+      {
+        "label": "person",
+        "iou": 0.993103448275862,
+        "confidence_delta": 7.855892181396484e-05,
+        "passed": true
+      },
+      {
+        "label": "person",
+        "iou": 0.9969230769230769,
+        "confidence_delta": 0.0011231303215026855,
+        "passed": true
+      },
+      {
+        "label": "airplane",
+        "iou": 0.997585384592359,
+        "confidence_delta": 0.0008553266525268555,
+        "passed": true
+      },
+      {
+        "label": "bus",
+        "iou": 0.9975299282337091,
+        "confidence_delta": 0.0030869245529174805,
+        "passed": true
+      }
+    ]
+  },
+  "soak": {
+    "schema": 1,
+    "requested_seconds": 3600,
+    "elapsed_seconds": 3605.4777507629988,
+    "returncode": 0,
+    "samples": 721,
+    "fd_growth": 2,
+    "rss_growth_kib": 696,
+    "passed": true,
+    "gpu_alloc_growth_kib": 0,
+    "resource_failure": null,
+    "limits": {
+      "fd_growth": 4,
+      "rss_growth_kib": 65536,
+      "gpu_alloc_growth_kib": 65536
+    },
+    "pipeline": {
+      "schema": 1,
+      "dlstreamer": true,
+      "frames_in": 107970,
+      "frames_out": 107970,
+      "detections": 647820,
+      "identity_violations": 0,
+      "fps": 29.9876,
+      "p95_ms": 10.412,
+      "p99_ms": 10.4895,
+      "buffer_identity_passed": true,
+      "copy_audit_present": true,
+      "copy_audit_passed": true,
+      "copy_violations": 0,
+      "readback_bytes": 777815880,
+      "pipeline_zero_copy_verified": true
+    },
+    "status": "passed",
+    "artifacts": "artifacts/soak-release",
+    "resource_ranges_after_warmup": {
+      "rss_kib": {
+        "min": 1546488,
+        "max": 1547184
+      },
+      "fds": {
+        "min": 12,
+        "max": 14
+      },
+      "gpu_alloc_kib": {
+        "min": 302540,
+        "max": 308748
+      }
+    }
+  },
+  "limitations": [
+    "One gfx1150 APU, one H.264 NV12 BT.709 limited progressive 1080p30 stream, YOLOv8n COCO 640x640.",
+    "Copy auditing observes selected public APIs and buffer identity; it does not trace all driver-internal operations.",
+    "CPU-reference detection comparison covers one fixture frame, not dataset-wide accuracy.",
+    "Active-flush fault injection and GPU-hang recovery are unvalidated."
+  ],
+  "model_graph": {
+    "copy_to_gpu_instructions": 0,
+    "copy_from_gpu_instructions": 0,
+    "evidence": "artifacts/model-compile.log",
+    "compiled_model": "artifacts/yolov8n-gfx1150.mxr"
+  },
+  "preprocessing_reference": {
+    "passed": true,
+    "frames": 2,
+    "surface_reuse": true,
+    "live_tensor_preserved": true
+  },
+  "short_soak": {
+    "schema": 1,
+    "requested_seconds": 120,
+    "elapsed_seconds": 125.01781561100142,
+    "returncode": 0,
+    "samples": 25,
+    "fd_growth": 0,
+    "rss_growth_kib": 10168,
+    "passed": true,
+    "gpu_alloc_growth_kib": 0,
+    "resource_failure": null,
+    "limits": {
+      "fd_growth": 4,
+      "rss_growth_kib": 65536,
+      "gpu_alloc_growth_kib": 65536
+    },
+    "pipeline": {
+      "schema": 1,
+      "dlstreamer": true,
+      "frames_in": 3570,
+      "frames_out": 3570,
+      "detections": 21420,
+      "identity_violations": 0,
+      "fps": 29.5926,
+      "p95_ms": 10.3897,
+      "p99_ms": 10.492,
+      "buffer_identity_passed": true,
+      "copy_audit_present": true,
+      "copy_audit_passed": true,
+      "copy_violations": 0,
+      "readback_bytes": 25718280,
+      "pipeline_zero_copy_verified": true
+    }
+  },
+  "corrected_issues": [
+    "Caller-owned export FD retained by importer: close after mapping.",
+    "Asynchronous MIGraphX device I/O: wait for inference before postprocessing.",
+    "Per-frame new-surface imports retained shared GPU allocations: retain and reuse one intermediate surface and mapping.",
+    "DL Streamer JSON partial getter failure leaked classification label strings: borrow both optional strings."
+  ],
+  "prior_failed_soak": {
+    "elapsed_seconds": 706.381,
+    "passed": false,
+    "cause": "Per-frame newly allocated/imported surface retained GPU allocations; host memory exhausted. Process required forced termination.",
+    "artifact": "artifacts/soak-final/summary.json"
+  },
+  "dlstreamer_metadata_stress": {
+    "frames": 3000,
+    "detections_per_frame": 6,
+    "rss_growth_kib": 8,
+    "limit_kib": 4096,
+    "passed": true
+  },
+  "prior_cpu_growth_failure": {
+    "schema": 1,
+    "requested_seconds": 3600,
+    "elapsed_seconds": 620.5890912020004,
+    "returncode": 0,
+    "samples": 125,
+    "fd_growth": 0,
+    "rss_growth_kib": 65556,
+    "passed": false,
+    "gpu_alloc_growth_kib": 6080,
+    "resource_failure": "missing counter or excessive growth: rss_kib",
+    "limits": {
+      "fd_growth": 4,
+      "rss_growth_kib": 65536,
+      "gpu_alloc_growth_kib": 65536
+    },
+    "pipeline": {
+      "schema": 1,
+      "dlstreamer": true,
+      "frames_in": 18570,
+      "frames_out": 18570,
+      "detections": 111420,
+      "identity_violations": 0,
+      "fps": 29.9317,
+      "p95_ms": 10.3949,
+      "p99_ms": 12.4233,
+      "buffer_identity_passed": true,
+      "copy_audit_present": true,
+      "copy_audit_passed": true,
+      "copy_violations": 0,
+      "readback_bytes": 133778280,
+      "pipeline_zero_copy_verified": true
+    },
+    "status": "failed_cpu_memory_growth"
+  },
+  "acceptance_passed": true
+}

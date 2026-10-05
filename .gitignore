@@ -1,0 +1,10 @@
+.deps/
+build*/
+artifacts/
+__pycache__/
+*.mxr
+*.onnx
+*.mp4
+*.jsonl
+core
+core.*
