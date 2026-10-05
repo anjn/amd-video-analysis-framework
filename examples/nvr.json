@@ -4,6 +4,8 @@
   "model_info": "../artifacts/nvr-model/model-info.json",
   "recording_root": "../artifacts/nvr-recordings",
   "batch_size": 4,
+  "background_ai_enabled": true,
+  "background_ai_interval_seconds": 5,
   "segment_seconds": 60,
   "quota_gib": 100,
   "reserve_gib": 1,

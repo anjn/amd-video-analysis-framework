@@ -1,0 +1,326 @@
+{
+  "schema": 1,
+  "validated_at": "2026-10-06T03:23:21.042761+09:00",
+  "hardware": {
+    "cpu": "AMD Ryzen AI 9 HX 370",
+    "gpu": "AMD Radeon 890M",
+    "gpu_arch": "gfx1150",
+    "vpe": "6.1.0",
+    "kernel": "6.17.0-1032-oem",
+    "linux_memtotal_kib": 14964912
+  },
+  "software": {
+    "gstreamer": "1.28.2",
+    "rocm": "7.2.0",
+    "migraphx": "2.15",
+    "qt": "6.4.2",
+    "mesa": "25.2.8"
+  },
+  "configuration": {
+    "registered_sources": 20,
+    "selected_views": 16,
+    "background_slots": 4,
+    "interval_seconds": 5,
+    "codecs": [
+      "H.264",
+      "H.265"
+    ],
+    "video": "1920x1080 progressive 8-bit NV12 local RTSP/TCP fixtures at 30 FPS",
+    "model": "YOLOv8n COCO FP16 compiled batches 1 and 4"
+  },
+  "ctest": {
+    "passed": true,
+    "tests": 9,
+    "failures": 0,
+    "log": "artifacts/nvr-background-ctest.log"
+  },
+  "single_au_va_decode": {
+    "h264-idr": {
+      "nal_types": {
+        "5": 2
+      },
+      "parser_keys": 2,
+      "passed": true,
+      "frames": 60,
+      "keys": 2,
+      "va_outputs": 2
+    },
+    "h265-idr": {
+      "nal_types": {
+        "20": 1,
+        "21": 1
+      },
+      "parser_keys": 2,
+      "passed": true,
+      "frames": 60,
+      "keys": 2,
+      "va_outputs": 2
+    },
+    "h264-b": {
+      "nal_types": {
+        "5": 1
+      },
+      "parser_keys": 2,
+      "passed": true,
+      "frames": 60,
+      "keys": 1,
+      "va_outputs": 1
+    },
+    "h265-cra": {
+      "nal_types": {
+        "20": 1,
+        "21": 1
+      },
+      "parser_keys": 2,
+      "passed": true,
+      "frames": 60,
+      "keys": 2,
+      "va_outputs": 2
+    },
+    "h265-bla": {
+      "nal_types": {
+        "18": 1,
+        "20": 1
+      },
+      "parser_keys": 2,
+      "passed": true,
+      "frames": 60,
+      "keys": 2,
+      "va_outputs": 2
+    },
+    "h265-bla16": {
+      "nal_types": {
+        "16": 1,
+        "20": 1
+      },
+      "parser_keys": 2,
+      "passed": true,
+      "frames": 60,
+      "keys": 2,
+      "va_outputs": 2
+    },
+    "h265-bla17": {
+      "nal_types": {
+        "17": 1,
+        "20": 1
+      },
+      "parser_keys": 2,
+      "passed": true,
+      "frames": 60,
+      "keys": 2,
+      "va_outputs": 2
+    }
+  },
+  "single_au_notes": "The H.264 open-GOP B-frame fixture has two parser key flags but only its IDR is admitted. All seven fixtures also reject a truncated IDR without parameter sets. BLA fixtures modify the CRA NAL type in a valid encoded AU to exercise BLA 16/17/18; they are synthetic qualification fixtures.",
+  "one_hour": {
+    "passed": true,
+    "failure": null,
+    "duration_s": 3600,
+    "cycles": 100,
+    "server_restarted": true,
+    "recovery_s": 7.500195968000071,
+    "warmup_s": 230,
+    "maximum_growth": {
+      "rss_kib": 22848,
+      "gpu_alloc_kib": 21720,
+      "fds": 4
+    },
+    "recordings_checked": 1309,
+    "invalid_recordings": [],
+    "background": {
+      "maximum_active": 4,
+      "minimum_observed_interval_s": 5.000006,
+      "hidden_channels": [
+        {
+          "id": "cam16",
+          "background_ai": 705,
+          "background_decoded": 705,
+          "background_attempts": 705
+        },
+        {
+          "id": "cam17",
+          "background_ai": 642,
+          "background_decoded": 642,
+          "background_attempts": 642
+        },
+        {
+          "id": "cam18",
+          "background_ai": 644,
+          "background_decoded": 644,
+          "background_attempts": 644
+        },
+        {
+          "id": "cam19",
+          "background_ai": 606,
+          "background_decoded": 606,
+          "background_attempts": 606
+        }
+      ]
+    },
+    "copy_errors": 0,
+    "artifact_directory": "artifacts/nvr-background-hour-final"
+  },
+  "rates_after_reconnect": {
+    "selected_display_fps_median": 29.88342407536325,
+    "selected_ai_fps_median": 5.977705543427526
+  },
+  "all_hidden_batch4": {
+    "passed": true,
+    "failure": null,
+    "duration_s": 70,
+    "cycles": 0,
+    "server_restarted": false,
+    "recovery_s": null,
+    "warmup_s": 60,
+    "maximum_growth": {
+      "rss_kib": 76,
+      "gpu_alloc_kib": 5836,
+      "fds": 0
+    },
+    "recordings_checked": 40,
+    "invalid_recordings": [],
+    "background": {
+      "maximum_active": 4,
+      "minimum_observed_interval_s": 5.000091,
+      "hidden_channels_checked": 20,
+      "minimum_completed_inferences": 11,
+      "maximum_completed_inferences": 13
+    },
+    "copy_errors": 0,
+    "artifact_directory": "artifacts/nvr-background-only-final"
+  },
+  "all_hidden_batch1": {
+    "passed": true,
+    "failure": null,
+    "duration_s": 70,
+    "cycles": 0,
+    "server_restarted": false,
+    "recovery_s": null,
+    "warmup_s": 60,
+    "maximum_growth": {
+      "rss_kib": 7208,
+      "gpu_alloc_kib": 0,
+      "fds": 0
+    },
+    "recordings_checked": 40,
+    "invalid_recordings": [],
+    "background": {
+      "maximum_active": 4,
+      "minimum_observed_interval_s": 5.000056,
+      "hidden_channels_checked": 20,
+      "minimum_completed_inferences": 12,
+      "maximum_completed_inferences": 13
+    },
+    "copy_errors": 0,
+    "artifact_directory": "artifacts/nvr-background-b1"
+  },
+  "long_gop": {
+    "passed": true,
+    "failure": null,
+    "duration_s": 70,
+    "cycles": 0,
+    "server_restarted": false,
+    "recovery_s": null,
+    "warmup_s": 60,
+    "maximum_growth": {
+      "rss_kib": 0,
+      "gpu_alloc_kib": 0,
+      "fds": 0
+    },
+    "recordings_checked": 40,
+    "invalid_recordings": [],
+    "background": {
+      "maximum_active": 4,
+      "minimum_observed_interval_s": 5.000192,
+      "hidden_channels_checked": 20,
+      "minimum_completed_inferences": 2,
+      "maximum_completed_inferences": 12
+    },
+    "copy_errors": 0,
+    "artifact_directory": "artifacts/nvr-background-long-gop"
+  },
+  "long_gop_h264_minimum_observed_interval_seconds": 9.948218,
+  "cpu_references": {
+    "nvr-background-reference": {
+      "passed": true,
+      "channels": [
+        "cam16",
+        "cam18"
+      ],
+      "reference_keyframes": 1,
+      "fp16_nms_ties": 0,
+      "minimum_canonical_nms_iou": 0.9951139841196133,
+      "matched": 12,
+      "minimum_iou": 0.9951139841196133,
+      "maximum_score_delta": 0.0016229748725891113
+    },
+    "nvr-background-only-reference": {
+      "passed": true,
+      "channels": [
+        "cam0",
+        "cam2",
+        "cam16",
+        "cam18"
+      ],
+      "reference_keyframes": 2,
+      "fp16_nms_ties": 3,
+      "minimum_canonical_nms_iou": 0.9300604165917701,
+      "matched": 24,
+      "minimum_iou": 0.9946481486575398,
+      "maximum_score_delta": 0.00277864933013916
+    },
+    "nvr-background-b1-reference": {
+      "passed": true,
+      "channels": [
+        "cam0",
+        "cam2",
+        "cam16",
+        "cam18"
+      ],
+      "reference_keyframes": 2,
+      "fp16_nms_ties": 2,
+      "minimum_canonical_nms_iou": 0.9300604165917701,
+      "matched": 24,
+      "minimum_iou": 0.9946481486575398,
+      "maximum_score_delta": 0.00277864933013916
+    }
+  },
+  "fp16_nms_note": "The second bus IDR has a CPU NMS winner score 0.40703967 and a suppressed alternate score 0.40354115. FP16 chooses the alternate, reproduced by the pre-existing offline GPU executor on the same tensor. Canonical CPU post-NMS IoU is about 0.93 for this box; matching the near-score alternate retains IoU >= 0.95 and score delta <= 0.03. The alternate policy is explicit in the comparison tool and is not a runtime postprocessing change.",
+  "recording_decode": {
+    "passed": true,
+    "files_checked": 20,
+    "frames_per_file": 60,
+    "method": "FFmpeg software decode of the latest recording from each channel",
+    "artifact": "artifacts/nvr-background-recording-decode.json"
+  },
+  "performance_comparison": {
+    "on": {
+      "display_fps_median": 29.862389629230066,
+      "ai_fps_median": 5.977629242613263,
+      "process_cpu_percent": 120.36555303352631,
+      "vcn_engine_ns_per_wall_second": 467409759.7401668,
+      "vpe_engine_ns_per_wall_second": 331875950.28812426,
+      "window_seconds": 50.03923338700042,
+      "duration_seconds": 70
+    },
+    "off": {
+      "display_fps_median": 29.90496372984947,
+      "ai_fps_median": 5.984857102589315,
+      "process_cpu_percent": 121.38186443281357,
+      "vcn_engine_ns_per_wall_second": 476813229.8645772,
+      "vpe_engine_ns_per_wall_second": 342889374.11916274,
+      "window_seconds": 50.04042431200287,
+      "duration_seconds": 70
+    },
+    "notes": "Sequential runs on the same host with no other GPU validation workload. CPU percent is relative to one CPU core. VCN decode work is exposed by this kernel as drm-engine-enc; engine counters are observational, not a throughput guarantee."
+  },
+  "gui_smoke": {
+    "passed": true,
+    "duration_seconds": 15,
+    "exit_code": 0,
+    "displayed_sources": 1,
+    "hidden_sources": 1,
+    "shutdown_signal": "SIGTERM",
+    "log": "artifacts/nvr-background-window.log"
+  }
+}

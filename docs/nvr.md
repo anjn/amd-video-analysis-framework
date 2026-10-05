@@ -2,7 +2,8 @@
 
 `amdva-nvr CONFIG.json` records every registered RTSP source and displays up to
 16 selected sources in a Qt desktop window. YOLOv8n runs on the selected sources
-with a shared MIGraphX batch executor. Source registration has no fixed count
+with a shared MIGraphX batch executor, optionally also analyzing keyframes from
+hidden sources. Source registration has no fixed count
 limit; camera, storage, network and decoder capacity still limit a deployment.
 The initial validated format is progressive, even-sized, 8-bit NV12 up to
 1920×1080, BT.709 limited range, from H.264 or H.265 at 30 FPS. Audio is ignored.
@@ -47,6 +48,49 @@ batch-1 model for partial batches of one. Model-info describes one image. All
 compiled models retain the schema-1 GPU/hash/device-I/O manifest contract; the
 compiler also records the batch size. Dynamic-batch ONNX is exported from the
 weights; changing a fixed-batch ONNX input alone is insufficient.
+
+## Background AI for hidden sources
+
+Set `background_ai_enabled` to `true` to analyze every source whose **View**
+checkbox is unchecked. `background_ai_interval_seconds` is an integer from 1
+through 3600 and defaults to 5. An omitted enable flag defaults to false for
+existing configurations; `examples/nvr.json` enables the feature. Selected
+sources continue using their normal display inference scheduler.
+
+Each hidden source takes the next independently decodable access unit after its
+sampling deadline. H.264 accepts IDR pictures; H.265 accepts IDR, BLA and CRA
+pictures. The compressed parser caches parameter sets by ID, capped at 1 MiB
+per source, and validates slice-header references before admission. An ordinary
+I picture or the absence of `DELTA_UNIT` alone is insufficient. Corrupted units,
+H.264 extensions and multilayer H.265 are excluded. The existing progressive,
+8-bit NV12, size and colorimetry restrictions still apply.
+
+A fresh VA decoder receives cached parameters and exactly one selected AU, then
+EOS to drain reordered output. No dependent pictures are decoded. Decode timeout
+is two seconds; errors affect background AI only. There is no full-stream or CPU
+decode fallback. Recording always receives the original complete compressed
+stream. Compressed headers may be copied on the CPU; decoded pixels remain in
+VAMemory through VPE, HIP and MIGraphX.
+
+Four background slots bound the entire decode-to-inference workload. Each owns
+only a reusable AI surface and mapping, with no preview/EGL resources. When all
+slots are occupied, a candidate is skipped rather than queued. Older sampling
+deadlines have priority, with rotating ties. The five-second deadline starts at
+admission; long GOPs or contention increase the actual interval. Sampling does
+not request extra keyframes from cameras.
+
+Background and displayed images share the existing batch executor. A mixed
+batch admits at most one background image, and background-only batches may fill
+all available batch positions. Partial batches retain the existing batch-1 and
+GPU-padding behavior. Selection, removal and reconnection cancel pending
+background jobs; generation checks reject obsolete completions. Background
+boxes are never reused as display overlays.
+
+The status column reports background mode, completed inference count, detection
+count and result age. `Controller::status()` and the validation JSON telemetry
+also expose decoded/attempt counts, active jobs, capture timestamps and the
+latest class/score/box coordinates. Results are retained in memory only; this
+feature does not create a persistent detection-event database.
 
 ## Pipelines and failure handling
 
@@ -182,3 +226,31 @@ temporarily changes its permissions.
 This sample has no playback, ONVIF discovery, audio recording or 4K performance
 claim. A production NVR should additionally define crash repair, retention
 policy, monitoring, access control and camera-specific qualification.
+
+The optional `nvr-keyframe-tests H264|H265 FILE OUTPUT_PREFIX` executable checks
+single-AU VA decoding and writes extracted AUs for offline reference work.
+Use B-frame/open-GOP fixtures as well as closed-GOP fixtures to distinguish
+ordinary intra pictures from valid random-access pictures. Extracted AUs and
+`amdva-dump-tensor` readbacks are offline test artifacts, not live processing.
+`tools/compare_background_reference.py` compares live background boxes with CPU
+FP32 ONNX detections from matching offline keyframe tensors.
+
+The background reference comparator checks class/count agreement, IoU >= 0.95
+and score delta <= 0.03. With `--allow-fp16-nms-ties`, it also accepts a
+CPU-suppressed overlapping candidate whose score is within 0.005 of the CPU
+winner, retaining those geometric/confidence checks. This addresses measured
+FP16 ranking changes rather than lowering the IoU threshold; the report records
+both the canonical post-NMS IoU and the number of alternate winners. On the
+second bus IDR, one low-confidence box differs from the FP32 NMS winner (IoU
+about 0.93), while matching the alternate CPU candidate above 0.994. The existing
+offline GPU executor reproduces the background result on that same tensor.
+
+Background AI completed the one-hour 20-source / 16-view test with 100 dynamic
+cycles and codec-swapping reconnection, recovering receive/record/display in
+7.5 seconds. All 1,309 MKVs passed metadata checks, and 60 frames from the latest
+recording of every channel decoded successfully. Copy-audit violations were
+zero; maximum RSS/GPU growth was 22.3/21.2 MiB, with at most four background jobs.
+Sequential 70-second runs with background AI enabled/disabled measured display
+medians of 29.86/29.90 FPS and selected AI medians of 5.98/5.98 FPS. These are
+local-fixture observations. Full results and reference-comparison conditions
+are in [background AI validation results](nvr-background-validation-results.json).

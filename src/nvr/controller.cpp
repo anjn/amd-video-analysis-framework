@@ -1,4 +1,5 @@
 #include "controller.hpp"
+#include "keyframe.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -178,6 +179,12 @@ struct Controller::Channel {
     unsigned retries{};
     Clock::time_point reconnect{Clock::now()}, record_retry{};
     uint64_t decode_count_base{}, ai_count_base{};
+    KeyframeCache keyframes;
+    int background_slot{-1};
+    bool background_counted{};
+    Clock::time_point background_due{}, background_deadline{}, background_captured{},
+        background_result_at{};
+    int64_t background_capture_us{};
     Channel(Controller &c, Source source) : controller(c) {
         state.source = std::move(source);
         state.source.selected = false;
@@ -280,25 +287,26 @@ struct Controller::Channel {
              info.colorimetry.range != GST_VIDEO_COLOR_RANGE_16_235))
             return GST_FLOW_NOT_NEGOTIATED;
         // slot and generation cannot change until set_state(NULL) has joined this callback.
-        const int index = c.state.slot;
+        const int index = c.state.slot >= 0 ? c.state.slot : c.background_slot;
         if (index < 0)
             return GST_FLOW_OK;
         auto *crop = gst_buffer_get_video_crop_meta(gst_sample_get_buffer(s.get()));
         if (crop && (crop->x || crop->y || crop->width != unsigned(info.width) ||
                      crop->height != unsigned(info.height)))
             return GST_FLOW_NOT_NEGOTIATED;
-        auto &slot = c.controller.slots_[index];
+        auto &slot = c.controller.ai_slot(index);
         std::lock_guard<std::mutex> l(slot.mutex);
         if (slot.latest.sample && (slot.latest.width != unsigned(info.width) ||
                                    slot.latest.height != unsigned(info.height)))
             slot.detections.clear();
         slot.latest = {std::move(s), c.state.generation, unsigned(info.width),
-                       unsigned(info.height), Clock::now()};
+                       unsigned(info.height), index >= 16 ? c.background_captured : Clock::now()};
         return GST_FLOW_OK;
     }
     void start_receive() {
         try {
             codec = 0;
+            keyframes.reset();
             state.connection = "connecting";
             state.error.clear();
             state.generation = ++controller.next_generation_;
@@ -333,6 +341,94 @@ struct Controller::Channel {
         encoded.clear();
         queued = 0;
     }
+    void cancel_background() {
+        if (background_slot < 0)
+            return;
+        stop_decode();
+        auto &s = controller.ai_slot(background_slot);
+        std::lock_guard<std::mutex> l(s.mutex);
+        s.channel.clear();
+        s.generation = ++controller.next_generation_;
+        s.latest = {};
+        s.detections.clear();
+        s.job_done = false;
+        background_slot = -1;
+        state.background_active = false;
+    }
+    void poll_background() {
+        if (background_slot < 0)
+            return;
+        auto &s = controller.ai_slot(background_slot);
+        bool done = false, decoded = false;
+        {
+            std::lock_guard<std::mutex> l(s.mutex);
+            done = s.job_done;
+            decoded = bool(s.latest.sample);
+            if (decoded && !background_counted) {
+                state.background_decoded++;
+                background_counted = true;
+            }
+            if (done) {
+                state.background_ai++;
+                state.background_detections = s.detections;
+                state.background_capture_us = background_capture_us;
+                background_result_at = s.detected_at;
+            }
+        }
+        if (done) {
+            state.background_state = "waiting for keyframe";
+            cancel_background();
+        } else if (!decoded && Clock::now() >= background_deadline) {
+            state.background_state = "decode timeout";
+            cancel_background();
+        } else if (decoded)
+            state.background_state = "inference queued";
+    }
+    void background(Sample &sample, bool key) {
+        if (!key || background_slot >= 0 || Clock::now() < background_due)
+            return;
+        for (unsigned i = 0; i < controller.background_slots_.size(); ++i) {
+            auto &s = controller.background_slots_[i];
+            {
+                std::lock_guard<std::mutex> l(s.mutex);
+                if (!s.channel.empty())
+                    continue;
+                s.channel = state.source.id;
+                s.generation = state.generation;
+                s.latest = {};
+                s.detections.clear();
+                s.error.clear();
+                s.job_done = false;
+                s.last_ai = {};
+            }
+            background_slot = 16 + i;
+            state.background_active = true;
+            background_counted = false;
+            background_captured = Clock::now();
+            background_capture_us = g_get_real_time();
+            background_due =
+                background_captured +
+                std::chrono::seconds(controller.options_.background_ai_interval_seconds);
+            background_deadline = background_captured + std::chrono::seconds(2);
+            state.background_attempts++;
+            state.background_state = "decoding keyframe";
+            try {
+                start_decoder(gst_sample_get_caps(sample.get()));
+                auto *buffer = keyframes.input(gst_sample_get_buffer(sample.get()));
+                if (!buffer)
+                    throw std::runtime_error("Missing keyframe parameters");
+                const auto flow = gst_app_src_push_buffer(GST_APP_SRC(decode_input), buffer);
+                if (flow != GST_FLOW_OK ||
+                    gst_app_src_end_of_stream(GST_APP_SRC(decode_input)) != GST_FLOW_OK)
+                    throw std::runtime_error("Keyframe submission failed");
+            } catch (const std::exception &) {
+                state.background_state = "keyframe decode failed";
+                cancel_background();
+            }
+            return;
+        }
+        state.background_state = "waiting for capacity";
+    }
     void stop_decode() {
         if (decoder)
             controller.request_reclaim();
@@ -355,8 +451,13 @@ struct Controller::Channel {
             state.gaps++;
         state.error = public_error(error, state.source);
         stop_receive();
+        cancel_background();
         stop_decode();
         end_record();
+        state.background_detections.clear();
+        state.background_capture_us = 0;
+        state.background_age_ms = 0;
+        background_due = {};
         state.connection = "reconnecting";
         state.recording = "waiting";
         state.generation = ++controller.next_generation_;
@@ -475,6 +576,18 @@ struct Controller::Channel {
         }
         if (removed)
             return;
+        poll_background();
+        if (state.background_capture_us)
+            state.background_age_ms =
+                unsigned(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() -
+                                                                               background_result_at)
+                             .count());
+        if (!controller.options_.background_ai_enabled)
+            state.background_state = "disabled";
+        else if (state.slot >= 0)
+            state.background_state = "display AI";
+        else if (background_slot < 0 && state.background_state == "disabled")
+            state.background_state = "waiting for keyframe";
         if (!space) {
             end_record();
             state.recording = "quota paused";
@@ -504,13 +617,23 @@ struct Controller::Channel {
             auto *b = gst_element_get_bus(decoder);
             while (auto *m = gst_bus_pop_filtered(
                        b, GstMessageType(GST_MESSAGE_ERROR | GST_MESSAGE_EOS))) {
-                state.error = "Decoder stopped; waiting for keyframe";
+                const bool error = GST_MESSAGE_TYPE(m) == GST_MESSAGE_ERROR;
                 gst_message_unref(m);
-                stop_decode();
+                if (background_slot >= 0) {
+                    if (error) {
+                        state.background_state = "keyframe decode failed";
+                        cancel_background();
+                    }
+                } else {
+                    state.error = "Decoder stopped; waiting for keyframe";
+                    stop_decode();
+                }
             }
             gst_object_unref(b);
         }
         if (overflow.exchange(false)) {
+            cancel_background();
+            keyframes.reset();
             stop_decode();
             end_record();
             state.gaps++;
@@ -546,6 +669,12 @@ struct Controller::Channel {
                 state.gaps++;
                 record_retry = Clock::now() + std::chrono::seconds(5);
             }
+            const bool independent =
+                controller.options_.background_ai_enabled
+                    ? keyframes.observe(gst_sample_get_buffer(sample.get()), codec.load())
+                    : false;
+            if (state.slot < 0 && controller.options_.background_ai_enabled)
+                background(sample, independent);
             if (state.slot >= 0) {
                 try {
                     if (!decoder && key)
@@ -579,6 +708,9 @@ Controller::Controller(Options options) : options_(std::move(options)) {
     if (options_.batch != 1 && options_.batch != 2 && options_.batch != 4 && options_.batch != 8 &&
         options_.batch != 16)
         throw std::runtime_error("Invalid batch size");
+    if (options_.background_ai_interval_seconds < 1 ||
+        options_.background_ai_interval_seconds > 3600)
+        throw std::runtime_error("Invalid background AI interval");
     if (!options_.segment_seconds || !options_.quota)
         throw std::runtime_error("Invalid recording limits");
     display_ = gst_va_display_drm_new_from_path("/dev/dri/renderD128");
@@ -594,6 +726,13 @@ Controller::Controller(Options options) : options_(std::move(options)) {
             for (auto &p : s.preview)
                 p.surface = s.va->create_bgra(1920, 1080);
         }
+        if (options_.background_ai_enabled)
+            for (auto &s : background_slots_) {
+                s.va = std::make_unique<VaSession>(
+                    static_cast<VADisplay>(gst_va_display_get_va_dpy(display_)));
+                s.ai_surface = s.va->create_bgra(640, 640);
+                s.image = std::make_unique<ImportedSurface>(s.va->export_surface(s.ai_surface));
+            }
         // Keep the startup probe separate from the live processing contexts.
         VaSession gate(static_cast<VADisplay>(gst_va_display_get_va_dpy(display_)));
         const auto test = gate.create_nv12(640, 360, true), output = gate.create_bgra(640, 360);
@@ -622,6 +761,13 @@ Controller::Controller(Options options) : options_(std::move(options)) {
                 s.va.reset();
             }
         }
+        for (auto &s : background_slots_) {
+            s.image.reset();
+            if (s.va)
+                s.va->destroy_surface(s.ai_surface);
+            s.ai_surface = VA_INVALID_SURFACE;
+            s.va.reset();
+        }
         gst_object_unref(display_);
         display_ = nullptr;
         throw;
@@ -644,6 +790,14 @@ Controller::~Controller() {
             p.surface = VA_INVALID_SURFACE;
         }
         s.va->destroy_surface(s.ai_surface);
+        s.ai_surface = VA_INVALID_SURFACE;
+        s.va.reset();
+    }
+    for (auto &s : background_slots_) {
+        s.latest = {};
+        s.image.reset();
+        if (s.va)
+            s.va->destroy_surface(s.ai_surface);
         s.ai_surface = VA_INVALID_SURFACE;
         s.va.reset();
     }
@@ -698,6 +852,7 @@ void Controller::remove(const std::string &id) {
         for (auto &c : channels_)
             if (c->state.source.id == id && !c->removed) {
                 assign(*c, false);
+                c->cancel_background();
                 c->removed = true;
                 c->stop_receive();
                 c->end_record();
@@ -719,6 +874,9 @@ void Controller::assign(Channel &c, bool value) {
             auto &s = slots_[i];
             std::lock_guard<std::mutex> l(s.mutex);
             if (s.channel.empty()) {
+                c.cancel_background();
+                c.state.background_detections.clear();
+                c.state.background_capture_us = 0;
                 c.state.slot = int(i);
                 c.state.source.selected = true;
                 if (c.state.error == "Maximum 16 displayed channels")
@@ -741,6 +899,7 @@ void Controller::assign(Channel &c, bool value) {
         const int i = c.state.slot;
         c.state.slot = -1;
         c.state.source.selected = false;
+        c.background_due = {};
         c.state.generation = ++next_generation_;
         if (i >= 0) {
             auto &s = slots_[i];
@@ -766,6 +925,7 @@ void Controller::loop() {
         std::string storage_error;
         auto quota_at = Clock::now();
         auto stats_at = Clock::now();
+        size_t background_cursor = 0;
         std::map<std::string, std::pair<uint64_t, uint64_t>> counts;
         while (true) {
             std::deque<std::function<void()>> work;
@@ -787,13 +947,21 @@ void Controller::loop() {
                 }
                 quota_at = Clock::now() + std::chrono::seconds(1);
             }
-            for (auto &c : channels_) {
+            // Older background deadlines win; rotate ties across equal-deadline cameras.
+            std::vector<Channel *> order;
+            for (size_t i = 0, n = channels_.size(); i < n; ++i)
+                order.push_back(channels_[(background_cursor + i) % n].get());
+            std::stable_sort(order.begin(), order.end(), [](const auto *a, const auto *b) {
+                return a->background_due < b->background_due;
+            });
+            for (auto *c : order) {
                 c->tick(space);
                 if (!storage_error.empty() && !c->removed) {
                     c->state.recording = "storage paused";
                     c->state.error = "Storage: " + storage_error;
                 }
             }
+            background_cursor++;
             channels_.erase(
                 std::remove_if(channels_.begin(), channels_.end(),
                                [](const auto &c) { return c->removed && c->recordings.empty(); }),
@@ -839,6 +1007,7 @@ void Controller::loop() {
         }
         for (auto &c : channels_) {
             c->stop_receive();
+            c->cancel_background();
             c->stop_decode();
             c->end_record();
         }
@@ -968,7 +1137,8 @@ void Controller::gpu_loop() {
                 single->infer(data, 1);
         }
         inference_ready_ = true;
-        std::array<Sample, 16> previous;
+        std::array<Sample, 20> previous;
+        unsigned background_cursor = 0;
         unsigned cursor = 0;
         double rate = 5;
         auto waiting = Clock::time_point{};
@@ -981,16 +1151,41 @@ void Controller::gpu_loop() {
         while (!stopping_) {
             std::vector<Item> items;
             const auto now = Clock::now();
-            for (unsigned i = 0; i < 16 && items.size() < options_.batch; ++i) {
-                const unsigned index = (cursor + i) % 16;
-                auto &s = slots_[index];
+            std::vector<unsigned> order;
+            for (unsigned i = 0; i < 4; ++i) {
+                const unsigned index = 16 + (background_cursor + i) % 4;
+                auto &s = ai_slot(index);
+                std::lock_guard<std::mutex> l(s.mutex);
+                if (!s.channel.empty() && s.latest.sample && !s.job_done) {
+                    order.push_back(index);
+                    break;
+                }
+            }
+            for (unsigned i = 0; i < 16; ++i)
+                order.push_back((cursor + i) % 16);
+            for (unsigned i = 0; i < 4; ++i) {
+                const unsigned index = 16 + (background_cursor + i) % 4;
+                if (order.empty() || order.front() != index)
+                    order.push_back(index);
+            }
+            for (const auto index : order) {
+                if (items.size() >= options_.batch)
+                    break;
+                if (index >= 16 &&
+                    std::any_of(items.begin(), items.end(),
+                                [](const auto &v) { return v.slot < 16; }) &&
+                    std::any_of(items.begin(), items.end(),
+                                [](const auto &v) { return v.slot >= 16; }))
+                    continue;
+                auto &s = ai_slot(index);
                 std::lock_guard<std::mutex> l(s.mutex);
                 if (s.channel.empty() || !s.latest.sample) {
                     previous[index].reset();
                     continue;
                 }
-                if (s.latest.sample == previous[index] ||
-                    std::chrono::duration<double>(now - s.last_ai).count() < 1.0 / rate)
+                if (s.job_done || s.latest.sample == previous[index] ||
+                    (index < 16 &&
+                     std::chrono::duration<double>(now - s.last_ai).count() < 1.0 / rate))
                     continue;
                 const auto &f = s.latest;
                 const double scale = std::min(640.0 / f.width, 640.0 / f.height);
@@ -1014,7 +1209,7 @@ void Controller::gpu_loop() {
             unsigned valid = 0;
             std::vector<Item> prepared;
             for (auto &item : items) {
-                auto &s = slots_[item.slot];
+                auto &s = ai_slot(item.slot);
                 std::lock_guard<std::mutex> l(s.mutex);
                 if (s.channel != item.channel || s.generation != item.frame.generation)
                     continue;
@@ -1070,7 +1265,7 @@ void Controller::gpu_loop() {
             double desired = std::clamp(capacity, 0.1, 30.0);
             for (unsigned i = 0; i < valid; ++i) {
                 const auto &item = prepared[i];
-                auto &s = slots_[item.slot];
+                auto &s = ai_slot(item.slot);
                 std::lock_guard<std::mutex> l(s.mutex);
                 if (s.channel != item.channel || s.generation != item.frame.generation ||
                     (s.latest.sample &&
@@ -1099,11 +1294,18 @@ void Controller::gpu_loop() {
                 s.detection_width = item.frame.width;
                 s.detection_height = item.frame.height;
                 s.inferred++;
-                if (completed - item.frame.received > std::chrono::milliseconds(200))
+                if (item.slot >= 16) {
+                    s.job_done = true;
+                    background_cursor = (item.slot - 16 + 1) % 4;
+                }
+                if (item.slot < 16 &&
+                    completed - item.frame.received > std::chrono::milliseconds(200))
                     desired = std::min(desired, rate * 0.8);
             }
             rate = std::clamp(rate * 0.8 + desired * 0.2, 0.1, 30.0);
-            cursor = (prepared.back().slot + 1) % 16;
+            for (const auto &item : prepared)
+                if (item.slot < 16)
+                    cursor = (item.slot + 1) % 16;
         }
         hip_check(hipDeviceSynchronize(), "AI shutdown");
     } catch (const std::exception &e) {

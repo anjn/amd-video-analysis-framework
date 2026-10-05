@@ -34,6 +34,10 @@ int main(int argc, char **argv) {
         write(base);
         auto o = load_config(path);
         require(o.batch == 4 && o.segment_seconds == 60, "Defaults");
+        require(!o.background_ai_enabled && o.background_ai_interval_seconds == 5,
+                "Background defaults");
+        o.background_ai_enabled = true;
+        o.background_ai_interval_seconds = 3;
         require(o.model == (dir / "batch.mxr"), "Relative model path");
         require(o.recording_root == (dir / "recordings"), "Relative recording root");
         save_config(path, o);
@@ -41,13 +45,20 @@ int main(int argc, char **argv) {
         stat(path.c_str(), &st);
         require((st.st_mode & 0777) == 0600, "Credential file permissions");
         require(load_config(path).sources[0].uri == o.sources[0].uri, "Credential persistence");
+        require(load_config(path).background_ai_enabled &&
+                    load_config(path).background_ai_interval_seconds == 3,
+                "Background persistence");
         for (const auto &item :
              std::vector<std::pair<QString, QJsonValue>>{{"quota_gib", -1},
                                                          {"quota_gib", "bad"},
                                                          {"reserve_gib", -1},
                                                          {"segment_seconds", 0.5},
                                                          {"batch_size", 3},
-                                                         {"sources", "bad"}}) {
+                                                         {"sources", "bad"},
+                                                         {"background_ai_enabled", "true"},
+                                                         {"background_ai_interval_seconds", 0},
+                                                         {"background_ai_interval_seconds", 3601},
+                                                         {"background_ai_interval_seconds", 1.5}}) {
             auto j = base;
             j[item.first] = item.second;
             write(j);

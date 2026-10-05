@@ -25,6 +25,8 @@ struct Source {
 struct Options {
     std::string model, single_model, model_info, recording_root{"recordings"};
     unsigned batch{4}, segment_seconds{60};
+    bool background_ai_enabled{};
+    unsigned background_ai_interval_seconds{5};
     uint64_t quota{100ull << 30}, reserve{1ull << 30};
     std::vector<Source> sources;
 };
@@ -35,6 +37,12 @@ struct Status {
     uint64_t received{}, decoded{}, ai{}, gaps{}, generation{};
     double display_fps{}, ai_fps{};
     unsigned ai_age_ms{};
+    std::string background_state{"disabled"};
+    uint64_t background_decoded{}, background_ai{}, background_attempts{};
+    unsigned background_age_ms{};
+    bool background_active{};
+    std::vector<Detection> background_detections;
+    int64_t background_capture_us{};
 };
 struct Frame {
     Sample sample;
@@ -67,6 +75,7 @@ struct Slot {
     unsigned target_width{640}, target_height{360};
     uint64_t processed{}, inferred{};
     std::string error;
+    bool job_done{};
     ~Slot();
 };
 class Controller {
@@ -91,6 +100,10 @@ class Controller {
     Options options_;
     GstVaDisplay *display_{};
     std::array<Slot, 16> slots_;
+    std::array<Slot, 4> background_slots_;
+    Slot &ai_slot(unsigned index) {
+        return index < 16 ? slots_[index] : background_slots_[index - 16];
+    }
     std::atomic<bool> stopping_{false}, initial_enqueued_{false};
     uint64_t next_generation_{0};
     std::thread control_, gpu_, preview_;

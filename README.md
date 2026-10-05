@@ -106,4 +106,6 @@ The Qt sample receives and records dynamically registered RTSP cameras, displays
 up to 16 selected H.264/H.265 channels through VA/VPE/EGL, and overlays YOLOv8n
 GPU batch detections. It supports automatic reconnect and quota-based deletion
 of closed managed MKV recordings. See [NVR setup, architecture and verification](docs/nvr.md)
-and [the example configuration](examples/nvr.json).
+and [the example configuration](examples/nvr.json). Optional background AI
+decodes only independently decodable keyframes from hidden sources, at a
+configurable interval (five seconds by default), using four bounded AI slots.

@@ -349,6 +349,13 @@ Options load_config(const std::string &path) {
         throw std::runtime_error("Invalid batch size");
     if (seconds != std::floor(seconds) || seconds < 1 || seconds > 86400)
         throw std::runtime_error("Invalid segment duration");
+    if (j.contains("background_ai_enabled") && !j["background_ai_enabled"].isBool())
+        throw std::runtime_error("Expected boolean background_ai_enabled");
+    o.background_ai_enabled = j["background_ai_enabled"].toBool(false);
+    const double interval = number("background_ai_interval_seconds", 5);
+    if (interval != std::floor(interval) || interval < 1 || interval > 3600)
+        throw std::runtime_error("Invalid background AI interval");
+    o.background_ai_interval_seconds = unsigned(interval);
     o.batch = unsigned(batch);
     const int segment = int(seconds);
     const double quota = number("quota_gib", 100), reserve = number("reserve_gib", 1);
@@ -389,6 +396,8 @@ void save_config(const std::string &path, const Options &o) {
                   {"model_info", qs(o.model_info)},
                   {"recording_root", qs(o.recording_root)},
                   {"batch_size", int(o.batch)},
+                  {"background_ai_enabled", o.background_ai_enabled},
+                  {"background_ai_interval_seconds", int(o.background_ai_interval_seconds)},
                   {"segment_seconds", int(o.segment_seconds)},
                   {"quota_gib", double(o.quota) / (1024 * 1024 * 1024)},
                   {"reserve_gib", double(o.reserve) / (1024 * 1024 * 1024)}};
@@ -520,7 +529,13 @@ void Window::refresh() {
         table_->item(row, 4)->setText(
             QString("%1 / %2").arg(s.display_fps, 0, 'f', 1).arg(s.ai_fps, 0, 'f', 1));
         table_->item(row, 5)->setText(
-            qs(s.error) + QString(" · gaps %1 · AI age %2 ms").arg(s.gaps).arg(s.ai_age_ms));
+            qs(s.error) + QString(" · gaps %1 · AI age %2 ms").arg(s.gaps).arg(s.ai_age_ms) +
+            (options_.background_ai_enabled ? QString(" · BG %1 · runs %2 · boxes %3 · age %4 ms")
+                                                  .arg(qs(s.background_state))
+                                                  .arg(s.background_ai)
+                                                  .arg(s.background_detections.size())
+                                                  .arg(s.background_age_ms)
+                                            : QString{}));
     }
     updating_ = false;
     summary_->setText(QString("%1 sources · batch %2 · %3 ms\n%4\n%5")
