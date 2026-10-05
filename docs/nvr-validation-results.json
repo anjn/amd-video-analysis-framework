@@ -1,0 +1,120 @@
+{
+  "schema": 1,
+  "validated_at": "2026-10-06T01:27:47.651067+09:00",
+  "hardware": {
+    "cpu": "AMD Ryzen AI 9 HX 370",
+    "gpu": "AMD Radeon 890M",
+    "gpu_arch": "gfx1150",
+    "vpe": "6.1.0",
+    "kernel": "6.17.0-1032-oem",
+    "linux_memtotal_kib": 14964912
+  },
+  "software": {
+    "gstreamer": "1.28.2",
+    "rocm": "7.2.0",
+    "migraphx": "2.15",
+    "qt": "6.4.2",
+    "mesa": "25.2.8"
+  },
+  "scope": {
+    "registered": 20,
+    "maximum_displayed": 16,
+    "codecs": [
+      "H.264",
+      "H.265"
+    ],
+    "video": "progressive 8-bit 1920x1080 BT.709 limited range at 30 FPS",
+    "fixtures": "looped pre-encoded bus and blue frames over local RTSP/TCP",
+    "model": "YOLOv8n COCO, FP16 GPU execution, compiled batches 1 and 4"
+  },
+  "dependency_integrity": {
+    "passed": true,
+    "checked": 66,
+    "invalid": []
+  },
+  "ctest": {
+    "passed": true,
+    "tests": 9,
+    "failures": 0,
+    "log": "artifacts/nvr-final-ctest.log"
+  },
+  "cpu_batch_reference": {
+    "passed": true,
+    "valid_batches": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "matched": 32,
+    "minimum_iou": 0.9934031022387795,
+    "maximum_score_delta": 0.004895701580047596
+  },
+  "dynamic_reconnect_and_codec_change": {
+    "passed": true,
+    "failure": null,
+    "duration_s": 320,
+    "cycles": 100,
+    "server_restarted": true,
+    "recovery_s": 7.4999048289999735,
+    "warmup_s": 230,
+    "maximum_growth": {
+      "rss_kib": 12220,
+      "gpu_alloc_kib": 0,
+      "fds": 0
+    },
+    "recordings_checked": 236,
+    "invalid_recordings": []
+  },
+  "one_hour": {
+    "passed": true,
+    "failure": null,
+    "duration_s": 3600,
+    "cycles": 100,
+    "server_restarted": true,
+    "recovery_s": 6.9998332389999405,
+    "warmup_s": 230,
+    "maximum_growth": {
+      "rss_kib": 11200,
+      "gpu_alloc_kib": 7124,
+      "fds": 0
+    },
+    "recordings_checked": 1304,
+    "invalid_recordings": [],
+    "recording_check_method": "ffprobe metadata validation of every finalized MKV"
+  },
+  "steady_rates_after_reconnect": {
+    "selected_channel_display_fps_median": 29.88403646083153,
+    "selected_channel_ai_fps_median": 5.983574495635605
+  },
+  "live_gpu_path": {
+    "copy_errors": 0,
+    "copy_calls": 358086,
+    "copy_bytes": 2579651544,
+    "allocator_layout_queries": 114,
+    "batch": 4,
+    "batch_ms": 23.676348
+  },
+  "gui_smoke": {
+    "passed": true,
+    "duration_s": 15,
+    "exit_code": 0,
+    "signal": "SIGTERM",
+    "log": "artifacts/nvr-window.log"
+  },
+  "artifact_directory": "artifacts/nvr-hour-final-2",
+  "fault_injection": {
+    "passed": true,
+    "storage_error_visible": true,
+    "credential_masking": true,
+    "source_removed": true,
+    "artifact": "artifacts/nvr-faults-final.json"
+  },
+  "recording_decode": {
+    "passed": true,
+    "files_checked": 20,
+    "frames_per_file": 60,
+    "method": "FFmpeg software decode of 60 frames from the latest recording of each registered channel",
+    "artifact": "artifacts/nvr-recording-decode.json"
+  }
+}

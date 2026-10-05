@@ -68,7 +68,7 @@ def main():
         path = DEPS / "packages" / Path(package["Filename"]).name
         download(lock["rocm"]["repository"] + package["Filename"], path, package["SHA256"])
         run("dpkg-deb", "-x", path, DEPS / "rocm72")
-    for name in ("libva", "libva-drm", "json-glib-1.0"):
+    for name in ("libva", "libva-drm", "json-glib-1.0", "sqlite3"):
         path = DEPS / "sysroot/usr/lib/x86_64-linux-gnu/pkgconfig" / f"{name}.pc"
         (DEPS / "pkgconfig" / path.name).write_text(path.read_text().replace("prefix=/usr", f"prefix={DEPS}/sysroot/usr"))
     source = DEPS / "src/dlstreamer"
@@ -98,10 +98,11 @@ def main():
            for item in raw.split(b"\0") if b"=" in item}
     variants = {
         "gstreamer": ["-Dtests=disabled", "-Dexamples=disabled", "-Dintrospection=disabled", "-Ddoc=disabled", "-Dbenchmarks=disabled", "-Dcheck=disabled", "-Dlibdw=disabled", "-Dlibunwind=disabled", "-Dptp-helper=disabled"],
-        "gst-plugins-base": ["-Dauto_features=disabled", "-Dapp=enabled", "-Dvideoconvertscale=enabled", "-Dvideotestsrc=enabled", "-Dtypefind=enabled", "-Dplayback=enabled"],
+        "gst-plugins-base": ["-Dauto_features=disabled", "-Dapp=enabled", "-Dvideoconvertscale=enabled", "-Dvideotestsrc=enabled", "-Dtypefind=enabled", "-Dplayback=enabled", "-Dgio=enabled", "-Dtcp=enabled"],
         "gst-plugins-bad": ["-Dauto_features=disabled", "-Dva=enabled", "-Dvideoparsers=enabled"],
-        "gst-plugins-good": ["-Dauto_features=disabled", "-Dmultifile=enabled"],
+        "gst-plugins-good": ["-Dauto_features=disabled", "-Dmultifile=enabled", "-Drtp=enabled", "-Drtpmanager=enabled", "-Drtsp=enabled", "-Dudp=enabled", "-Dmatroska=enabled"],
     }
+    variants["gst-rtsp-server"] = ["-Dauto_features=disabled", "-Dtests=disabled", "-Dexamples=disabled", "-Dintrospection=disabled"]
     for name, options in variants.items():
         build = DEPS / f"locked-build-{name}"
         command = ["meson", "setup"]
@@ -117,7 +118,7 @@ def main():
     run("cmake", "--build", DEPS / "build-dls", "-j", args.jobs, env=env)
     run("cmake", "--install", DEPS / "build-dls", env=env)
     run("cmake", "-S", ROOT, "-B", ROOT / "build", f"-DAMDVA_ROCM_ROOT={env['AMDVA_ROCM_ROOT']}",
-        "-DCMAKE_BUILD_TYPE=RelWithDebInfo", "-DAMDVA_DLSTREAMER_TESTS=ON", f"-DCMAKE_INSTALL_PREFIX={DEPS}/prefix", env=env)
+        f"-DCMAKE_PREFIX_PATH={DEPS}/sysroot/usr", "-DCMAKE_BUILD_TYPE=RelWithDebInfo", "-DAMDVA_DLSTREAMER_TESTS=ON", f"-DCMAKE_INSTALL_PREFIX={DEPS}/prefix", env=env)
     run("cmake", "--build", ROOT / "build", "-j", args.jobs, env=env)
     run("ctest", "--test-dir", ROOT / "build", "--output-on-failure", env=env)
     return 0

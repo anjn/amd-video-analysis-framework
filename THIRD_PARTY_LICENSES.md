@@ -11,6 +11,9 @@ Retain their license files when packaging a binary distribution.
 | OpenVINO | 2026.2.0 | Apache-2.0, wheel notices |
 | OpenCV | Ubuntu 4.6.0 | Apache-2.0, Ubuntu copyright files |
 | libva / Mesa | host libva 2.20 / Mesa 25.2.8 | Upstream and Ubuntu component notices |
+| Qt | Ubuntu 6.4.2 | LGPL-3.0 / GPL-2.0 / GPL-3.0; retain Ubuntu copyright and Qt notices |
+| SQLite | Ubuntu 3.45.1 | Public domain; retain Ubuntu packaging notices |
+| Ultralytics / PyTorch / ONNX | isolated model export environment | Upstream AGPL-3.0 / BSD-style / Apache-2.0 notices; not linked into the NVR runtime |
 | nlohmann JSON | 3.11.3 | MIT |
 | GLib, json-glib, TBB, build tools | locked packages and host prerequisites | Upstream/Ubuntu license files |
 

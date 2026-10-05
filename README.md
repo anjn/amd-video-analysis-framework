@@ -99,3 +99,11 @@ RTSP recovery, NPU execution and UI are subsequent development stages.
 New code is MIT licensed. External sources remain separately licensed; see
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). Model and sample-image terms
 must be checked separately before redistribution.
+
+## Desktop NVR sample
+
+The Qt sample receives and records dynamically registered RTSP cameras, displays
+up to 16 selected H.264/H.265 channels through VA/VPE/EGL, and overlays YOLOv8n
+GPU batch detections. It supports automatic reconnect and quota-based deletion
+of closed managed MKV recordings. See [NVR setup, architecture and verification](docs/nvr.md)
+and [the example configuration](examples/nvr.json).

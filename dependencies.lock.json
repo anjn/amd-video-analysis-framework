@@ -24,6 +24,12 @@
       "version": "1.28.2",
       "url": "https://gstreamer.freedesktop.org/src/gst-plugins-good/gst-plugins-good-1.28.2.tar.xz",
       "sha256": "1ace2d8ec74f632d82eab5006753a27fe0c2402db4ca94d63271e494b62f50bf"
+    },
+    {
+      "name": "gst-rtsp-server",
+      "version": "1.28.2",
+      "url": "https://gstreamer.freedesktop.org/src/gst-rtsp-server/gst-rtsp-server-1.28.2.tar.xz",
+      "sha256": "917c58b9ff14f91a6b5cd1c3af16c9fcfdf5d8d78d3d167c7e8fa5bdda35f947"
     }
   ],
   "dlstreamer": {
@@ -249,6 +255,180 @@
         "version": "3.11.3-1",
         "filename": "nlohmann-json3-dev_3.11.3-1_all.deb",
         "sha256": "85e4e95dc4bdc6034d593e1933ee88e085319fee36cae83c178e8ddc1a66e8fd"
+      },
+      {
+        "name": "libb2-1",
+        "version": "0.98.1-1.1build1",
+        "filename": "libb2-1_0.98.1-1.1build1_amd64.deb",
+        "sha256": "c23173e035b257118540266098bd4f1928c67d918ad981b1e13e6e0d9847d69c"
+      },
+      {
+        "name": "libqt6core6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6core6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "1f6e26589271c1d7aa549cb86d0156ff589b764d37edf356712fecebfe5f30f8"
+      },
+      {
+        "name": "libqt6concurrent6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6concurrent6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "458bcc5f69954fed963354f248ab5ab78b9a06f5823f9e2a4b88a6e32fa940c6"
+      },
+      {
+        "name": "libqt6dbus6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6dbus6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "20891a752f6569b8b0772b0c81b7251eb3394fdef57bf52870f4825cb0e9c0de"
+      },
+      {
+        "name": "libts0t64",
+        "version": "1.22-1.1build1",
+        "filename": "libts0t64_1.22-1.1build1_amd64.deb",
+        "sha256": "892524fd6a070e9e6a6b084d3a4099b81d6fbbd82a1c7bd4b67a8e6e998ac5a3"
+      },
+      {
+        "name": "libqt6gui6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6gui6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "f8774151f151a932d389817a371a3241004b1c3031cf53afd91feed73c8dd68e"
+      },
+      {
+        "name": "libqt6network6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6network6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "743f289d5f7b1a4cafa021de62bcd705122bad06ba5d3a2c971fd7d34b87752f"
+      },
+      {
+        "name": "libqt6opengl6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6opengl6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "dc7b43aa74d5694ab10e02bee7751c1bea0905ed6f0aaf527bff1952c582403f"
+      },
+      {
+        "name": "libqt6widgets6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6widgets6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "9d5aba1eeb471c1230a94eb1865a95df0595ed8311971acf50fff2652452562d"
+      },
+      {
+        "name": "libqt6openglwidgets6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6openglwidgets6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "68a328430e1d354532d718969c74f2df4579777375d3a47d5e2bc999819cdc9d"
+      },
+      {
+        "name": "libqt6printsupport6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6printsupport6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "5e068edcc290d740bcbf34d2bcc7be8efb738f47bb2460849742ba221cbb7b15"
+      },
+      {
+        "name": "libqt6qml6",
+        "version": "6.4.2+dfsg-4build3",
+        "filename": "libqt6qml6_6.4.2+dfsg-4build3_amd64.deb",
+        "sha256": "e490f2df6ddba340f50b061d7a48dbdd0fa8bc418cfa3713d2641e794ad2aff4"
+      },
+      {
+        "name": "libqt6qmlmodels6",
+        "version": "6.4.2+dfsg-4build3",
+        "filename": "libqt6qmlmodels6_6.4.2+dfsg-4build3_amd64.deb",
+        "sha256": "859d0fc930633cda2bf07a0e0725b98e2a9f268b1c169c0575c49c7accd821db"
+      },
+      {
+        "name": "libqt6quick6",
+        "version": "6.4.2+dfsg-4build3",
+        "filename": "libqt6quick6_6.4.2+dfsg-4build3_amd64.deb",
+        "sha256": "85e7c9973b88b102202164a2f7f0766f3a717196dc92e5bb7ef05e57af50b2be"
+      },
+      {
+        "name": "libqt6sql6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6sql6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "35155bb0ef40d8769004f75a2a000029f86adfdd3cd76a14eeab2e68951f407e"
+      },
+      {
+        "name": "libqt6test6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6test6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "7d0f27c84fab37ec9f574d8cb47f117d411bceffba2eada10436928bccb22537"
+      },
+      {
+        "name": "libqt6waylandclient6",
+        "version": "6.4.2-5build3",
+        "filename": "libqt6waylandclient6_6.4.2-5build3_amd64.deb",
+        "sha256": "e6c669a21e019e67393dcecdbc22a396b66ebcee7cfc261f9ba673070af99946"
+      },
+      {
+        "name": "libqt6waylandcompositor6",
+        "version": "6.4.2-5build3",
+        "filename": "libqt6waylandcompositor6_6.4.2-5build3_amd64.deb",
+        "sha256": "2a64210011c85071675e7e00730ae56b823a0fb603449d6b32c3ea1d4471d5ec"
+      },
+      {
+        "name": "libqt6waylandeglclienthwintegration6",
+        "version": "6.4.2-5build3",
+        "filename": "libqt6waylandeglclienthwintegration6_6.4.2-5build3_amd64.deb",
+        "sha256": "d0caf28f9ccc3e9b3ff495fe1dedef2b4301a5e3b2c15f0a6d8948736c8fd962"
+      },
+      {
+        "name": "libqt6waylandeglcompositorhwintegration6",
+        "version": "6.4.2-5build3",
+        "filename": "libqt6waylandeglcompositorhwintegration6_6.4.2-5build3_amd64.deb",
+        "sha256": "3258b0f5522e156607ed2cb4a5e2aee3e2ea622a38279821bc1327851f21c33c"
+      },
+      {
+        "name": "libqt6wlshellintegration6",
+        "version": "6.4.2-5build3",
+        "filename": "libqt6wlshellintegration6_6.4.2-5build3_amd64.deb",
+        "sha256": "75255f4a95ee3873259f71cab65570a3733d729df5a0c861b1b61c95f6345064"
+      },
+      {
+        "name": "libqt6xml6t64",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "libqt6xml6t64_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "7999c22f56a9b8d23e4d5e7cd7d0e679df581c8e72015baaa4e2b870746245ad"
+      },
+      {
+        "name": "libsqlite3-dev",
+        "version": "3.45.1-1ubuntu2.8",
+        "filename": "libsqlite3-dev_3.45.1-1ubuntu2.8_amd64.deb",
+        "sha256": "61e688e7ced1c6f7c0b66721e46fd996f891489654dbf382daa98e17ee3ae192"
+      },
+      {
+        "name": "qmake6-bin",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "qmake6-bin_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "85005a23941c2ac634d02758ffcb7dd9ddaebe88aa15b3bcf4914ca3ee3774e7"
+      },
+      {
+        "name": "qmake6",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "qmake6_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "2226948252b282854a26311054930964895863fdcab65151591ea11a1a1731e6"
+      },
+      {
+        "name": "qt6-base-dev-tools",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "qt6-base-dev-tools_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "6d24069f67e2ffdde4b7295780ebc89673d7ee66a1ecf9cc383405d0d651fb23"
+      },
+      {
+        "name": "qt6-qpa-plugins",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "qt6-qpa-plugins_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "10999ac52ea568d6d4ea896b16ccf931b1eb2fd9e96e058a743f00e2e7f099d2"
+      },
+      {
+        "name": "qt6-base-dev",
+        "version": "6.4.2+dfsg-21.1build5",
+        "filename": "qt6-base-dev_6.4.2+dfsg-21.1build5_amd64.deb",
+        "sha256": "f81ea0070597621c2a1027d753c343c8204a2fce601b1a92d6e264d909a32bfb"
+      },
+      {
+        "name": "qt6-wayland",
+        "version": "6.4.2-5build3",
+        "filename": "qt6-wayland_6.4.2-5build3_amd64.deb",
+        "sha256": "61ea3237974e71188c699e3554f08b8b2dc29e6854d727ff60627ec0570de6cd"
       }
     ]
   },
@@ -258,5 +438,17 @@
     "openvino": "2026.2.0",
     "numpy": "2.4.6",
     "openvino-telemetry": "2025.2.0"
+  },
+  "model_export": {
+    "torch": {
+      "torch": "2.8.0",
+      "torchvision": "0.23.0"
+    },
+    "python": {
+      "ultralytics": "8.3.203",
+      "onnx": "1.18.0",
+      "onnxslim": "0.1.71",
+      "onnxruntime": "1.24.4"
+    }
   }
 }

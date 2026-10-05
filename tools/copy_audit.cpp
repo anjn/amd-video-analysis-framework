@@ -3,9 +3,13 @@
 #include <atomic>
 #include <cstdio>
 #include <dlfcn.h>
+#include <mutex>
+#include <set>
 namespace {
 std::atomic<bool> active{false};
-std::atomic<unsigned long long> violations{0},copies{0},bytes{0};
+std::atomic<unsigned long long> violations{0},copies{0},bytes{0},layout_queries{0};
+struct Surfaces {std::mutex mutex;std::set<std::pair<VADisplay,VASurfaceID>> unused;};
+Surfaces& surfaces(){static Surfaces value;return value;}
 template<class F> F original(const char* name) {return reinterpret_cast<F>(dlsym(RTLD_NEXT,name));}
 void copy(size_t size,hipMemcpyKind kind) {
     if(!active.load())return;
@@ -24,6 +28,7 @@ extern "C" void amdva_audit_start() {active=true;}
 extern "C" unsigned long long amdva_audit_errors() {return violations.load();}
 extern "C" unsigned long long amdva_audit_copies() {return copies.load();}
 extern "C" unsigned long long amdva_audit_bytes() {return bytes.load();}
+extern "C" unsigned long long amdva_audit_layout_queries() {return layout_queries.load();}
 extern "C" void amdva_audit_stop() {active=false;}
 extern "C" hipError_t hipMemcpy(void* dst,const void* src,size_t size,hipMemcpyKind kind) {
     copy(size,kind);auto f=original<decltype(&hipMemcpy)>("hipMemcpy");return f?f(dst,src,size,kind):hipErrorNotSupported;
@@ -49,11 +54,30 @@ extern "C" gboolean gst_memory_map(GstMemory* memory,GstMapInfo* info,GstMapFlag
     auto f=original<decltype(&gst_memory_map)>("gst_memory_map");return f?f(memory,info,flags):FALSE;
 }
 extern "C" VAStatus vaDeriveImage(VADisplay d,VASurfaceID s,VAImage* i) {
-    image_operation("vaDeriveImage");auto f=original<decltype(&vaDeriveImage)>("vaDeriveImage");return f?f(d,s,i):VA_STATUS_ERROR_OPERATION_FAILED;
+    // GStreamer's allocator derives a newly-created, never-rendered test
+    // surface only to discover pitches. It destroys the image without mapping
+    // or copying pixels. Live decoded/VPE surfaces are never exempted.
+    bool layout=false;{auto& registry=surfaces();std::lock_guard<std::mutex> lock(registry.mutex);layout=registry.unused.count({d,s})!=0;}
+    if(layout){if(active.load())++layout_queries;}else image_operation("vaDeriveImage");auto f=original<decltype(&vaDeriveImage)>("vaDeriveImage");return f?f(d,s,i):VA_STATUS_ERROR_OPERATION_FAILED;
 }
 extern "C" VAStatus vaGetImage(VADisplay d,VASurfaceID s,int x,int y,unsigned w,unsigned h,VAImageID i) {
     image_operation("vaGetImage");auto f=original<decltype(&vaGetImage)>("vaGetImage");return f?f(d,s,x,y,w,h,i):VA_STATUS_ERROR_OPERATION_FAILED;
 }
 extern "C" VAStatus vaPutImage(VADisplay d,VASurfaceID s,VAImageID i,int sx,int sy,unsigned sw,unsigned sh,int dx,int dy,unsigned dw,unsigned dh) {
     image_operation("vaPutImage");auto f=original<decltype(&vaPutImage)>("vaPutImage");return f?f(d,s,i,sx,sy,sw,sh,dx,dy,dw,dh):VA_STATUS_ERROR_OPERATION_FAILED;
+}
+
+extern "C" VAStatus vaCreateSurfaces(VADisplay d,unsigned format,unsigned w,unsigned h,VASurfaceID* ids,unsigned count,VASurfaceAttrib* attrs,unsigned attr_count) {
+    auto f=original<decltype(&vaCreateSurfaces)>("vaCreateSurfaces");if(!f)return VA_STATUS_ERROR_OPERATION_FAILED;
+    const auto result=f(d,format,w,h,ids,count,attrs,attr_count);
+    if(result==VA_STATUS_SUCCESS){auto& registry=surfaces();std::lock_guard<std::mutex> lock(registry.mutex);for(unsigned i=0;i<count;++i)registry.unused.insert({d,ids[i]});}
+    return result;
+}
+extern "C" VAStatus vaBeginPicture(VADisplay d,VAContextID context,VASurfaceID target) {
+    {auto& registry=surfaces();std::lock_guard<std::mutex> lock(registry.mutex);registry.unused.erase({d,target});}
+    auto f=original<decltype(&vaBeginPicture)>("vaBeginPicture");return f?f(d,context,target):VA_STATUS_ERROR_OPERATION_FAILED;
+}
+extern "C" VAStatus vaDestroySurfaces(VADisplay d,VASurfaceID* ids,int count) {
+    {auto& registry=surfaces();std::lock_guard<std::mutex> lock(registry.mutex);for(int i=0;i<count;++i)registry.unused.erase({d,ids[i]});}
+    auto f=original<decltype(&vaDestroySurfaces)>("vaDestroySurfaces");return f?f(d,ids,count):VA_STATUS_ERROR_OPERATION_FAILED;
 }

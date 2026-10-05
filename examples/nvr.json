@@ -1,0 +1,24 @@
+{
+  "model": "../artifacts/nvr-model/yolov8n-b4.mxr",
+  "single_model": "../artifacts/nvr-model/yolov8n-b1.mxr",
+  "model_info": "../artifacts/nvr-model/model-info.json",
+  "recording_root": "../artifacts/nvr-recordings",
+  "batch_size": 4,
+  "segment_seconds": 60,
+  "quota_gib": 100,
+  "reserve_gib": 1,
+  "sources": [
+    {
+      "id": "camera-1",
+      "name": "Camera 1",
+      "uri": "rtsp://127.0.0.1:8554/cam0",
+      "selected": true
+    },
+    {
+      "id": "camera-2",
+      "name": "Camera 2",
+      "uri": "rtsp://127.0.0.1:8554/cam1",
+      "selected": true
+    }
+  ]
+}
