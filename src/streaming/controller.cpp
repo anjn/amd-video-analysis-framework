@@ -441,6 +441,9 @@ struct Controller::Channel {
                 auto *buffer = keyframes.input(gst_sample_get_buffer(sample.get()));
                 if (!buffer)
                     throw std::runtime_error("Missing keyframe parameters");
+                // Header prepending creates a new compressed buffer; retain the AU identity.
+                set_frame_trace(buffer, frame_trace(gst_sample_get_buffer(sample.get())));
+                decode_timing->submit(buffer);
                 const auto flow = gst_app_src_push_buffer(GST_APP_SRC(decode_input), buffer);
                 if (flow != GST_FLOW_OK ||
                     gst_app_src_end_of_stream(GST_APP_SRC(decode_input)) != GST_FLOW_OK)
