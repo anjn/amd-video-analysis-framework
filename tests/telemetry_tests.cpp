@@ -75,6 +75,33 @@ int main() {
         check(swap.ns[unsigned(TimingStage::Draw)] == draw.ns[unsigned(TimingStage::Draw)],
               "Copies recover canonical ancestor timestamps");
         check(t->snapshot().latency[0][6].mean_ms == 2, "Cross-copy draw/swap interval");
+        Telemetry exact("exact", {}, [&] { return at; });
+        exact.begin_generation();
+        exact.availability(TimingStage::DecodeOutput, true, true);
+        check(exact.snapshot().stages[0][3].age_ms == -1, "No invented first observation age");
+        for (unsigned i = 1; i <= 100; i++) {
+            auto frame = exact.frame(at);
+            at += i * 1000000LL;
+            exact.mark(frame, TimingStage::DecodeOutput);
+        }
+        auto distribution = exact.snapshot().latency[0][0];
+        check(distribution.samples == 100 && distribution.mean_ms == 50.5 &&
+                  distribution.p95_ms == 95 && distribution.p99_ms == 99 &&
+                  distribution.maximum_ms == 100,
+              "Exact nearest-rank percentiles and mean");
+        at += 1200000000LL;
+        exact.activity(TimingStage::DecodeOutput, false);
+        auto paused = exact.snapshot().stages[0][3];
+        check(paused.stops == 1 && paused.stopped_ms == 1200 && !paused.stalled,
+              "Pause accounts gap without intermediate snapshots");
+        exact.activity(TimingStage::DecodeOutput, true);
+        auto restarted = exact.frame(at);
+        exact.mark(restarted, TimingStage::DecodeOutput);
+        at += 1300000000LL;
+        exact.begin_generation();
+        check(exact.snapshot().stages[0][3].stops == 2 &&
+                  exact.snapshot().stages[0][3].stopped_ms == 2500,
+              "Generation retirement accounts final observed gap");
         Telemetry disabled("off", {false, 1000}, [&] { return at; });
         auto empty = disabled.frame(at);
         check(!disabled.mark(empty, TimingStage::Draw) && !disabled.snapshot().enabled, "Disabled");

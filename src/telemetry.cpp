@@ -154,8 +154,9 @@ void Telemetry::begin_generation(uint64_t generation) {
     s.seen.clear();
     s.started = now();
     s.latency = {};
-    for (auto &group : s.stage)
-        for (auto &v : group) {
+    for (unsigned g = 0; g < 2; g++)
+        for (auto &v : s.stage[g]) {
+            v.update(s.started, int64_t(s.options.stall_ms) * 1000000, g == 0);
             v.close_stop(s.started);
             v.last = 0;
             v.active_since = s.started;
@@ -172,12 +173,14 @@ void Telemetry::activity(TimingStage stage, bool active) {
         return;
     auto &s = *impl_;
     std::lock_guard<std::mutex> lock(s.mutex);
-    for (auto &group : s.stage) {
-        auto &v = group[unsigned(stage)];
-        if (v.status.active != active) {
-            v.close_stop(now());
+    const auto at = now();
+    for (unsigned g = 0; g < 2; g++) {
+        auto &v = s.stage[g][unsigned(stage)];
+        if (v.status.active != (v.status.supported && active)) {
+            v.update(at, int64_t(s.options.stall_ms) * 1000000, g == 0);
+            v.close_stop(at);
             v.last = 0;
-            v.active_since = now();
+            v.active_since = at;
             v.intervals = {};
             v.arrivals = {};
         }
@@ -277,12 +280,14 @@ void Telemetry::availability(TimingStage stage, bool supported, bool active) {
         return;
     auto &s = *impl_;
     std::lock_guard<std::mutex> lock(s.mutex);
-    for (auto &group : s.stage) {
-        auto &v = group[unsigned(stage)];
-        if (v.status.active != active) {
-            v.close_stop(now());
+    const auto at = now();
+    for (unsigned g = 0; g < 2; g++) {
+        auto &v = s.stage[g][unsigned(stage)];
+        if (v.status.active != (supported && active)) {
+            v.update(at, int64_t(s.options.stall_ms) * 1000000, g == 0);
+            v.close_stop(at);
             v.last = 0;
-            v.active_since = now();
+            v.active_since = at;
             v.intervals = {};
             v.arrivals = {};
         }
