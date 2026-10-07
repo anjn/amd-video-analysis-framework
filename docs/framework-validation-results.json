@@ -1,0 +1,277 @@
+{
+  "schema": 1,
+  "validated_at": "2026-10-07T16:14:46.733285+09:00",
+  "implementation_commit": "06f92ab",
+  "hardware": {
+    "cpu": "AMD Ryzen AI 9 HX 370",
+    "gpu": "AMD Radeon 890M",
+    "gpu_arch": "gfx1150",
+    "vpe": "6.1.0",
+    "kernel": "6.17.0-1032-oem",
+    "linux_memtotal_kib": 14964912
+  },
+  "software": {
+    "gstreamer": "1.28.2",
+    "rocm": "7.2.0",
+    "migraphx": "2.15",
+    "qt": "6.4.2",
+    "mesa": "25.2.8",
+    "dlstreamer": "v2026.2.0",
+    "paho_mqtt": "1.3.13",
+    "librdkafka": "2.3.0"
+  },
+  "scope": "Main video analytics; AMD APIs and metadata interop, not complete gva/model-proc drop-in compatibility.",
+  "ctest": {
+    "passed": true,
+    "tests": 14,
+    "failures": 0,
+    "artifact_log": "artifacts/framework-final-ctest.log"
+  },
+  "gpu_pipeline_audit": {
+    "passed": true,
+    "violations": 0,
+    "cases": [
+      "flush/caps/VA-display replacement",
+      "detector/tracker/ROI classification/Python/watermark",
+      "pose",
+      "semantic segmentation",
+      "instance segmentation metadata aggregation",
+      "heterogeneous stream mux/B4 inference/demux"
+    ],
+    "artifact_log": "artifacts/framework-final-pipeline-audit.log"
+  },
+  "reference_models": {
+    "passed": true,
+    "models": {
+      "resnet18": {
+        "outputs": [
+          {
+            "relative_l2_error": 0.0022096692118793726,
+            "maximum_absolute_error": 0.02264404296875
+          }
+        ],
+        "top_k_match": true
+      },
+      "yolov8n-seg": {
+        "outputs": [
+          {
+            "relative_l2_error": 0.001089434139430523,
+            "maximum_absolute_error": 10.383056640625
+          },
+          {
+            "relative_l2_error": 0.005626387894153595,
+            "maximum_absolute_error": 0.03627043962478638
+          }
+        ],
+        "objects_matched": 4,
+        "minimum_instance_mask_iou": 0.9897435897435898
+      },
+      "yolov8n-pose": {
+        "outputs": [
+          {
+            "relative_l2_error": 0.0003922100004274398,
+            "maximum_absolute_error": 4.691947937011719
+          }
+        ],
+        "objects_matched": 4
+      },
+      "segformer-b0": {
+        "outputs": [
+          {
+            "relative_l2_error": 0.0012486641062423587,
+            "maximum_absolute_error": 0.10261917114257812
+          }
+        ],
+        "semantic_mask_agreement": 0.9989013671875
+      },
+      "yolov8n": {
+        "outputs": [
+          {
+            "relative_l2_error": 0.001355328131467104,
+            "maximum_absolute_error": 14.6004638671875
+          }
+        ],
+        "objects_matched": 6
+      }
+    }
+  },
+  "dependencies": {
+    "passed": true,
+    "cached_downloads_checked": 72
+  },
+  "nvr_one_hour": {
+    "passed": true,
+    "failure": null,
+    "duration_s": 3600,
+    "cycles": 100,
+    "server_restarted": true,
+    "recovery_s": 6.999953720000008,
+    "warmup_s": 230,
+    "maximum_growth": {
+      "rss_kib": 23144,
+      "gpu_alloc_kib": 34656,
+      "fds": 2
+    },
+    "recordings_checked": 1307,
+    "invalid_recordings": [],
+    "background": {
+      "maximum_active": 4,
+      "minimum_observed_interval_s": 5.000001,
+      "hidden_channels": [
+        {
+          "id": "cam16",
+          "background_ai": 706,
+          "background_decoded": 706,
+          "background_attempts": 706
+        },
+        {
+          "id": "cam17",
+          "background_ai": 644,
+          "background_decoded": 644,
+          "background_attempts": 644
+        },
+        {
+          "id": "cam18",
+          "background_ai": 642,
+          "background_decoded": 642,
+          "background_attempts": 642
+        },
+        {
+          "id": "cam19",
+          "background_ai": 600,
+          "background_decoded": 600,
+          "background_attempts": 600
+        }
+      ]
+    },
+    "copy_errors": 0,
+    "last_live": 20,
+    "last_recording": 20,
+    "artifact_directory": "artifacts/framework-nvr-hour"
+  },
+  "performance": {
+    "window_start_seconds": 720,
+    "selected_channel_samples": 92176,
+    "median_fps": {
+      "display_fps": 29.88299718859567,
+      "ai_fps": 5.966063408562848
+    },
+    "baseline": {
+      "selected_display_fps_median": 29.88342407536325,
+      "selected_ai_fps_median": 5.977705543427526
+    },
+    "baseline_report": "docs/nvr-background-validation-results.json",
+    "ratios": {
+      "display_fps": 0.999985714931244,
+      "ai_fps": 0.998052407436248
+    },
+    "minimum_required_ratio": 0.9,
+    "passed": true,
+    "notes": "Same host and RTSP fixtures. Additional GPU contract/model tests and a final 90-second NVR regression overlapped portions of the soak; these are observed rates, not an isolated benchmark."
+  },
+  "nvr_final_build": {
+    "passed": true,
+    "failure": null,
+    "duration_s": 90,
+    "cycles": 5,
+    "server_restarted": true,
+    "recovery_s": 6.999983602999997,
+    "warmup_s": 60,
+    "maximum_growth": {
+      "rss_kib": 1496,
+      "gpu_alloc_kib": 3840,
+      "fds": 0
+    },
+    "recordings_checked": 45,
+    "invalid_recordings": [],
+    "background": {
+      "maximum_active": 4,
+      "minimum_observed_interval_s": 5.000433,
+      "hidden_channels": [
+        {
+          "id": "cam16",
+          "background_ai": 18,
+          "background_decoded": 18,
+          "background_attempts": 18
+        },
+        {
+          "id": "cam17",
+          "background_ai": 16,
+          "background_decoded": 16,
+          "background_attempts": 16
+        },
+        {
+          "id": "cam18",
+          "background_ai": 17,
+          "background_decoded": 17,
+          "background_attempts": 17
+        },
+        {
+          "id": "cam19",
+          "background_ai": 11,
+          "background_decoded": 11,
+          "background_attempts": 11
+        }
+      ]
+    },
+    "copy_errors": 0,
+    "last_live": 20,
+    "last_recording": 20,
+    "artifact_directory": "artifacts/framework-nvr-final"
+  },
+  "publication": {
+    "records": 6098,
+    "background_records": 74,
+    "foreground_records": 6024,
+    "tracked_objects": 18258
+  },
+  "headless": {
+    "passed": true,
+    "qt_linked": false,
+    "display_environment": false,
+    "last": {
+      "live": 2,
+      "recording": 2,
+      "ai": 898,
+      "results_delivered": 898,
+      "results_dropped": 0
+    }
+  },
+  "external_sdk": {
+    "configure_build_run_passed": true,
+    "run_seconds": 30,
+    "rtsp_sources": 2,
+    "log": "/tmp/amdva-sdk-runtime.log"
+  },
+  "one_hour_runtime": {
+    "notes": "Frozen libraries taken during this implementation, before final stream-flush, overlay-label and validation hardening. The final build separately passed the 90-second NVR regression and all contract/pipeline tests. Dependencies were not replaced during the run.",
+    "sha256": {
+      "artifacts/framework-soak-runtime/libamdva_runtime.so": "2e5e7dd0fc99205b25c95b3d6c1e0d5e55ebb784b613fce11d98d8939220fe29",
+      "artifacts/framework-soak-runtime/plugins/libgstamdanalytics.so": "a57296ec31746b972beb7148abc16272debbdd530e2d0fc06ba47be3412cc093",
+      "artifacts/framework-soak-runtime/src/gst/libamdva_inference.so": "b916050188973edc64e5a4d752bf41b482e317501436b5579edbb4f0300bd48f",
+      "artifacts/framework-soak-runtime/src/gst/libamdva_copy_audit.so": "f1045b694cb829e14a362eb8860116966b70f0bd5ba2294c248b66dfcc8c06c0",
+      "artifacts/framework-soak-runtime/src/gst/libamdva_gst_support.so": "58fd1e2751b7e625aa084aa5f12ca8a2f04a7c8d540274a89d856e23d668d61b",
+      "artifacts/framework-soak-runtime/src/nvr/amdva-nvr-validate": "39915986e62ccdddeed2f87f4c8aedd6137661d32053f842316205793c92d6c9",
+      "artifacts/framework-soak-runtime/src/streaming/libamdva_streaming.so": "65a1ae49b47adaa82218814142d469c28f543d6305a8baca7548c8189fbb80ad"
+    }
+  },
+  "models_sha256": {
+    "artifacts/framework-models/resnet18.mxr": "a574ac35cfe75245176c5144d5e69cbc6fb7386eebd942958731c655c0a8a31b",
+    "artifacts/framework-models/yolov8n-pose.mxr": "20bf025d9a65b69d5e279567d335fcf06fd46475a7bc54530d041a427100dc6f",
+    "artifacts/framework-models/resnet18.onnx": "8a25f4fb57be05427e4fe0d286a2f602dce7cada22c1eac0bf1f920536aa2db7",
+    "artifacts/framework-models/yolov8n-seg.mxr": "f8a4eb1c547685f8675622fc568dda71b9218e76adc76f4c8da5dd6863e1f214",
+    "artifacts/framework-models/yolov8n-seg.onnx": "e378cabbe67090199abc46896b81f14e4561d0669e70f0213ee9c90de7c74a82",
+    "artifacts/framework-models/yolov8n-pose.onnx": "6e49a5ef1a558534f71fb7bedcdd29db676cdd0dee653fe85378eb93099af718",
+    "artifacts/framework-models/segformer-b0.mxr": "7fd07efc6b939d33afcfb4b0d9aa2a99f8180953a35048c59e124c456ad19421",
+    "artifacts/framework-models/segformer-b0.onnx": "1d3b74122418bbd2f6165560bcfdf9ac11160f038e14344d28d3706b6ab16194",
+    "artifacts/nvr-model/yolov8n.onnx": "c8fa171f92c501d76c71ae34451acec3abbf43fefa4e3ae643b4ad5f638766b7",
+    "artifacts/nvr-model/yolov8n-b1.mxr": "f0566831963439c352c5e24e2b628b878b4de5fc8d9f7fad915653936044975d",
+    "artifacts/nvr-model/yolov8n-b4.mxr": "d98bbac6ed6c87a0b100c63413cec791bcdec403fd547d10ac567d3803af3ddb"
+  },
+  "limits": [
+    "Validated on gfx1150 with progressive even-sized 8-bit NV12 BT.709 limited-range VA surfaces.",
+    "Model comparisons are fixture correctness checks, not dataset accuracy benchmarks.",
+    "Broker tests use local protocol fixtures/mock Kafka; production TLS/auth configurations are not covered.",
+    "No CPU image fallback. Upstream gvapython typelibs are not supplied by the rootless baseline."
+  ]
+}

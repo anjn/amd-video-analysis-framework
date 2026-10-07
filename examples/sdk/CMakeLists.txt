@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.22)
+project(amdva_headless_example LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(AMDVideoAnalysis REQUIRED)
+add_executable(headless main.cpp)
+target_link_libraries(headless PRIVATE AMDVA::amdva_streaming)

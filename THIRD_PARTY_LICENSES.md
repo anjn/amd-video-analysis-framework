@@ -14,6 +14,10 @@ Retain their license files when packaging a binary distribution.
 | Qt | Ubuntu 6.4.2 | LGPL-3.0 / GPL-2.0 / GPL-3.0; retain Ubuntu copyright and Qt notices |
 | SQLite | Ubuntu 3.45.1 | Public domain; retain Ubuntu packaging notices |
 | Ultralytics / PyTorch / ONNX | isolated model export environment | Upstream AGPL-3.0 / BSD-style / Apache-2.0 notices; not linked into the NVR runtime |
+| Paho MQTT C | Ubuntu 1.3.13 | EPL-2.0, Ubuntu package copyright |
+| librdkafka | Ubuntu 2.3.0 | BSD-2-Clause and bundled dependency notices |
+| CPython / PyGObject | host Python 3.12 / Ubuntu 3.48.2 headers | PSF / LGPL-2.1-or-later notices |
+| Transformers / representative model weights | isolated exporter and ignored validation artifacts | Apache-2.0 library; weights retain their model-specific license, see docs/framework.md |
 | nlohmann JSON | 3.11.3 | MIT |
 | GLib, json-glib, TBB, build tools | locked packages and host prerequisites | Upstream/Ubuntu license files |
 

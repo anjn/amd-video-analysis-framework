@@ -12,7 +12,7 @@ The initial validated format is progressive, even-sized, 8-bit NV12 up to
 
 Run `python3 scripts/bootstrap.py` to build the locked dependencies, including
 Qt 6, SQLite, RTSP/RTP and Matroska plugins. The sample is enabled by default;
-`-DAMDVA_BUILD_NVR=OFF` retains the original single-stream build. Dependencies
+`-DAMDVA_BUILD_NVR=OFF` builds the plugins and headless streaming service without Qt. Dependencies
 remain under `.deps`; no system packages are installed or replaced.
 
 Prepare the same YOLOv8n COCO weights in a separate CPU-only export environment:
@@ -44,10 +44,41 @@ application's status messages omit URLs that may contain credentials.
 
 The config keys are demonstrated in `examples/nvr.json`. Batch size is one of
 1, 2, 4, 8 or 16; `model` must match that size and `single_model` must be a
-batch-1 model for partial batches of one. Model-info describes one image. All
-compiled models retain the schema-1 GPU/hash/device-I/O manifest contract; the
-compiler also records the batch size. Dynamic-batch ONNX is exported from the
+batch-1 model for partial batches of one. Model-info describes one image. Schema-1 models remain readable; new models use the general schema-2
+GPU/hash/device-I/O manifest and record the batch size. Dynamic-batch ONNX is exported from the
 weights; changing a fixed-batch ONNX input alone is insufficient.
+
+## Shared services, tracking and publication
+
+The controller, recording catalog, keyframe selector and config persistence now
+live in `amdva_streaming` and can be used without Qt. GPU image packing, batch
+execution, imageless tracking, overlay geometry and result publication use shared
+framework libraries. See [framework interfaces](framework.md) for SDK and
+headless usage. The original `amdva::nvr` controller/catalog/keyframe headers
+remain source compatibility wrappers for the desktop sample.
+
+`tracking_enabled` defaults to true. Selected channels run imageless DL Streamer
+tracking across decoded frames and draw class labels and tracking IDs. A source
+reconnect, selection change or incompatible caps resets its tracker. Hidden
+keyframe detections remain independent untracked results.
+
+Optional `results` configuration uses the same asynchronous publisher as
+`amdmetapublish`:
+
+```json
+"results": {
+  "method": "file", "file_path": "events.jsonl",
+  "address": "", "topic": "amdva/analytics",
+  "queue_limit": 256, "byte_limit": 4194304
+}
+```
+
+Use `method=none` to disable output (default), `mqtt` with an address such as
+`tcp://127.0.0.1:1883`, or `kafka` with `127.0.0.1:9092`. JSON contains selected
+tracked observations and background observations with source generation and
+PTS. File paths are relative to the config. Full queues discard oldest waiting
+records; delivery errors do not stop recording/display. The UI reports delivered,
+dropped and error counts. Output is best effort and is not a durable event log.
 
 ## Background AI for hidden sources
 

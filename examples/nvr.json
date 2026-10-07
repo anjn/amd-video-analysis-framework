@@ -22,5 +22,14 @@
       "uri": "rtsp://127.0.0.1:8554/cam1",
       "selected": true
     }
-  ]
+  ],
+  "tracking_enabled": true,
+  "results": {
+    "method": "none",
+    "file_path": "",
+    "address": "",
+    "topic": "amdva/analytics",
+    "queue_limit": 256,
+    "byte_limit": 4194304
+  }
 }

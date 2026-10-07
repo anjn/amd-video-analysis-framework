@@ -1,9 +1,12 @@
 # Validation and reproduction
 
-Validation is limited to the declared APU, driver/runtime, format, model and
-single-stream configuration. Reports are JSON; logs, models and video fixtures
-remain in ignored `artifacts/`. The summary in `validation-results.json` records
-completed checks, not prospective capability claims.
+The original single-stream results remain in `validation-results.json`; NVR
+regressions have separate reports. The expanded framework's task, publication,
+Python, batching, GPU drawing and SDK checks are described in
+[framework validation](framework-validation.md) and its
+[recorded results](framework-validation-results.json). Logs, compiled models and video
+fixtures remain in ignored `artifacts/`. Reports record completed checks on the
+declared host, rather than compatibility claims for every APU/model.
 
 ## Hardware and zero-copy evidence
 
@@ -16,9 +19,9 @@ They do not appear in the analytics video pipeline.
 
 `amdva-run` checks original GstMemory identity and PTS at the AMD input and final
 output. The preload auditor separately intercepts HIP memcpy operations, VA
-image download/upload/derive calls and VA image memory mapping. It permits
-exactly one 7204-byte D2H detection transfer per output frame and rejects other
-observed copies. The compiled MIGraphX graph is also checked for copy-to/from-GPU
+image download/upload/derive calls and VA image memory mapping. It permits the legacy 7204-byte D2H detection record, explicitly marked
+bounded metadata transfers, and GPU-to-GPU assembly/ownership copies. Unmarked
+host transfers and decoded-image mapping are rejected. The compiled MIGraphX graph is also checked for copy-to/from-GPU
 operations. This evidence covers the tested public API path; it does not claim
 to trace every internal driver operation or establish compatibility on other
 APUs. Importer/driver changes require repeating the alias and pipeline probes.
@@ -38,7 +41,7 @@ cmake --build build -j 8
 ctest --test-dir build --output-on-failure
 ```
 
-The six tests cover layout bounds/overlap/modifiers, tensor ownership and shallow
+The original baseline tests cover layout bounds/overlap/modifiers, tensor ownership and shallow
 copying, PTS and original memory identity, strict caps, missing-model/non-strict
 initialization rejection, hardware aliasing/VPE execution, real preprocessing
 against independent BT.709 RGB values and letterbox boundaries, and 10000

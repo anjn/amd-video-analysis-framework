@@ -1,30 +1,30 @@
 # AMD Video Analysis Framework
 
-GStreamer plugins for AMD APU video analytics, with selected Intel DL Streamer
-elements for tracking and JSON output. The initial implementation targets one
-H.264 stream and YOLOv8n COCO detection on Linux.
+GStreamer video analytics for AMD APUs, using VA codecs/VPE, HIP image
+processing and MIGraphX inference. Selected Intel DL Streamer elements provide
+tracking, stream mux/demux, metadata aggregation and interoperability.
 
 ```text
-H.264 → vah264dec → amdpreproc → amdmigraphx → gvatrack
-      → gvametaconvert → gvametapublish → fakesink
+RTSP / file → VA decode → amddetect → gvatrack → amdclassify (ROI)
+                       → amdpython → amdmetapublish → amdwatermark → DMA-BUF sink
 ```
 
-`amdpreproc` retains the original NV12 VA video memory and timestamps. It uses
-the dedicated VPE to scale and convert an internal surface to linear BGRA, then
-HIP generates an RGB float32 NCHW tensor with letterbox padding. `amdmigraphx`
-consumes that device allocation directly, runs inference and class-aware NMS on
-the GPU, and attaches GstAnalytics detections in original-image coordinates.
-The only per-frame CPU readback is a bounded 7,204-byte detection structure.
+The framework supports YOLOv8 detection, instance segmentation and pose,
+classification logits, semantic segmentation and generic GPU tensor results.
+Image and mask processing stay on the GPU; only bounded result metadata returns
+to the CPU. Shared batches support static sizes 1/2/4/8/16 and partial timeouts.
 
-Strict mode rejects CPU image transfers, GPU memcpy staging, unsupported memory
-layouts and scaling without observed VPE engine activity. See
-[architecture and interfaces](docs/architecture.md) for the exact constraints
-and [validation](docs/validation.md) for evidence and measurement limits.
+The reusable `amdva_streaming` library provides dynamic RTSP registration,
+recording, reconnect, selected-source analytics and background keyframe AI
+without Qt. The desktop NVR uses that library to display up to 16 tiles with
+tracked detections. A headless command and installed CMake SDK are included.
 
-Local validation passed six tests, the six-detection CPU reference comparison,
-and a one-hour 1080p30 run (107970 frames, no observed prohibited copies,
-P95 processing latency 10.412 ms). See the
-[recorded results](docs/validation-results.json) for resource limits and scope.
+See [framework support and examples](docs/framework.md),
+[memory contracts](docs/architecture.md), [NVR usage](docs/nvr.md), and
+[validation](docs/validation.md). AMD elements use their own model-info format;
+they do not implement every upstream DL Streamer model adapter or its gva
+inference backend. The legacy `amdpreproc ! amdmigraphx` pipeline remains
+available.
 
 ## Build on the host
 
@@ -49,7 +49,7 @@ build/src/gst/amdva-validate-preproc
 
 Dependencies are pinned with SHA256 hashes in [dependencies.lock.json](dependencies.lock.json):
 GStreamer 1.28.2 with DL Streamer's analytics extension patch, DL Streamer
-v2026.2.0, ROCm 7.2.0 / MIGraphX 2.15.0, and OpenVINO 2026.2.0. The selected
+v2026.2.0, ROCm 7.2.0 / MIGraphX 2.15.0, and OpenVINO 2026.2.0, with Paho MQTT, librdkafka and embedded CPython. The selected
 DL Streamer build retains its OpenVINO dependency; inference uses MIGraphX.
 `python3 scripts/bootstrap.py --check` verifies cached dependency downloads.
 Do not reinstall or rebuild loaded libraries during a running pipeline.
@@ -91,8 +91,8 @@ The soak collects RSS, FD and allocated GPU-memory samples, checks bounded growt
 requires DL Streamer integration plus copy-audit success. See
 [validation](docs/validation.md) for acceptance thresholds and reproduction.
 
-This PoC covers the analytics path. Encoding, recording, multiple cameras,
-RTSP recovery, NPU execution and UI are subsequent development stages.
+Video recording preserves compressed RTSP packets; the framework does not
+currently provide an encoding or NPU inference backend.
 
 ## Licenses
 
