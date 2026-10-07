@@ -1,3 +1,4 @@
+#include "amdva/gst_telemetry.hpp"
 #include "amdva/publishing.hpp"
 #include <dlfcn.h>
 #include <filesystem>
@@ -16,6 +17,8 @@ static void require(bool value, const char *why) {
         throw std::runtime_error(why);
 }
 struct Check {
+    std::shared_ptr<Telemetry> timing = std::make_shared<Telemetry>("pipeline");
+    Check() { timing->begin_generation(1); }
     std::mutex mutex;
     std::map<GstMemory *, std::set<GstClockTime>> original;
     bool failed{}, audit_started{};
@@ -27,7 +30,11 @@ struct Check {
     }
     static GstPadProbeReturn origin(GstPad *, GstPadProbeInfo *info, gpointer opaque) {
         auto &self = *static_cast<Check *>(opaque);
-        auto *buffer = GST_PAD_PROBE_INFO_BUFFER(info);
+        auto *buffer = gst_buffer_make_writable(GST_PAD_PROBE_INFO_BUFFER(info));
+        GST_PAD_PROBE_INFO_DATA(info) = buffer;
+        TraceToken token{self.timing, self.timing->frame(Telemetry::monotonic_ns())};
+        token.mark(TimingStage::DecodeOutput);
+        set_frame_trace(buffer, token);
         auto *memory = gst_buffer_peek_memory(buffer, 0);
         std::lock_guard<std::mutex> lock(self.mutex);
         if (self.audit_start && self.checked && !self.audit_started) {
@@ -44,6 +51,8 @@ struct Check {
         auto *buffer = GST_PAD_PROBE_INFO_BUFFER(info);
         std::lock_guard<std::mutex> lock(self.mutex);
         auto it = self.original.find(gst_buffer_peek_memory(buffer, 0));
+        if (!frame_trace(buffer).telemetry)
+            self.failed = true;
         if (it == self.original.end() || !it->second.count(GST_BUFFER_PTS(buffer)))
             self.failed = true;
         ++self.checked;
@@ -95,6 +104,8 @@ static unsigned run(const std::string &description, const std::string &kind) {
             while (auto *sample =
                        gst_app_sink_try_pull_sample(GST_APP_SINK(sink), 10 * GST_SECOND)) {
                 auto *buffer = gst_sample_get_buffer(sample);
+                require(frame_trace(buffer).telemetry == check.timing,
+                        "Timing metadata lost through AMD/DLS pipeline");
                 auto *amd = get_analysis_meta(buffer);
                 require(amd && amd->data && !((**amd->data).attachments.empty()),
                         "AMD metadata lost");

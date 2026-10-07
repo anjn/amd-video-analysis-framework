@@ -142,8 +142,13 @@ def main():
                 stop(process)
             if server is not None:
                 stop(server)
-    lines = (args.output / 'telemetry.jsonl').read_text().splitlines()
-    samples = [json.loads(line) for line in lines]
+    samples = []
+    timing_last = []
+    with (args.output / 'telemetry.jsonl').open() as stream:
+        for line in stream:
+            row = json.loads(line)
+            timing_last = row.pop('telemetry', [])
+            samples.append(row)
     last = samples[-1] if samples else None
     if last is None or last['elapsed_s'] < args.seconds - 1:
         failure = failure or 'NVR exited before the requested test duration'
@@ -202,7 +207,8 @@ def main():
                'cycles': args.cycles, 'server_restarted': restarted, 'recovery_s': recovery_s,
                'warmup_s': warmup,
                'maximum_growth': growth, 'recordings_checked': len(recordings),
-               'invalid_recordings': invalid, 'background': background, 'last': last}
+               'invalid_recordings': invalid, 'background': background, 'last': last,
+               'telemetry': timing_last}
     (args.output / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n')
     print(json.dumps({k: v for k, v in summary.items() if k != 'last'}))
     return 0 if failure is None else 2

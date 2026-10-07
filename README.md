@@ -21,7 +21,7 @@ tracked detections. A headless command and installed CMake SDK are included.
 
 See [framework support and examples](docs/framework.md),
 [memory contracts](docs/architecture.md), [NVR usage](docs/nvr.md), and
-[validation](docs/validation.md). AMD elements use their own model-info format;
+[validation](docs/validation.md), and [decode/presentation telemetry](docs/telemetry.md). AMD elements use their own model-info format;
 they do not implement every upstream DL Streamer model adapter or its gva
 inference backend. The legacy `amdpreproc ! amdmigraphx` pipeline remains
 available.

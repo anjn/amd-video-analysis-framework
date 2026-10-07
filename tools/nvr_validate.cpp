@@ -103,7 +103,11 @@ int main(int argc, char **argv) {
                                 {"generation", double(s.generation)},
                                 {"error", QString::fromStdString(s.error)}});
             }
-            const auto publication=controller.publication_status();
+            QJsonArray timing;
+            for (const auto &snapshot : controller.telemetry())
+                timing.append(
+                    QJsonDocument::fromJson(QByteArray::fromStdString(snapshot.json())).object());
+            const auto publication = controller.publication_status();
             const auto heap = mallinfo2();
             QJsonObject result{{"results_delivered", double(publication.delivered)},
                                {"results_dropped", double(publication.dropped)},
@@ -126,7 +130,8 @@ int main(int argc, char **argv) {
                                {"allocator_layout_queries", double(layouts ? layouts() : 0)},
                                {"copy_calls", double(copies ? copies() : 0)},
                                {"copy_bytes", double(bytes ? bytes() : 0)},
-                               {"channels", channels}};
+                               {"channels", channels},
+                               {"telemetry", timing}};
             std::cout << QJsonDocument(result).toJson(QJsonDocument::Compact).toStdString() << "\n"
                       << std::flush;
             if (!controller.fatal().empty() || !tiles.error().empty() || (errors && errors())) {

@@ -1,4 +1,5 @@
 #pragma once
+#include "amdva/gst_telemetry.hpp"
 #include "amdva/inference.hpp"
 #include "amdva/publishing.hpp"
 #include "amdva/runtime.hpp"
@@ -13,6 +14,7 @@
 #include <gst/gst.h>
 #include <gst/va/gstvadisplay.h>
 #include <gst/video/video.h>
+#include <map>
 #include <mutex>
 #include <thread>
 namespace amdva::streaming {
@@ -31,6 +33,7 @@ struct Options {
     bool tracking_enabled{true};
     bool preview_enabled{true};
     PublicationOptions results;
+    TelemetryOptions telemetry;
     unsigned background_ai_interval_seconds{5};
     uint64_t quota{100ull << 30}, reserve{1ull << 30};
     std::vector<Source> sources;
@@ -50,12 +53,15 @@ struct Status {
     int64_t background_capture_us{};
 };
 struct Frame {
+    TraceToken timing;
     Sample sample;
     uint64_t generation{};
     unsigned width{}, height{};
     Clock::time_point received;
+    bool preview_consumed{};
 };
 struct Plane {
+    TraceToken timing;
     VASurfaceID surface{VA_INVALID_SURFACE};
     // 0 free; 1 complete; 2 displayed; 3 fence pending. GL objects belong
     // exclusively to the UI thread; VA writes only to state 0.
@@ -102,6 +108,8 @@ class Controller {
     unsigned last_batch() const { return last_batch_.load(); }
     double batch_ms() const { return batch_ms_.load(); }
     PublicationStatus publication_status() const;
+    std::vector<TelemetrySnapshot> telemetry() const;
+    void presentation_active(bool);
     void shutdown();
 
   private:
@@ -114,11 +122,14 @@ class Controller {
         return index < 16 ? slots_[index] : background_slots_[index - 16];
     }
     std::atomic<bool> stopping_{false}, initial_enqueued_{false};
+    std::atomic<bool> presentation_observed_{true};
     uint64_t next_generation_{0};
     std::thread control_, gpu_, preview_;
     mutable std::mutex mutex_;
     std::deque<std::function<void()>> commands_;
     std::vector<Status> statuses_;
+    mutable std::mutex telemetry_mutex_;
+    std::map<std::string, std::shared_ptr<Telemetry>> telemetry_;
     std::string fatal_;
     std::vector<std::unique_ptr<Channel>> channels_;
     std::unique_ptr<Catalog> catalog_;

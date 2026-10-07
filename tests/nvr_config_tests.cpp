@@ -33,11 +33,18 @@ int main(int argc, char **argv) {
     try {
         write(base);
         auto o = load_config(path);
-        require(o.tracking_enabled&&o.results.method=="none","Analytics defaults");
+        require(o.tracking_enabled && o.results.method == "none", "Analytics defaults");
+        require(o.telemetry.enabled && o.telemetry.stall_ms == 1000, "Telemetry defaults");
+        o.telemetry.enabled = false;
+        o.telemetry.stall_ms = 1200;
         require(o.batch == 4 && o.segment_seconds == 60, "Defaults");
         require(!o.background_ai_enabled && o.background_ai_interval_seconds == 5,
                 "Background defaults");
-        o.tracking_enabled=false;o.results.method="file";o.results.file_path=(dir/"events.jsonl").string();o.results.queue_limit=9;o.results.byte_limit=2048;
+        o.tracking_enabled = false;
+        o.results.method = "file";
+        o.results.file_path = (dir / "events.jsonl").string();
+        o.results.queue_limit = 9;
+        o.results.byte_limit = 2048;
         o.background_ai_enabled = true;
         o.background_ai_interval_seconds = 3;
         require(o.model == (dir / "batch.mxr"), "Relative model path");
@@ -46,27 +53,37 @@ int main(int argc, char **argv) {
         struct stat st {};
         stat(path.c_str(), &st);
         require((st.st_mode & 0777) == 0600, "Credential file permissions");
-        require(!load_config(path).tracking_enabled&&load_config(path).results.queue_limit==9&&load_config(path).results.byte_limit==2048,"Analytics config persistence");
+        require(!load_config(path).telemetry.enabled &&
+                    load_config(path).telemetry.stall_ms == 1200,
+                "Telemetry persistence");
+        require(!load_config(path).tracking_enabled && load_config(path).results.queue_limit == 9 &&
+                    load_config(path).results.byte_limit == 2048,
+                "Analytics config persistence");
         require(load_config(path).sources[0].uri == o.sources[0].uri, "Credential persistence");
         require(load_config(path).background_ai_enabled &&
                     load_config(path).background_ai_interval_seconds == 3,
                 "Background persistence");
-        for (const auto &item :
-             std::vector<std::pair<QString, QJsonValue>>{{"quota_gib", -1},
-                                                         {"quota_gib", "bad"},
-                                                         {"reserve_gib", -1},
-                                                         {"segment_seconds", 0.5},
-                                                         {"batch_size", 3},
-                                                         {"sources", "bad"},
-                                                         {"tracking_enabled", "true"},
-                                                         {"results", "bad"},
-                                                         {"results", QJsonObject{{"method", "unknown"}}},
-                                                         {"results", QJsonObject{{"queue_limit", 0}}},
-                                                         {"results", QJsonObject{{"byte_limit", -1}}},
-                                                         {"background_ai_enabled", "true"},
-                                                         {"background_ai_interval_seconds", 0},
-                                                         {"background_ai_interval_seconds", 3601},
-                                                         {"background_ai_interval_seconds", 1.5}}) {
+        for (const auto &item : std::vector<std::pair<QString, QJsonValue>>{
+                 {"quota_gib", -1},
+                 {"quota_gib", "bad"},
+                 {"reserve_gib", -1},
+                 {"segment_seconds", 0.5},
+                 {"batch_size", 3},
+                 {"sources", "bad"},
+                 {"tracking_enabled", "true"},
+                 {"telemetry", "bad"},
+                 {"telemetry", QJsonObject{{"enabled", "false"}}},
+                 {"telemetry", QJsonObject{{"stall_ms", 0}}},
+                 {"telemetry", QJsonObject{{"stall_ms", 1.5}}},
+                 {"telemetry", QJsonObject{{"stall_ms", 3600001}}},
+                 {"results", "bad"},
+                 {"results", QJsonObject{{"method", "unknown"}}},
+                 {"results", QJsonObject{{"queue_limit", 0}}},
+                 {"results", QJsonObject{{"byte_limit", -1}}},
+                 {"background_ai_enabled", "true"},
+                 {"background_ai_interval_seconds", 0},
+                 {"background_ai_interval_seconds", 3601},
+                 {"background_ai_interval_seconds", 1.5}}) {
             auto j = base;
             j[item.first] = item.second;
             write(j);

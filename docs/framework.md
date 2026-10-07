@@ -13,9 +13,9 @@ NPU execution are outside this implementation.
 
 | Library | Public headers | Responsibility |
 | --- | --- | --- |
-| `amdva_runtime` | `runtime.hpp`, `preprocess.hpp` | VA/HIP import, VPE operations, GPU image packing, inverse image geometry |
+| `amdva_runtime` | `runtime.hpp`, `preprocess.hpp`, `telemetry.hpp` | VA/HIP import, VPE operations, GPU image packing, inverse image geometry |
 | `amdva_inference` | `model.hpp`, `batching.hpp` | Named static GPU tensor I/O, model manifests, task adapters, bounded shared batches |
-| `amdva_gst_support` | `tensor_meta.hpp`, `video_preprocess.hpp`, `tracking.hpp`, `overlay.hpp`, `publishing.hpp` | GstAnalytics interop, GPU payload ownership, video preprocessing, imageless tracking, drawing and output |
+| `amdva_gst_support` | `tensor_meta.hpp`, `video_preprocess.hpp`, `tracking.hpp`, `overlay.hpp`, `publishing.hpp`, `gst_telemetry.hpp` | GstAnalytics interop, GPU payload ownership, video preprocessing, imageless tracking, drawing and output |
 | `amdva_streaming` | `streaming/*.hpp` | Dynamic RTSP registration/selection, reconnect, compressed recording, SQLite catalog, storage quota, background keyframe admission and analytics scheduling |
 | Desktop NVR | `src/nvr` | Qt controls and EGL tile presentation; uses the public streaming library |
 
@@ -240,3 +240,12 @@ requires the compatible host VA/GStreamer/ROCm stack; it does not bundle a
 portable driver runtime. Set `AMDVA_ROCM_ROOT` when locating HIP headers on a
 compatible installation. The Qt desktop can be disabled independently of the
 streaming framework.
+
+## Decode and presentation telemetry
+
+The Qt-independent telemetry collector and GStreamer adapters measure local
+RTP receipt to decoder output and renderer notifications, with rolling
+percentiles, frame rates, update gaps and known local discard counters.
+NVR and headless commands publish statistics separately from AI result JSON.
+No latency/FPS acceptance thresholds or automatic controls are imposed. See
+[timing boundaries, SDK adapters and validation](telemetry.md).

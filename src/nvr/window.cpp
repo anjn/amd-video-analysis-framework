@@ -70,7 +70,41 @@ GLuint program(QOpenGLExtraFunctions *gl, const char *vertex, const char *fragme
 }
 } // namespace
 Tiles::Tiles(Controller &c) : QOpenGLWindow(QOpenGLWindow::NoPartialUpdate), controller_(c) {
+    connect(this, &QOpenGLWindow::frameSwapped, this, [this] {
+        const auto now = Telemetry::monotonic_ns();
+        for (auto &pending : pending_swap_) {
+            if (!pending.timing.mark(TimingStage::Swap, now))
+                continue;
+            auto &slot = controller_.gpu_slots()[pending.slot];
+            std::lock_guard<std::mutex> lock(slot.mutex);
+            auto &trace = slot.preview[pending.plane].timing;
+            if (trace.telemetry == pending.timing.telemetry &&
+                trace.frame.generation == pending.timing.frame.generation &&
+                trace.frame.sequence == pending.timing.frame.sequence)
+                trace = pending.timing;
+        }
+        pending_swap_.clear();
+    });
+    connect(this, &QWindow::visibleChanged, this, [this](bool) { observe_visibility(); });
+    connect(this, &QWindow::visibilityChanged, this, [this](QWindow::Visibility value) {
+        (void)value;
+        observe_visibility();
+    });
     current_.fill(-1);
+}
+void Tiles::observe_visibility() {
+    const bool active = isVisible() && isExposed() && visibility() != QWindow::Minimized;
+    controller_.presentation_active(active);
+    if (!active) {
+        for (const auto &pending : pending_swap_)
+            if (pending.timing.telemetry)
+                pending.timing.telemetry->counter(TimingCounter::PresentationUnobserved);
+        pending_swap_.clear();
+    }
+}
+void Tiles::exposeEvent(QExposeEvent *event) {
+    QOpenGLWindow::exposeEvent(event);
+    observe_visibility();
 }
 Tiles::~Tiles() {
     if (!context() || !gl_)
@@ -197,6 +231,11 @@ void Tiles::release_current(unsigned slot) {
     current_[slot] = -1;
 }
 void Tiles::paintGL() {
+    controller_.presentation_active(isExposed() && visibility() != QWindow::Minimized);
+    for (const auto &pending : pending_swap_)
+        if (pending.timing.telemetry)
+            pending.timing.telemetry->counter(TimingCounter::PresentationUnobserved);
+    pending_swap_.clear();
     gl_->glViewport(0, 0, int(width() * devicePixelRatio()), int(height() * devicePixelRatio()));
     gl_->glClearColor(0.025f, 0.025f, 0.035f, 1);
     gl_->glClear(GL_COLOR_BUFFER_BIT);
@@ -236,6 +275,8 @@ void Tiles::paintGL() {
         for (unsigned j = 0; j < 3; ++j)
             if (s.preview[j].state == 1) {
                 if (s.preview[j].generation != s.generation) {
+                    if (s.preview[j].timing.telemetry)
+                        s.preview[j].timing.telemetry->counter(TimingCounter::PreviewDiscarded);
                     s.preview[j].state = 0;
                     continue;
                 }
@@ -248,8 +289,11 @@ void Tiles::paintGL() {
             s.preview[newest].state = 2;
             presented_++;
             for (unsigned j = 0; j < 3; ++j)
-                if (s.preview[j].state == 1)
+                if (s.preview[j].state == 1) {
+                    if (s.preview[j].timing.telemetry)
+                        s.preview[j].timing.telemetry->counter(TimingCounter::PreviewDiscarded);
                     s.preview[j].state = 0;
+                }
         }
     }
     for (unsigned tile = 0; tile < active.size(); ++tile) {
@@ -279,17 +323,32 @@ void Tiles::paintGL() {
         gl_->glUniform1i(gl_->glGetUniformLocation(image_program_, "image"), 0);
         vertices(quad, 4, 4);
         gl_->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        p.timing.mark(TimingStage::Draw);
+        if (p.timing.telemetry && !p.timing.frame.ns[unsigned(TimingStage::Swap)])
+            pending_swap_.push_back({index, unsigned(image), p.timing});
         if (Clock::now() - s.detected_at <= std::chrono::milliseconds(500) &&
             p.original_width == s.detection_width && p.original_height == s.detection_height) {
             gl_->glUseProgram(box_program_);
-            OverlayFrame overlay{s.detection_width,s.detection_height,{},{}};
-            if(!s.tracked.empty())for(const auto& tracked:s.tracked)overlay.objects.push_back({tracked.box,tracked.label,tracked.id,{}});
-            else for(const auto& box:s.detections)overlay.objects.push_back({box,"",0,{}});
-            const auto lines=make_overlay_lines(overlay,s.detection_width,s.detection_height);
-            std::vector<float> points;points.reserve(lines.size()*4);
-            for(const auto& line:lines){points.push_back(x+w*line.x0/s.detection_width);points.push_back(y-h*line.y0/s.detection_height);points.push_back(x+w*line.x1/s.detection_width);points.push_back(y-h*line.y1/s.detection_height);}
-            if(!points.empty()){vertices(points.data(),points.size()/2,2);gl_->glDrawArrays(GL_LINES,0,points.size()/2);}
-
+            OverlayFrame overlay{s.detection_width, s.detection_height, {}, {}};
+            if (!s.tracked.empty())
+                for (const auto &tracked : s.tracked)
+                    overlay.objects.push_back({tracked.box, tracked.label, tracked.id, {}});
+            else
+                for (const auto &box : s.detections)
+                    overlay.objects.push_back({box, "", 0, {}});
+            const auto lines = make_overlay_lines(overlay, s.detection_width, s.detection_height);
+            std::vector<float> points;
+            points.reserve(lines.size() * 4);
+            for (const auto &line : lines) {
+                points.push_back(x + w * line.x0 / s.detection_width);
+                points.push_back(y - h * line.y0 / s.detection_height);
+                points.push_back(x + w * line.x1 / s.detection_width);
+                points.push_back(y - h * line.y1 / s.detection_height);
+            }
+            if (!points.empty()) {
+                vertices(points.data(), points.size() / 2, 2);
+                gl_->glDrawArrays(GL_LINES, 0, points.size() / 2);
+            }
         }
     }
     gl_->glFlush();
@@ -318,9 +377,10 @@ Window::Window(Controller &c, Options options, std::string config)
     auto *remove = new QPushButton("Remove selected row");
     sidebar->addWidget(add);
     sidebar->addWidget(remove);
-    table_ = new QTableWidget(0, 6);
-    table_->setHorizontalHeaderLabels(
-        {"View", "Channel", "Connection", "Recording", "Display / AI FPS", "Status"});
+    table_ = new QTableWidget(0, 8);
+    table_->setHorizontalHeaderLabels({"View", "Channel", "Connection", "Recording",
+                                       "Decode / swap / AI FPS", "Status", "Input→decode P99 ms",
+                                       "Input→swap P99 ms"});
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
@@ -404,11 +464,12 @@ void Window::persist() {
 }
 void Window::refresh() {
     const auto statuses = controller_.status();
+    const auto timing_snapshots = controller_.telemetry();
     updating_ = true;
     table_->setRowCount(int(statuses.size()));
     for (unsigned row = 0; row < statuses.size(); ++row) {
         const auto &s = statuses[row];
-        for (unsigned col = 0; col < 6; ++col)
+        for (unsigned col = 0; col < 8; ++col)
             if (!table_->item(row, col))
                 table_->setItem(row, col, new QTableWidgetItem);
         auto *check = table_->item(row, 0);
@@ -420,6 +481,68 @@ void Window::refresh() {
         table_->item(row, 3)->setText(qs(s.recording));
         table_->item(row, 4)->setText(
             QString("%1 / %2").arg(s.display_fps, 0, 'f', 1).arg(s.ai_fps, 0, 'f', 1));
+        for (const auto &metrics : timing_snapshots)
+            if (metrics.source == s.source.id) {
+                auto text = [](const TimingDistribution &d) {
+                    return d.samples ? QString::number(d.p99_ms, 'f', 1) : QString("N/A");
+                };
+                table_->item(row, 4)->setText(
+                    QString("decode %1 / swap %2 / AI %3")
+                        .arg(metrics.stages[0][unsigned(TimingStage::DecodeOutput)].fps, 0, 'f', 1)
+                        .arg(metrics.stages[0][unsigned(TimingStage::Swap)].fps, 0, 'f', 1)
+                        .arg(s.ai_fps, 0, 'f', 1));
+                table_->item(row, 6)->setText(text(metrics.latency[0][0]));
+                table_->item(row, 7)->setText(text(metrics.latency[0][3]));
+                if (!metrics.enabled)
+                    table_->item(row, 4)->setText(
+                        QString("Timing off / AI %1").arg(s.ai_fps, 0, 'f', 1));
+                QString details = "Latency: mean / P95 / P99 / maximum (ms)\n";
+                const char *names[] = {"Input → decode", "Decoder input → output", "Input → draw",
+                                       "Input → swap",   "Decode → preview",       "Preview → draw",
+                                       "Draw → swap"};
+                for (unsigned i = 0; i < 7; i++) {
+                    const auto &d = metrics.latency[0][i];
+                    details += QString::fromUtf8(names[i]) + ": ";
+                    if (!d.samples)
+                        details += "N/A\n";
+                    else
+                        details += QString("%1 / %2 / %3 / %4 (%5 samples%6)\n")
+                                       .arg(d.mean_ms, 0, 'f', 1)
+                                       .arg(d.p95_ms, 0, 'f', 1)
+                                       .arg(d.p99_ms, 0, 'f', 1)
+                                       .arg(d.maximum_ms, 0, 'f', 1)
+                                       .arg(qulonglong(d.samples))
+                                       .arg(d.truncated ? ", partial window" : "");
+                }
+                for (auto stage : {TimingStage::DecodeOutput, TimingStage::Swap}) {
+                    const auto &v = metrics.stages[0][unsigned(stage)];
+                    details +=
+                        QString("%1: %2 frames; interval P99 %3 ms; %4 stops, longest %5 ms%6\n")
+                            .arg(stage == TimingStage::Swap ? "New-image swap" : "Decoder output")
+                            .arg(qulonglong(v.count))
+                            .arg(text(v.intervals))
+                            .arg(qulonglong(v.stops))
+                            .arg(v.longest_stop_ms, 0, 'f', 1)
+                            .arg(!v.supported ? " (unavailable)"
+                                 : !v.active  ? " (paused)"
+                                              : "");
+                }
+                details +=
+                    QString("Discards: compressed %1, latest %2, preview %3\nUnmatched: RTP %4, "
+                            "decoder %5; ambiguous/missing PTS %6\nBackground: %7 decoded, input → "
+                            "decode P99 %8 ms\nRecent window: up to 10 seconds / 4096 samples")
+                        .arg(qulonglong(metrics.encoded_discarded))
+                        .arg(qulonglong(metrics.latest_replaced))
+                        .arg(qulonglong(metrics.preview_discarded))
+                        .arg(qulonglong(metrics.unmatched_rtp))
+                        .arg(qulonglong(metrics.unmatched_decode))
+                        .arg(qulonglong(metrics.ambiguous_pts))
+                        .arg(qulonglong(
+                            metrics.stages[1][unsigned(TimingStage::DecodeOutput)].count))
+                        .arg(text(metrics.latency[1][0]));
+                for (unsigned col : {4u, 6u, 7u})
+                    table_->item(row, col)->setToolTip(details);
+            }
         table_->item(row, 5)->setText(
             qs(s.error) + QString(" · gaps %1 · AI age %2 ms").arg(s.gaps).arg(s.ai_age_ms) +
             (options_.background_ai_enabled ? QString(" · BG %1 · runs %2 · boxes %3 · age %4 ms")
@@ -430,14 +553,17 @@ void Window::refresh() {
                                             : QString{}));
     }
     updating_ = false;
-    const auto publication=controller_.publication_status();
-    summary_->setText(QString("%1 sources · batch %2 · %3 ms\nResults: %6 delivered · %7 dropped · %8 errors\n%4\n%5\n%9")
+    const auto publication = controller_.publication_status();
+    summary_->setText(QString("%1 sources · batch %2 · %3 ms\nResults: %6 delivered · %7 dropped · "
+                              "%8 errors\n%4\n%5\n%9")
                           .arg(statuses.size())
                           .arg(controller_.last_batch())
                           .arg(controller_.batch_ms(), 0, 'f', 1)
                           .arg(qs(controller_.fatal()))
                           .arg(qs(tiles_->error()))
-                          .arg(publication.delivered).arg(publication.dropped).arg(publication.errors)
+                          .arg(publication.delivered)
+                          .arg(publication.dropped)
+                          .arg(publication.errors)
                           .arg(qs(publication.last_error)));
     static unsigned ticks = 0;
     if (++ticks % 30 == 0) {

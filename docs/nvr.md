@@ -285,3 +285,16 @@ Sequential 70-second runs with background AI enabled/disabled measured display
 medians of 29.86/29.90 FPS and selected AI medians of 5.98/5.98 FPS. These are
 local-fixture observations. Full results and reference-comparison conditions
 are in [background AI validation results](nvr-background-validation-results.json).
+
+## Decode and display timing
+
+The optional `telemetry` configuration defaults to
+`{ "enabled": true, "stall_ms": 1000 }`. NVR shows actual decoder-output and
+new-image swap FPS plus input→decode/input→swap P99 columns; the FPS tooltip
+contains detailed statistics. Hidden/minimized display observation pauses while
+decode continues. Legacy SDK `decoded`/`display_fps` fields still describe
+preview processing. Use `Controller::telemetry()` for actual stage counts,
+latency, update intervals, stops and explicit discards. The headless command and
+GUI validator add a top-level `telemetry` array to periodic JSON. There is no
+latency/FPS pass/fail policy. See [telemetry](telemetry.md) for exact boundaries
+and the limitations of buffer-swap notification as a display measurement.

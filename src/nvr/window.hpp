@@ -19,6 +19,7 @@ class Tiles final : public QOpenGLWindow {
   protected:
     void initializeGL() override;
     void paintGL() override;
+    void exposeEvent(QExposeEvent *) override;
 
   private:
     struct Texture {
@@ -38,6 +39,12 @@ class Tiles final : public QOpenGLWindow {
     GLuint buffer_{};
     std::string error_;
     uint64_t presented_{};
+    struct PendingSwap {
+        unsigned slot, plane;
+        TraceToken timing;
+    };
+    std::vector<PendingSwap> pending_swap_;
+    void observe_visibility();
     void vertices(const float *data, unsigned count, unsigned stride);
     void release_current(unsigned slot);
 };

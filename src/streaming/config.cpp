@@ -79,6 +79,24 @@ Options load_config(const std::string &path) {
             throw std::runtime_error("Expected boolean tracking_enabled");
         o.tracking_enabled = json_object_get_boolean_member(root, "tracking_enabled");
     }
+    if (json_object_has_member(root, "telemetry")) {
+        auto *t = required_object(root, "telemetry");
+        if (json_object_has_member(t, "enabled")) {
+            if (json_node_get_value_type(json_object_get_member(t, "enabled")) != G_TYPE_BOOLEAN)
+                throw std::runtime_error("Expected boolean telemetry.enabled");
+            o.telemetry.enabled = json_object_get_boolean_member(t, "enabled");
+        }
+        if (json_object_has_member(t, "stall_ms")) {
+            auto *n = json_object_get_member(t, "stall_ms");
+            if (json_node_get_value_type(n) != G_TYPE_INT64 &&
+                json_node_get_value_type(n) != G_TYPE_DOUBLE)
+                throw std::runtime_error("Expected numeric telemetry.stall_ms");
+            const double v = json_node_get_double(n);
+            if (!std::isfinite(v) || v != std::floor(v) || v < 1 || v > 3600000)
+                throw std::runtime_error("Invalid telemetry.stall_ms");
+            o.telemetry.stall_ms = unsigned(v);
+        }
+    }
     if (json_object_has_member(root, "results")) {
         auto *output = required_object(root, "results");
         if (json_object_has_member(output, "method"))
@@ -164,6 +182,10 @@ void save_config(const std::string &path, const Options &o) {
     str("model_info", o.model_info);
     str("recording_root", o.recording_root);
     json_object_set_boolean_member(root, "tracking_enabled", o.tracking_enabled);
+    auto *timing = json_object_new();
+    json_object_set_boolean_member(timing, "enabled", o.telemetry.enabled);
+    json_object_set_int_member(timing, "stall_ms", o.telemetry.stall_ms);
+    json_object_set_object_member(root, "telemetry", timing);
     json_object_set_int_member(root, "batch_size", o.batch);
     json_object_set_int_member(root, "segment_seconds", o.segment_seconds);
     json_object_set_boolean_member(root, "background_ai_enabled", o.background_ai_enabled);

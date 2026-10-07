@@ -31,5 +31,9 @@
     "topic": "amdva/analytics",
     "queue_limit": 256,
     "byte_limit": 4194304
+  },
+  "telemetry": {
+    "enabled": true,
+    "stall_ms": 1000
   }
 }

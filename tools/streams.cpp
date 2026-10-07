@@ -35,8 +35,15 @@ int main(int argc, char **argv) {
             const auto publication = controller.publication_status();
             std::cout << "{\"live\":" << live << ",\"recording\":" << recording << ",\"ai\":" << ai
                       << ",\"results_delivered\":" << publication.delivered
-                      << ",\"results_dropped\":" << publication.dropped << "}\n"
-                      << std::flush;
+                      << ",\"results_dropped\":" << publication.dropped << ",\"telemetry\":[";
+            bool first = true;
+            for (const auto &snapshot : controller.telemetry()) {
+                if (!first)
+                    std::cout << ",";
+                first = false;
+                std::cout << snapshot.json();
+            }
+            std::cout << "]}\n" << std::flush;
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
         controller.shutdown();

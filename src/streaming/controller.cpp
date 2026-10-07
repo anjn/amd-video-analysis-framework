@@ -167,6 +167,8 @@ struct Controller::Channel {
     };
     Controller &controller;
     Status state;
+    std::shared_ptr<Telemetry> timing;
+    std::unique_ptr<PipelineTelemetry> receive_timing, decode_timing;
     GstElement *receive{}, *decoder{}, *decode_input{};
     std::vector<std::unique_ptr<Recorder>> recordings;
     Recorder *recording{};
@@ -189,6 +191,9 @@ struct Controller::Channel {
     int64_t background_capture_us{};
     Channel(Controller &c, Source source) : controller(c) {
         state.source = std::move(source);
+        timing = std::make_shared<Telemetry>(state.source.id, controller.options_.telemetry);
+        std::lock_guard<std::mutex> lock(controller.telemetry_mutex_);
+        controller.telemetry_[state.source.id] = timing;
         state.source.selected = false;
     }
     ~Channel() {
@@ -211,11 +216,14 @@ struct Controller::Channel {
                  GST_BUFFER_PTS(gst_sample_get_buffer(c.encoded.front().get()))) &&
              GST_BUFFER_PTS(b) >
                  GST_BUFFER_PTS(gst_sample_get_buffer(c.encoded.front().get())) + 2 * GST_SECOND)) {
+            c.timing->counter(TimingCounter::EncodedDiscarded, c.encoded.size());
             c.encoded.clear();
             c.queued = 0;
             c.overflow = true;
         }
         // An oversized AU must not bypass the compressed queue's hard cap.
+        if (size > compressed_limit)
+            c.timing->counter(TimingCounter::EncodedDiscarded);
         if (size <= compressed_limit) {
             c.queued += size;
             c.encoded.push_back(std::move(sample));
@@ -265,6 +273,9 @@ struct Controller::Channel {
         GstAppSinkCallbacks callbacks{};
         callbacks.new_sample = received;
         gst_app_sink_set_callbacks(GST_APP_SINK(sink), &callbacks, &c, nullptr);
+        auto *encoded_pad = gst_element_get_static_pad(sink, "sink");
+        c.receive_timing->attach_access_units(encoded_pad);
+        gst_object_unref(encoded_pad);
         gst_object_unref(sink);
         gst_bin_add(GST_BIN(c.receive), branch);
         auto *input = gst_element_get_static_pad(branch, "sink");
@@ -301,7 +312,11 @@ struct Controller::Channel {
         if (slot.latest.sample && (slot.latest.width != unsigned(info.width) ||
                                    slot.latest.height != unsigned(info.height)))
             slot.detections.clear();
-        slot.latest = {std::move(s), c.state.generation, unsigned(info.width),
+        if (slot.latest.sample && !slot.latest.preview_consumed)
+            c.timing->counter(TimingCounter::LatestReplaced);
+        auto trace = frame_trace(gst_sample_get_buffer(s.get()));
+        slot.latest = {std::move(trace),      std::move(s),
+                       c.state.generation,    unsigned(info.width),
                        unsigned(info.height), index >= 16 ? c.background_captured : Clock::now()};
         return GST_FLOW_OK;
     }
@@ -319,6 +334,9 @@ struct Controller::Channel {
                 slot.latest = {};
                 slot.detections.clear();
             }
+            timing->begin_generation(state.generation);
+            receive_timing = std::make_unique<PipelineTelemetry>(timing);
+            receive_timing->background(state.slot < 0);
             receive = gst_pipeline_new(nullptr);
             auto *src = gst_element_factory_make("rtspsrc", nullptr);
             if (!src)
@@ -326,6 +344,7 @@ struct Controller::Channel {
             g_object_set(src, "location", state.source.uri.c_str(), "protocols", 4, "latency", 100,
                          "tcp-timeout", guint64(5 * G_USEC_PER_SEC), "do-rtsp-keep-alive", TRUE,
                          nullptr);
+            receive_timing->attach_rtsp(src);
             g_signal_connect(src, "pad-added", G_CALLBACK(pad_added), this);
             gst_bin_add(GST_BIN(receive), src);
             last_packet_us = g_get_monotonic_time();
@@ -339,6 +358,9 @@ struct Controller::Channel {
         if (receive)
             controller.request_reclaim();
         destroy(receive);
+        receive_timing.reset();
+        timing->availability(TimingStage::Input, true, false);
+        timing->availability(TimingStage::AccessUnit, true, false);
         std::lock_guard<std::mutex> l(encoded_mutex);
         encoded.clear();
         queued = 0;
@@ -439,6 +461,11 @@ struct Controller::Channel {
             decode_input = nullptr;
         }
         destroy(decoder);
+        decode_timing.reset();
+        timing->activity(TimingStage::DecodeInput, false);
+        timing->activity(TimingStage::DecodeOutput, false);
+        timing->activity(TimingStage::Draw, false);
+        timing->activity(TimingStage::Swap, false);
         decode_wait = true;
         decode_origin = GST_CLOCK_TIME_NONE;
     }
@@ -484,13 +511,19 @@ struct Controller::Channel {
     }
     void start_decoder(GstCaps *caps) {
         const char *decode =
-            codec == 1 ? "appsrc name=input is-live=true format=time block=false ! h264parse ! "
-                         "vah264dec ! video/x-raw(memory:VAMemory),format=NV12 ! appsink "
-                         "name=frames sync=false max-buffers=1 drop=true"
-                       : "appsrc name=input is-live=true format=time block=false ! h265parse ! "
-                         "vah265dec ! video/x-raw(memory:VAMemory),format=NV12 ! appsink "
-                         "name=frames sync=false max-buffers=1 drop=true";
+            codec == 1
+                ? "appsrc name=input is-live=true format=time block=false ! h264parse ! "
+                  "vah264dec name=decode ! video/x-raw(memory:VAMemory),format=NV12 ! appsink "
+                  "name=frames sync=false max-buffers=1 drop=true"
+                : "appsrc name=input is-live=true format=time block=false ! h265parse ! "
+                  "vah265dec name=decode ! video/x-raw(memory:VAMemory),format=NV12 ! appsink "
+                  "name=frames sync=false max-buffers=1 drop=true";
         decoder = parse(decode);
+        decode_timing = std::make_unique<PipelineTelemetry>(timing);
+        decode_timing->background(background_slot >= 0);
+        auto *decoder_element = gst_bin_get_by_name(GST_BIN(decoder), "decode");
+        decode_timing->attach_decoder(decoder_element);
+        gst_object_unref(decoder_element);
         auto *context = gst_context_new(GST_VA_DISPLAY_HANDLE_CONTEXT_TYPE_STR, TRUE);
         gst_context_set_va_display(context, controller.display_);
         gst_element_set_context(decoder, context);
@@ -557,9 +590,17 @@ struct Controller::Channel {
             GST_CLOCK_TIME_IS_VALID(GST_BUFFER_DTS(b)) && GST_BUFFER_DTS(b) >= origin
                 ? GST_BUFFER_DTS(b) - origin
                 : GST_CLOCK_TIME_NONE;
+        if (input == decode_input && decode_timing)
+            decode_timing->submit(b);
         return gst_app_src_push_buffer(GST_APP_SRC(input), b) == GST_FLOW_OK;
     }
     void tick(bool space) {
+        if (receive_timing)
+            receive_timing->background(state.slot < 0);
+        timing->availability(TimingStage::PreviewReady, controller.options_.preview_enabled,
+                             controller.options_.preview_enabled &&
+                                 controller.presentation_observed_.load() && state.slot >= 0 &&
+                                 state.connection == "live");
         recordings.erase(std::remove_if(recordings.begin(), recordings.end(),
                                         [this](auto &r) {
                                             if (r->poll()) {
@@ -967,6 +1008,15 @@ void Controller::loop() {
                 }
             }
             background_cursor++;
+            {
+                std::lock_guard<std::mutex> lock(telemetry_mutex_);
+                for (const auto &c : channels_)
+                    if (c->removed && c->recordings.empty()) {
+                        auto it = telemetry_.find(c->state.source.id);
+                        if (it != telemetry_.end() && it->second == c->timing)
+                            telemetry_.erase(it);
+                    }
+            }
             channels_.erase(
                 std::remove_if(channels_.begin(), channels_.end(),
                                [](const auto &c) { return c->removed && c->recordings.empty(); }),
@@ -1066,7 +1116,7 @@ void Controller::preview_loop() {
                                        [](const auto &p) { return p.state == 0; });
                 if (options_.preview_enabled && it == s.preview.end())
                     continue;
-                const auto frame = s.latest;
+                auto frame = s.latest;
                 auto *buffer = gst_sample_get_buffer(frame.sample.get());
                 if (gst_va_buffer_peek_display(buffer) != display_)
                     throw std::runtime_error("Decoder did not use the shared VA display");
@@ -1107,6 +1157,7 @@ void Controller::preview_loop() {
                     }
                 }
                 if (!options_.preview_enabled) {
+                    s.latest.preview_consumed = true;
                     previous[index] = frame.sample;
                     s.processed++;
                     continue;
@@ -1132,6 +1183,10 @@ void Controller::preview_loop() {
                 }
                 s.preview_va->scale(surface, it->surface, frame.width, frame.height, it->width,
                                     it->height);
+                frame.timing.mark(TimingStage::PreviewReady);
+                s.latest.timing = frame.timing;
+                s.latest.preview_consumed = true;
+                it->timing = frame.timing;
                 it->original_width = frame.width;
                 it->original_height = frame.height;
                 it->generation = frame.generation;
@@ -1414,5 +1469,38 @@ void Controller::gpu_loop() {
 namespace amdva::streaming {
 PublicationStatus Controller::publication_status() const {
     return publisher_ ? publisher_->status() : PublicationStatus{};
+}
+} // namespace amdva::streaming
+
+namespace amdva::streaming {
+std::vector<TelemetrySnapshot> Controller::telemetry() const {
+    std::vector<std::shared_ptr<Telemetry>> collectors;
+    {
+        std::lock_guard<std::mutex> lock(telemetry_mutex_);
+        for (const auto &entry : telemetry_)
+            collectors.push_back(entry.second);
+    }
+    std::vector<TelemetrySnapshot> snapshots;
+    for (const auto &collector : collectors)
+        snapshots.push_back(collector->snapshot());
+    return snapshots;
+}
+} // namespace amdva::streaming
+
+namespace amdva::streaming {
+void Controller::presentation_active(bool active) {
+    presentation_observed_ = active;
+    const auto states = status();
+    std::lock_guard<std::mutex> lock(telemetry_mutex_);
+    for (const auto &state : states) {
+        auto it = telemetry_.find(state.source.id);
+        if (it == telemetry_.end())
+            continue;
+        it->second->availability(TimingStage::PreviewReady, options_.preview_enabled,
+                                 options_.preview_enabled && active && state.slot >= 0 &&
+                                     state.connection == "live");
+        it->second->availability(TimingStage::Draw, true, active && state.slot >= 0);
+        it->second->availability(TimingStage::Swap, true, active && state.slot >= 0);
+    }
 }
 } // namespace amdva::streaming
