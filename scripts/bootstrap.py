@@ -80,9 +80,10 @@ def main():
     patch = source / lock["dlstreamer"]["analytics_patch"]
     if not verify(patch, lock["dlstreamer"]["analytics_patch_sha256"]):
         raise RuntimeError("DL Streamer analytics patch differs from lock")
-    local_patch = ROOT / "patches/dlstreamer-gstanalytics-label-id.patch"
-    if subprocess.run(["git", "apply", "--reverse", "--check", str(local_patch)], cwd=source, capture_output=True).returncode:
-        run("git", "apply", local_patch, cwd=source)
+    for name in ("dlstreamer-gstanalytics-label-id.patch", "dlstreamer-amd-metadata-merge.patch", "dlstreamer-stream-identities.patch"):
+        local_patch = ROOT / "patches" / name
+        if subprocess.run(["git", "apply", "--reverse", "--check", str(local_patch)], cwd=source, capture_output=True).returncode:
+            run("git", "apply", local_patch, cwd=source)
     for archive in lock["gstreamer"]:
         path = DEPS / "src" / Path(archive["url"]).name
         download(archive["url"], path, archive["sha256"])

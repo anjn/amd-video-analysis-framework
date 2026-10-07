@@ -58,6 +58,4 @@ class Window final : public QMainWindow {
     void persist();
 };
 void install_shutdown_signals(QCoreApplication &app);
-Options load_config(const std::string &path);
-void save_config(const std::string &path, const Options &options);
 } // namespace amdva::nvr

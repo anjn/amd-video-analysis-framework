@@ -103,8 +103,12 @@ int main(int argc, char **argv) {
                                 {"generation", double(s.generation)},
                                 {"error", QString::fromStdString(s.error)}});
             }
+            const auto publication=controller.publication_status();
             const auto heap = mallinfo2();
-            QJsonObject result{{"heap_live_bytes", double(heap.uordblks)},
+            QJsonObject result{{"results_delivered", double(publication.delivered)},
+                               {"results_dropped", double(publication.dropped)},
+                               {"results_errors", double(publication.errors)},
+                               {"heap_live_bytes", double(heap.uordblks)},
                                {"heap_free_bytes", double(heap.fordblks)},
                                {"heap_arena_bytes", double(heap.arena)},
                                {"elapsed_s", elapsed},

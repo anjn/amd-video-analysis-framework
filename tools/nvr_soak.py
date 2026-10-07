@@ -47,6 +47,7 @@ def main():
     parser.add_argument('config', type=Path)
     parser.add_argument('h264', type=Path)
     parser.add_argument('h265', type=Path)
+    parser.add_argument('--build-dir', type=Path, help='Frozen build tree for long-running validation')
     parser.add_argument('--seconds', type=int, default=3600)
     parser.add_argument('--cycles', type=int, default=0)
     parser.add_argument('--port', type=int, default=8555)
@@ -57,6 +58,7 @@ def main():
     if args.seconds < 40 or args.seconds < 30 + args.cycles * 2:
         parser.error('allow startup, 2 seconds per cycle and recovery')
     root = Path(__file__).resolve().parents[1]
+    build = args.build_dir.resolve() if args.build_dir else root / 'build'
     if args.output.exists():
         parser.error('select a new output directory')
     args.output.mkdir(parents=True)
@@ -70,11 +72,13 @@ def main():
     local_config.write_text(json.dumps(config, indent=2))
     local_config.chmod(0o600)
     env = os.environ.copy()
+    env['LD_LIBRARY_PATH'] = ':'.join(str(build / p) for p in ('', 'src/gst', 'src/streaming')) + ':' + env.get('LD_LIBRARY_PATH', '')
+    env['GST_PLUGIN_PATH'] = str(build / 'plugins') + ':' + env.get('GST_PLUGIN_PATH', '')
     env.setdefault('WAYLAND_DISPLAY', 'wayland-0')
     env.setdefault('QT_QPA_PLATFORM', 'wayland-egl')
-    server_command = [str(root / 'build/src/nvr/amdva-nvr-rtsp-server'),
+    server_command = [str(build / 'src/nvr/amdva-nvr-rtsp-server'),
                       str(args.h264.resolve()), str(args.h265.resolve()), str(args.port)]
-    env['LD_PRELOAD'] = str(root / 'build/src/gst/libamdva_copy_audit.so')
+    env['LD_PRELOAD'] = str(build / 'src/gst/libamdva_copy_audit.so')
     server_env = env.copy()
     server_env.pop('LD_PRELOAD', None)
     warmup = max(60, 30 + args.cycles * 2)
@@ -94,7 +98,7 @@ def main():
             time.sleep(1)
             if server.poll() is not None:
                 raise RuntimeError('RTSP fixture server exited')
-            process = subprocess.Popen([str(root / 'build/src/nvr/amdva-nvr-validate'),
+            process = subprocess.Popen([str(build / 'src/nvr/amdva-nvr-validate'),
                                         str(local_config), str(args.seconds), str(args.cycles)],
                                        env=env, stdout=telemetry, stderr=log)
             started = time.monotonic()

@@ -8,15 +8,19 @@
 namespace {
 std::atomic<bool> active{false};
 std::atomic<unsigned long long> violations{0},copies{0},bytes{0},layout_queries{0};
+thread_local const void* metadata_pointer{};
+thread_local size_t metadata_bytes{};
+thread_local int metadata_kind{};
 struct Surfaces {std::mutex mutex;std::set<std::pair<VADisplay,VASurfaceID>> unused;};
 Surfaces& surfaces(){static Surfaces value;return value;}
 template<class F> F original(const char* name) {return reinterpret_cast<F>(dlsym(RTLD_NEXT,name));}
-void copy(size_t size,hipMemcpyKind kind) {
+void copy(size_t size,hipMemcpyKind kind,const void* source) {
     if(!active.load())return;
     ++copies;bytes+=size;
-    // The only transfer in the analytics path is the 7204-byte compact
-    // detection structure; no H2D/D2D or other sized transfers are allowed.
-    if(kind!=hipMemcpyDeviceToHost || size!=7204) {
+    const bool metadata=source==metadata_pointer&&size==metadata_bytes&&int(kind)==metadata_kind;
+    // GPU batch assembly stays on-device. Host transfers require an exact,
+    // bounded metadata declaration (or the legacy detection ABI size).
+    if(kind!=hipMemcpyDeviceToDevice&&!metadata&&(kind!=hipMemcpyDeviceToHost||size!=7204)) {
         ++violations;std::fprintf(stderr,"AMDVA_AUDIT prohibited copy: bytes=%zu kind=%d\n",size,int(kind));
     }
 }
@@ -25,28 +29,32 @@ void image_operation(const char* operation) {
 }
 }
 extern "C" void amdva_audit_start() {active=true;}
+extern "C" void amdva_audit_metadata_begin(const void* pointer,size_t size,int kind){
+    if(size<=256*1024){metadata_pointer=pointer;metadata_bytes=size;metadata_kind=kind;}
+}
+extern "C" void amdva_audit_metadata_end(){metadata_pointer=nullptr;metadata_bytes=0;}
 extern "C" unsigned long long amdva_audit_errors() {return violations.load();}
 extern "C" unsigned long long amdva_audit_copies() {return copies.load();}
 extern "C" unsigned long long amdva_audit_bytes() {return bytes.load();}
 extern "C" unsigned long long amdva_audit_layout_queries() {return layout_queries.load();}
 extern "C" void amdva_audit_stop() {active=false;}
 extern "C" hipError_t hipMemcpy(void* dst,const void* src,size_t size,hipMemcpyKind kind) {
-    copy(size,kind);auto f=original<decltype(&hipMemcpy)>("hipMemcpy");return f?f(dst,src,size,kind):hipErrorNotSupported;
+    copy(size,kind,src);auto f=original<decltype(&hipMemcpy)>("hipMemcpy");return f?f(dst,src,size,kind):hipErrorNotSupported;
 }
 extern "C" hipError_t hipMemcpyAsync(void* dst,const void* src,size_t size,hipMemcpyKind kind,hipStream_t stream) {
-    copy(size,kind);auto f=original<decltype(&hipMemcpyAsync)>("hipMemcpyAsync");return f?f(dst,src,size,kind,stream):hipErrorNotSupported;
+    copy(size,kind,src);auto f=original<decltype(&hipMemcpyAsync)>("hipMemcpyAsync");return f?f(dst,src,size,kind,stream):hipErrorNotSupported;
 }
 extern "C" hipError_t hipMemcpyDtoD(hipDeviceptr_t dst,hipDeviceptr_t src,size_t size) {
-    copy(size,hipMemcpyDeviceToDevice);auto f=original<decltype(&hipMemcpyDtoD)>("hipMemcpyDtoD");return f?f(dst,src,size):hipErrorNotSupported;
+    copy(size,hipMemcpyDeviceToDevice,src);auto f=original<decltype(&hipMemcpyDtoD)>("hipMemcpyDtoD");return f?f(dst,src,size):hipErrorNotSupported;
 }
 extern "C" hipError_t hipMemcpyDtoDAsync(hipDeviceptr_t dst,hipDeviceptr_t src,size_t size,hipStream_t stream) {
-    copy(size,hipMemcpyDeviceToDevice);auto f=original<decltype(&hipMemcpyDtoDAsync)>("hipMemcpyDtoDAsync");return f?f(dst,src,size,stream):hipErrorNotSupported;
+    copy(size,hipMemcpyDeviceToDevice,src);auto f=original<decltype(&hipMemcpyDtoDAsync)>("hipMemcpyDtoDAsync");return f?f(dst,src,size,stream):hipErrorNotSupported;
 }
 extern "C" hipError_t hipMemcpyHtoD(hipDeviceptr_t dst,const void* src,size_t size) {
-    copy(size,hipMemcpyHostToDevice);auto f=original<decltype(&hipMemcpyHtoD)>("hipMemcpyHtoD");return f?f(dst,src,size):hipErrorNotSupported;
+    copy(size,hipMemcpyHostToDevice,src);auto f=original<decltype(&hipMemcpyHtoD)>("hipMemcpyHtoD");return f?f(dst,src,size):hipErrorNotSupported;
 }
 extern "C" hipError_t hipMemcpyDtoH(void* dst,hipDeviceptr_t src,size_t size) {
-    copy(size,hipMemcpyDeviceToHost);auto f=original<decltype(&hipMemcpyDtoH)>("hipMemcpyDtoH");return f?f(dst,src,size):hipErrorNotSupported;
+    copy(size,hipMemcpyDeviceToHost,src);auto f=original<decltype(&hipMemcpyDtoH)>("hipMemcpyDtoH");return f?f(dst,src,size):hipErrorNotSupported;
 }
 extern "C" gboolean gst_memory_map(GstMemory* memory,GstMapInfo* info,GstMapFlags flags) {
     if(memory && memory->allocator && memory->allocator->mem_type &&

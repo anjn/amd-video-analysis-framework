@@ -17,6 +17,10 @@
 namespace amdva {
 void hip_check(hipError_t status, const char* operation);
 void va_check(VAStatus status, const char* operation);
+// Explicit bounded control/analysis transfers. Images and raw tensors must not
+// use these helpers. The copy auditor checks the exact pointer, size and kind.
+void readback_metadata(void* host, const void* device, size_t bytes);
+void upload_metadata(void* device, const void* host, size_t bytes);
 struct Layout {
     uint32_t width{}, height{}, fourcc{};
     uint32_t object_size{}, y_offset{}, uv_offset{}, y_pitch{}, uv_pitch{};
@@ -28,6 +32,8 @@ Layout validate_layout(const VADRMPRIMESurfaceDescriptor& desc);
 class DeviceBuffer {
 public:
     explicit DeviceBuffer(size_t bytes);
+    // Non-owning view for synchronous APIs. The caller retains GPU ownership.
+    DeviceBuffer(void* borrowed, size_t bytes);
     ~DeviceBuffer();
     DeviceBuffer(const DeviceBuffer&) = delete;
     DeviceBuffer& operator=(const DeviceBuffer&) = delete;
@@ -36,6 +42,7 @@ public:
 private:
     void* data_{};
     size_t bytes_{};
+    bool owned_{true};
 };
 
 class ImportedSurface {
@@ -78,7 +85,9 @@ public:
     VASurfaceID create_bgra(unsigned width, unsigned height);
     void scale(VASurfaceID src, VASurfaceID dst, unsigned src_width,
                unsigned src_height, unsigned dst_width, unsigned dst_height);
-    VADRMPRIMESurfaceDescriptor export_surface(VASurfaceID surface);
+    void crop_scale(VASurfaceID src, VASurfaceID dst, unsigned x, unsigned y,
+                    unsigned width, unsigned height, unsigned dst_width, unsigned dst_height);
+    VADRMPRIMESurfaceDescriptor export_surface(VASurfaceID surface, bool writable=false);
     void destroy_surface(VASurfaceID surface) noexcept;
     bool has_h264_decode() const;
 private:

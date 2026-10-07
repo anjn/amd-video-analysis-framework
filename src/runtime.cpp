@@ -9,8 +9,21 @@
 #include <set>
 #include <algorithm>
 #include <limits>
+extern "C" void amdva_audit_metadata_begin(const void*,size_t,int) __attribute__((weak));
+extern "C" void amdva_audit_metadata_end() __attribute__((weak));
 
 namespace amdva {
+namespace {
+void metadata_copy(void* dst,const void* src,size_t bytes,hipMemcpyKind kind){
+    if(!dst||!src||!bytes||bytes>256*1024)throw std::runtime_error("Metadata transfer exceeds budget");
+    if(amdva_audit_metadata_begin)amdva_audit_metadata_begin(src,bytes,int(kind));
+    auto status=hipMemcpy(dst,src,bytes,kind);
+    if(amdva_audit_metadata_end)amdva_audit_metadata_end();
+    hip_check(status,"Compact metadata transfer");
+}
+}
+void readback_metadata(void* host,const void* device,size_t bytes){metadata_copy(host,device,bytes,hipMemcpyDeviceToHost);}
+void upload_metadata(void* device,const void* host,size_t bytes){metadata_copy(device,host,bytes,hipMemcpyHostToDevice);}
 void hip_check(hipError_t s, const char* op) {
     if (s != hipSuccess) throw std::runtime_error(std::string(op) + ": " + hipGetErrorString(s));
 }
@@ -56,7 +69,10 @@ DeviceBuffer::DeviceBuffer(size_t b):bytes_(b) {
     if (!b) throw std::runtime_error("Zero-sized device buffer");
     hip_check(hipMalloc(&data_, b), "hipMalloc");
 }
-DeviceBuffer::~DeviceBuffer() { if (data_) (void)hipFree(data_); }
+DeviceBuffer::DeviceBuffer(void* borrowed,size_t bytes):data_(borrowed),bytes_(bytes),owned_(false){
+    if(!borrowed||!bytes)throw std::runtime_error("Invalid borrowed device buffer");
+}
+DeviceBuffer::~DeviceBuffer() { if (data_&&owned_) (void)hipFree(data_); }
 ImportedSurface::ImportedSurface(VADRMPRIMESurfaceDescriptor d) {
     auto close_all=[&] { for(unsigned i=0;i<std::min(d.num_objects,4u);++i) if(d.objects[i].fd>=0) close(d.objects[i].fd); };
     try {
@@ -168,8 +184,12 @@ VASurfaceID VaSession::create_bgra(unsigned w,unsigned h) {
     return surface;
 }
 void VaSession::scale(VASurfaceID src,VASurfaceID dst,unsigned sw,unsigned sh,unsigned dw,unsigned dh) {
+    crop_scale(src,dst,0,0,sw,sh,dw,dh);
+}
+void VaSession::crop_scale(VASurfaceID src,VASurfaceID dst,unsigned x,unsigned y,unsigned sw,unsigned sh,unsigned dw,unsigned dh) {
     if(std::max({sw,sh,dw,dh})>32767) throw std::runtime_error("VA rectangle dimensions exceed supported bounds");
-    VARectangle in{0,0,static_cast<uint16_t>(sw),static_cast<uint16_t>(sh)};
+    if(x>32767||y>32767||!sw||!sh||!dw||!dh)throw std::runtime_error("Invalid VA crop rectangle");
+    VARectangle in{static_cast<int16_t>(x),static_cast<int16_t>(y),static_cast<uint16_t>(sw),static_cast<uint16_t>(sh)};
     VARectangle out{0,0,static_cast<uint16_t>(dw),static_cast<uint16_t>(dh)};
     VAProcPipelineParameterBuffer p{}; p.surface=src; p.surface_region=&in; p.output_region=&out;
     p.surface_color_standard=VAProcColorStandardBT709; p.output_color_standard=VAProcColorStandardBT709;
@@ -184,11 +204,11 @@ void VaSession::scale(VASurfaceID src,VASurfaceID dst,unsigned sw,unsigned sh,un
         vaDestroyBuffer(display_,b);
     } catch (...) { vaDestroyBuffer(display_,b); throw; }
 }
-VADRMPRIMESurfaceDescriptor VaSession::export_surface(VASurfaceID s) {
+VADRMPRIMESurfaceDescriptor VaSession::export_surface(VASurfaceID s,bool writable) {
     va_check(vaSyncSurface(display_,s),"VA export readiness");
     VADRMPRIMESurfaceDescriptor d{};
     va_check(vaExportSurfaceHandle(display_,s,VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2,
-        VA_EXPORT_SURFACE_READ_ONLY|VA_EXPORT_SURFACE_SEPARATE_LAYERS,&d),"VA export DMA-BUF");
+        (writable?VA_EXPORT_SURFACE_READ_WRITE:VA_EXPORT_SURFACE_READ_ONLY)|VA_EXPORT_SURFACE_SEPARATE_LAYERS,&d),"VA export DMA-BUF");
     return d;
 }
 bool VaSession::has_h264_decode() const {

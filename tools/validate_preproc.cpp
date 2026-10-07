@@ -1,4 +1,5 @@
 #include "amdva/tensor_meta.hpp"
+#include "amdva/video_preprocess.hpp"
 #include <gst/app/gstappsrc.h>
 #include <gst/app/gstappsink.h>
 #include <gst/video/video.h>
@@ -30,6 +31,9 @@ int main(int argc,char** argv) {
         require(gst_element_set_state(pipeline,GST_STATE_PLAYING)!=GST_STATE_CHANGE_FAILURE,"Pipeline start failed");
         std::shared_ptr<amdva::Tensor> first_tensor;
         std::vector<float> first_values;
+        amdva::ModelInfo roi_model;roi_model.width=roi_model.height=224;roi_model.letterbox=false;
+        roi_model.normalization.bgr=true;roi_model.normalization.mean={.1f,.2f,.3f};roi_model.normalization.stddev={.5f,.6f,.7f};
+        amdva::VideoPreprocessor roi_preprocessor(roi_model);
         for(unsigned frame=0;frame<2;frame++) {
         auto* memory=gst_va_allocator_alloc(allocator);require(memory,"VA allocation failed");
         auto* buffer=gst_buffer_new();gst_buffer_append_memory(buffer,memory);
@@ -67,6 +71,13 @@ int main(int argc,char** argv) {
             require(std::abs(values[c*640*640+140*640+320]-expected[c])<2.0f/255,"RGB channel/normalization incorrect");
             require(std::abs(values[c*640*640+499*640+639]-expected[c])<2.0f/255,"Pitch or bottom edge incorrect");
             require(std::abs(values[c*640*640+500*640]-114.0f/255)<1e-6,"Bottom padding incorrect");
+        }
+        auto cropped=roi_preprocessor.prepare(output,info,11,233,1897,513);
+        require(cropped->geometry.crop_x==10&&cropped->geometry.crop_y==232&&cropped->geometry.crop_width==1898&&cropped->geometry.crop_height==514,"NV12 ROI alignment");
+        std::vector<float> roi_values(3*224*224);amdva::hip_check(hipMemcpy(roi_values.data(),cropped->buffer->data(),roi_values.size()*sizeof(float),hipMemcpyDeviceToHost),"Offline ROI reference");
+        for(unsigned c=0;c<3;c++){
+            const float normalized=(expected[2-c]-roi_model.normalization.mean[c])/roi_model.normalization.stddev[c];
+            require(std::abs(roi_values[c*224*224+112*224+112]-normalized)<.04f,"Multistage ROI color/BGR/mean/std reference");
         }
         if(!frame) {first_tensor=tensor;first_values=values;}
         else {

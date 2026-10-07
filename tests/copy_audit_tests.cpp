@@ -34,6 +34,13 @@ int main() {
                          "Prohibited test copy");
         if (errors() != 2)
             throw std::runtime_error("Non-detection readback not rejected");
+        amdva::upload_metadata(compact.data(),bytes,128);
+        amdva::readback_metadata(bytes,compact.data(),128);
+        amdva::DeviceBuffer second(7204);
+        amdva::hip_check(hipMemcpy(second.data(),compact.data(),7204,hipMemcpyDeviceToDevice),"GPU batch assembly");
+        if(errors()!=2)throw std::runtime_error("Marked metadata or GPU assembly incorrectly rejected");
+        amdva::hip_check(hipMemcpy(compact.data(),bytes,128,hipMemcpyHostToDevice),"Prohibited upload");
+        if(errors()!=3)throw std::runtime_error("Unmarked CPU upload not rejected");
         stop();
         va.destroy_surface(source);
         va.destroy_surface(target);

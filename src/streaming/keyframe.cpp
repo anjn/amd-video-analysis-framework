@@ -1,5 +1,5 @@
-#include "keyframe.hpp"
-namespace amdva::nvr {
+#include "amdva/streaming/keyframe.hpp"
+namespace amdva::streaming {
 KeyframeCache::~KeyframeCache() {
     gst_h264_nal_parser_free(h264_);
     gst_h265_parser_free(h265_);
@@ -134,4 +134,4 @@ GstBuffer *KeyframeCache::input(GstBuffer *au) const {
     GST_BUFFER_FLAG_UNSET(result, GST_BUFFER_FLAG_DELTA_UNIT);
     return result;
 }
-} // namespace amdva::nvr
+} // namespace amdva::streaming

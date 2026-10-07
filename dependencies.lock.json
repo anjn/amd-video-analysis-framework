@@ -429,6 +429,42 @@
         "version": "6.4.2-5build3",
         "filename": "qt6-wayland_6.4.2-5build3_amd64.deb",
         "sha256": "61ea3237974e71188c699e3554f08b8b2dc29e6854d727ff60627ec0570de6cd"
+      },
+      {
+        "name": "libpaho-mqtt-dev",
+        "version": "1.3.13-1build2",
+        "filename": "libpaho-mqtt-dev_1.3.13-1build2_amd64.deb",
+        "sha256": "3b2171a187a17656230ef5e839c93ddb3941e54a1a3a39ab9a0ec7bc032ce022"
+      },
+      {
+        "name": "libpaho-mqtt1.3",
+        "version": "1.3.13-1build2",
+        "filename": "libpaho-mqtt1.3_1.3.13-1build2_amd64.deb",
+        "sha256": "435f7e12d2a7466d39e405013d3d1ae2ac449b6020d0dced9d75a3fbdaa89638"
+      },
+      {
+        "name": "librdkafka-dev",
+        "version": "2.3.0-1build2",
+        "filename": "librdkafka-dev_2.3.0-1build2_amd64.deb",
+        "sha256": "ed1e3d3a689b83b9bc6aeedb4b83b01dfff77c464897a87d2d082a0c9069c49f"
+      },
+      {
+        "name": "librdkafka1",
+        "version": "2.3.0-1build2",
+        "filename": "librdkafka1_2.3.0-1build2_amd64.deb",
+        "sha256": "0294972c1eb7229644ba09c97772b69d0587686b1e082d75ea8d77d615385a2b"
+      },
+      {
+        "name": "librdkafka++1",
+        "version": "2.3.0-1build2",
+        "filename": "librdkafka++1_2.3.0-1build2_amd64.deb",
+        "sha256": "d5b1ce37ec720345057017d4d3a33469cbc50a6f4bc730e9d13586f3b5e5c823"
+      },
+      {
+        "name": "python-gi-dev",
+        "version": "3.48.2-1",
+        "filename": "python-gi-dev_3.48.2-1_amd64.deb",
+        "sha256": "406b1f6c8e827984e334c2e657011c2ac93f385a036a5db13cb7bf8ffb6cdc95"
       }
     ]
   },
@@ -448,7 +484,8 @@
       "ultralytics": "8.3.203",
       "onnx": "1.18.0",
       "onnxslim": "0.1.71",
-      "onnxruntime": "1.24.4"
+      "onnxruntime": "1.24.4",
+      "transformers": "4.57.1"
     }
   }
 }

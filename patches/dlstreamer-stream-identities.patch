@@ -1,0 +1,49 @@
+--- a/src/monolithic/gst/elements/gvastreammux/gstgvastreammux.cpp
++++ b/src/monolithic/gst/elements/gvastreammux/gstgvastreammux.cpp
+@@ -1081,6 +1081,7 @@
+     GstBuffer *buf;
+     guint pad_index;
+     GstCaps *caps; /* own ref; only used in CONTAINER mode */
++    GstEvent *start; /* original stream identity; own ref */
+ } BatchEntry;
+
+ /* Output task loop: runs on srcpad task thread */
+@@ -1210,7 +1211,8 @@
+                 head = (GstBuffer *)g_queue_pop_head(&pdata->buffer_queue);
+                 BatchEntry entry = {
+                     head, pdata->pad_index,
+-                    (output_mode == GVA_STREAMMUX_OUTPUT_CONTAINER && pdata->caps) ? gst_caps_ref(pdata->caps) : NULL};
++                    (output_mode == GVA_STREAMMUX_OUTPUT_CONTAINER && pdata->caps) ? gst_caps_ref(pdata->caps) : NULL,
++                    output_mode == GVA_STREAMMUX_OUTPUT_CONTAINER ? gst_pad_get_sticky_event(pdata->pad, GST_EVENT_STREAM_START, 0) : NULL};
+                 g_array_append_val(batch, entry);
+                 batch_size++;
+             }
+@@ -1256,6 +1258,8 @@
+                     gst_buffer_unref(e->buf);
+                 if (e->caps)
+                     gst_caps_unref(e->caps);
++                if (e->start)
++                    gst_event_unref(e->start);
+             }
+             g_array_free(batch, TRUE);
+             gst_pad_pause_task(mux->srcpad);
+@@ -1275,12 +1279,18 @@
+             entry->buf = NULL;
+
+             if (entry->caps) {
+-                stream->sticky_events = g_new0(GstEvent *, 1);
++                stream->sticky_events = g_new0(GstEvent *, entry->start ? 2 : 1);
+                 stream->sticky_events[0] = gst_event_new_caps(entry->caps); /* takes its own ref */
+                 stream->n_sticky_events = 1;
++                if (entry->start) {
++                    stream->sticky_events[stream->n_sticky_events++] = entry->start;
++                    entry->start = NULL;
++                }
+                 gst_caps_unref(entry->caps);
+                 entry->caps = NULL;
+             }
++            if (entry->start)
++                gst_event_unref(entry->start);
+         }
+
+         GST_LOG_OBJECT(mux, "Push container buffer (pts=%" GST_TIME_FORMAT "), n_streams=%u", GST_TIME_ARGS(batch_pts),

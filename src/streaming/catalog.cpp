@@ -1,13 +1,14 @@
-#include "catalog.hpp"
+#include "amdva/streaming/catalog.hpp"
 #include <algorithm>
 #include <chrono>
 #include <fcntl.h>
+#include <sqlite3.h>
 #include <stdexcept>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
-namespace amdva::nvr {
+namespace amdva::streaming {
 namespace {
 struct Statement {
     sqlite3_stmt *p{};
@@ -134,4 +135,4 @@ bool Catalog::enforce(uint64_t quota, uint64_t reserve) {
     }
     return false;
 }
-} // namespace amdva::nvr
+} // namespace amdva::streaming

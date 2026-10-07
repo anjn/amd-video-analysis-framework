@@ -1,5 +1,7 @@
-#include "controller.hpp"
-#include "keyframe.hpp"
+#include "amdva/streaming/controller.hpp"
+#include "amdva/batching.hpp"
+#include "amdva/preprocess.hpp"
+#include "amdva/streaming/keyframe.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -14,7 +16,7 @@
 #include <malloc.h>
 #include <map>
 #include <random>
-namespace amdva::nvr {
+namespace amdva::streaming {
 void initialize_runtime() {
     // Reuse a bounded set of glibc arenas across transient camera worker groups.
     // Respect an operator's explicit allocator setting.
@@ -718,13 +720,16 @@ Controller::Controller(Options options) : options_(std::move(options)) {
         throw std::runtime_error("Cannot open shared VA display");
     try {
         catalog_ = std::make_unique<Catalog>(options_.recording_root);
+        if (options_.results.method != "none")
+            publisher_ = std::make_unique<ResultPublisher>(options_.results);
         for (auto &s : slots_) {
             s.va = std::make_unique<VaSession>(
                 static_cast<VADisplay>(gst_va_display_get_va_dpy(display_)));
             s.ai_surface = s.va->create_bgra(640, 640);
             s.image = std::make_unique<ImportedSurface>(s.va->export_surface(s.ai_surface));
-            for (auto &p : s.preview)
-                p.surface = s.va->create_bgra(1920, 1080);
+            if (options_.preview_enabled)
+                for (auto &p : s.preview)
+                    p.surface = s.va->create_bgra(1920, 1080);
         }
         if (options_.background_ai_enabled)
             for (auto &s : background_slots_) {
@@ -1043,22 +1048,10 @@ void Controller::loop() {
         fatal_ = e.what();
     }
 }
-namespace {
-const char *pack_source = R"(
-extern "C" __global__ void pack(const unsigned char* bgra,unsigned offset,unsigned pitch,unsigned sw,unsigned sh,unsigned px,unsigned py,float* tensor) {
- unsigned i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=640*640)return;
- unsigned x=i%640,y=i/640;float r=114.0f/255.0f,g=r,b=r;
- if(x>=px && x<px+sw && y>=py && y<py+sh){const unsigned char* p=bgra+offset+(y-py)*pitch+(x-px)*4;b=p[0]/255.0f;g=p[1]/255.0f;r=p[2]/255.0f;}
- tensor[i]=r;tensor[640*640+i]=g;tensor[2*640*640+i]=b;
-}
-extern "C" __global__ void pad(float* input,unsigned valid,unsigned batch) {
- unsigned i=blockIdx.x*blockDim.x+threadIdx.x;unsigned size=3*640*640;
- if(i<(batch-valid)*size)input[valid*size+i]=114.0f/255.0f;
-})";
-}
 void Controller::preview_loop() {
     try {
         std::array<Sample, 16> previous;
+        const auto model_info = ModelInfo::load(options_.model_info);
         while (!stopping_) {
             for (unsigned index = 0; index < slots_.size(); ++index) {
                 auto &s = slots_[index];
@@ -1071,12 +1064,53 @@ void Controller::preview_loop() {
                     continue;
                 auto it = std::find_if(s.preview.begin(), s.preview.end(),
                                        [](const auto &p) { return p.state == 0; });
-                if (it == s.preview.end())
+                if (options_.preview_enabled && it == s.preview.end())
                     continue;
                 const auto frame = s.latest;
                 auto *buffer = gst_sample_get_buffer(frame.sample.get());
                 if (gst_va_buffer_peek_display(buffer) != display_)
                     throw std::runtime_error("Decoder did not use the shared VA display");
+                if (options_.tracking_enabled) {
+                    if (!s.tracker || s.tracking_generation != frame.generation) {
+                        s.tracker = std::make_unique<MetadataTracker>(model_info);
+                        s.tracking_generation = frame.generation;
+                        s.tracking_observation = 0;
+                        s.tracked.clear();
+                    }
+                    const bool observed = s.inferred != s.tracking_observation &&
+                                          s.detection_width == frame.width &&
+                                          s.detection_height == frame.height;
+                    s.tracked = s.tracker->process(
+                        frame.sample.get(), observed ? &s.detections : nullptr,
+                        {s.channel, frame.generation, s.sequence, GST_BUFFER_PTS(buffer)});
+                    if (observed) {
+                        s.tracking_observation = s.inferred;
+                        if (publisher_) {
+                            AnalysisResult result;
+                            for (const auto &tracked : s.tracked) {
+                                Instance object;
+                                object.box = tracked.box;
+                                object.tracking_id = tracked.id;
+                                if (object.box.class_id >= 0)
+                                    result.objects.push_back(object);
+                            }
+                            auto *metadata = gst_buffer_new();
+                            GST_BUFFER_PTS(metadata) = GST_BUFFER_PTS(buffer);
+                            attach_analysis(
+                                metadata, std::move(result), model_info,
+                                ImageTransform::make(frame.width, frame.height, frame.width,
+                                                     frame.height, false),
+                                {s.channel, frame.generation, s.sequence, GST_BUFFER_PTS(buffer)});
+                            publisher_->publish(analysis_json(metadata));
+                            gst_buffer_unref(metadata);
+                        }
+                    }
+                }
+                if (!options_.preview_enabled) {
+                    previous[index] = frame.sample;
+                    s.processed++;
+                    continue;
+                }
                 const auto surface = gst_va_buffer_get_surface(buffer);
                 if (surface == VA_INVALID_SURFACE)
                     throw std::runtime_error("Missing VA decode surface");
@@ -1117,24 +1151,62 @@ void Controller::preview_loop() {
 void Controller::gpu_loop() {
     try {
         hip_check(hipSetDevice(0), "AI device");
-        BatchEngine batch(options_.model, options_.model_info, options_.batch);
-        std::unique_ptr<BatchEngine> single;
-        if (options_.batch > 1)
-            single = std::make_unique<BatchEngine>(options_.single_model, options_.model_info, 1);
-        DeviceBuffer input(size_t(options_.batch) * 3 * 640 * 640 * sizeof(float));
-        Kernel pack(pack_source, "pack", gpu_arch(0)), pad(pack_source, "pad", gpu_arch(0));
+        BatchOptions configuration;
+        configuration.model = options_.model;
+        configuration.model_info = options_.model_info;
+        configuration.size = options_.batch;
+        configuration.timeout_ms = 0;
+        const auto prefix = "nvr/" + std::to_string(reinterpret_cast<uintptr_t>(this));
+        configuration.instance_id = prefix + "/batch";
+        auto batch = SharedBatchExecutor::acquire(configuration);
+        const auto &info = batch->info();
+        const PixelNormalization defaults;
+        if (info.task != "detection" || info.width != 640 || info.height != 640 ||
+            info.classes != 80 || info.input_name != "images" || !info.letterbox ||
+            info.normalization.bgr != defaults.bgr || info.normalization.scale != defaults.scale ||
+            info.normalization.padding != defaults.padding ||
+            info.normalization.mean != defaults.mean ||
+            info.normalization.stddev != defaults.stddev)
+            throw std::runtime_error("NVR streaming analytics requires YOLOv8 COCO80 at 640x640 "
+                                     "with default RGB letterbox normalization");
+        std::shared_ptr<SharedBatchExecutor> single;
+        if (options_.batch > 1) {
+            configuration.model = options_.single_model;
+            configuration.size = 1;
+            configuration.instance_id = prefix + "/single";
+            single = SharedBatchExecutor::acquire(configuration);
+        }
+        auto input =
+            std::make_shared<DeviceBuffer>(size_t(options_.batch) * 3 * 640 * 640 * sizeof(float));
+        auto view = [&](unsigned slot) {
+            auto *ptr = static_cast<float *>(input->data()) + size_t(slot) * 3 * 640 * 640;
+            return std::shared_ptr<DeviceBuffer>(
+                new DeviceBuffer(ptr, size_t(3) * 640 * 640 * sizeof(float)),
+                [owner = input](DeviceBuffer *p) { delete p; });
+        };
+        ImagePacker pack;
         // Prime both model shapes before enabling the live copy audit and sampling
         // resource baselines; lazy kernels/workspaces must not first appear on
         // a later reconnect's single-image batch.
         {
-            void *data = input.data();
-            unsigned zero = 0, size = options_.batch;
-            void *args[] = {&data, &zero, &size};
-            pad.launch(size * 3 * 640 * 640, args);
+            pack.pad(input->data(), 0, options_.batch, 640, 640);
             hip_check(hipDeviceSynchronize(), "Warmup input");
-            batch.infer(data, size);
+            std::vector<InferenceRequest> requests;
+            for (unsigned i = 0; i < options_.batch; i++)
+                requests.push_back({{"images", TensorType::Float32, {1, 3, 640, 640}, view(i), 0},
+                                    prefix + "/warmup/" + std::to_string(i),
+                                    0,
+                                    0});
+            auto warmup = batch->submit_many(std::move(requests));
+            for (auto &result : warmup)
+                (void)result.get();
             if (single)
-                single->infer(data, 1);
+                (void)single
+                    ->submit({{"images", TensorType::Float32, {1, 3, 640, 640}, view(0), 0},
+                              prefix + "/warmup/single",
+                              0,
+                              0})
+                    .get();
         }
         inference_ready_ = true;
         std::array<Sample, 20> previous;
@@ -1226,13 +1298,10 @@ void Controller::gpu_loop() {
                 s.ai_geometry = geometry;
                 s.va->scale(gst_va_buffer_get_surface(buffer), s.ai_surface, item.frame.width,
                             item.frame.height, item.sw, item.sh);
-                const auto &layout = s.image->layout();
-                const uint8_t *pixels = s.image->data();
-                unsigned offset = layout.y_offset, pitch = layout.y_pitch;
-                auto *output = static_cast<float *>(input.data()) + size_t(valid) * 3 * 640 * 640;
-                void *args[] = {&pixels,  &offset,  &pitch,   &item.sw,
-                                &item.sh, &item.px, &item.py, &output};
-                pack.launch(640 * 640, args);
+                auto *output = static_cast<float *>(input->data()) + size_t(valid) * 3 * 640 * 640;
+                pack.pack(*s.image,
+                          ImageTransform::make(item.frame.width, item.frame.height, 640, 640),
+                          output);
                 hip_check(hipDeviceSynchronize(), "AI packing completion");
                 s.last_ai = Clock::now();
                 previous[item.slot] = item.frame.sample;
@@ -1242,13 +1311,21 @@ void Controller::gpu_loop() {
             if (!valid)
                 continue;
             if (valid > 1 && valid < options_.batch) {
-                void *data = input.data();
-                unsigned size = options_.batch;
-                void *args[] = {&data, &valid, &size};
-                pad.launch((size - valid) * 3 * 640 * 640, args);
+                pack.pad(input->data(), valid, options_.batch, 640, 640);
                 hip_check(hipDeviceSynchronize(), "Batch padding completion");
             }
-            auto results = (valid == 1 && single ? *single : batch).infer(input.data(), valid);
+            auto executor = valid == 1 && single ? single : batch;
+            std::vector<InferenceRequest> requests;
+            for (unsigned i = 0; i < valid; i++)
+                requests.push_back({{"images", TensorType::Float32, {1, 3, 640, 640}, view(i), 0},
+                                    prefix + "/" + prepared[i].channel,
+                                    prepared[i].frame.generation,
+                                    prepared[i].slot});
+            auto pending = executor->submit_many(std::move(requests));
+            std::vector<std::vector<Detection>> results(valid);
+            for (unsigned i = 0; i < valid; i++)
+                for (const auto &object : pending[i].get().objects)
+                    results[i].push_back(object.box);
             const auto completed = Clock::now();
             const double elapsed =
                 std::chrono::duration<double, std::milli>(completed - started).count();
@@ -1293,6 +1370,25 @@ void Controller::gpu_loop() {
                 s.detected_at = item.frame.received;
                 s.detection_width = item.frame.width;
                 s.detection_height = item.frame.height;
+                if (publisher_ && (item.slot >= 16 || !options_.tracking_enabled)) {
+                    AnalysisResult result;
+                    for (const auto &box : s.detections) {
+                        Instance object;
+                        object.box = box;
+                        result.objects.push_back(object);
+                    }
+                    auto *metadata = gst_buffer_new();
+                    auto *source = gst_sample_get_buffer(item.frame.sample.get());
+                    GST_BUFFER_PTS(metadata) = GST_BUFFER_PTS(source);
+                    attach_analysis(metadata, std::move(result), batch->info(),
+                                    ImageTransform::make(item.frame.width, item.frame.height,
+                                                         item.frame.width, item.frame.height,
+                                                         false),
+                                    {item.channel, item.frame.generation, s.inferred,
+                                     GST_BUFFER_PTS(source), item.slot >= 16});
+                    publisher_->publish(analysis_json(metadata));
+                    gst_buffer_unref(metadata);
+                }
                 s.inferred++;
                 if (item.slot >= 16) {
                     s.job_done = true;
@@ -1313,4 +1409,10 @@ void Controller::gpu_loop() {
         fatal_ = std::string("AI: ") + e.what();
     }
 }
-} // namespace amdva::nvr
+} // namespace amdva::streaming
+
+namespace amdva::streaming {
+PublicationStatus Controller::publication_status() const {
+    return publisher_ ? publisher_->status() : PublicationStatus{};
+}
+} // namespace amdva::streaming

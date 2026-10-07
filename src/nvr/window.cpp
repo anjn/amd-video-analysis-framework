@@ -1,4 +1,5 @@
 #include "window.hpp"
+#include "amdva/overlay.hpp"
 #include <QApplication>
 #include <QDir>
 #include <QFile>
@@ -27,14 +28,6 @@ namespace {
 volatile std::sig_atomic_t shutdown_requested = 0;
 void shutdown_signal(int) { shutdown_requested = 1; }
 QString qs(const std::string &s) { return QString::fromStdString(s); }
-std::string validated_uri(std::string uri) {
-    const QUrl url(qs(uri));
-    if (!url.isValid() || url.host().isEmpty() ||
-        (url.scheme() != "rtsp" && url.scheme() != "rtsps"))
-        throw std::runtime_error("Source URI must use RTSP with a host");
-    uri.replace(0, size_t(url.scheme().size()), url.scheme().toStdString());
-    return uri;
-}
 GLuint program(QOpenGLExtraFunctions *gl, const char *vertex, const char *fragment) {
     GLuint shaders[2]{};
     GLuint result = 0;
@@ -289,15 +282,14 @@ void Tiles::paintGL() {
         if (Clock::now() - s.detected_at <= std::chrono::milliseconds(500) &&
             p.original_width == s.detection_width && p.original_height == s.detection_height) {
             gl_->glUseProgram(box_program_);
-            for (const auto &b : s.detections) {
-                const float left = x + w * b.x / s.detection_width,
-                            right = left + w * b.w / s.detection_width,
-                            top = y - h * b.y / s.detection_height,
-                            bottom = top - h * b.h / s.detection_height;
-                const float outline[] = {left, top, right, top, right, bottom, left, bottom};
-                vertices(outline, 4, 2);
-                gl_->glDrawArrays(GL_LINE_LOOP, 0, 4);
-            }
+            OverlayFrame overlay{s.detection_width,s.detection_height,{},{}};
+            if(!s.tracked.empty())for(const auto& tracked:s.tracked)overlay.objects.push_back({tracked.box,tracked.label,tracked.id,{}});
+            else for(const auto& box:s.detections)overlay.objects.push_back({box,"",0,{}});
+            const auto lines=make_overlay_lines(overlay,s.detection_width,s.detection_height);
+            std::vector<float> points;points.reserve(lines.size()*4);
+            for(const auto& line:lines){points.push_back(x+w*line.x0/s.detection_width);points.push_back(y-h*line.y0/s.detection_height);points.push_back(x+w*line.x1/s.detection_width);points.push_back(y-h*line.y1/s.detection_height);}
+            if(!points.empty()){vertices(points.data(),points.size()/2,2);gl_->glDrawArrays(GL_LINES,0,points.size()/2);}
+
         }
     }
     gl_->glFlush();
@@ -312,106 +304,6 @@ void install_shutdown_signals(QCoreApplication &app) {
             app.quit();
     });
     timer->start(100);
-}
-Options load_config(const std::string &path) {
-    QFile f(qs(path));
-    if (!f.open(QIODevice::ReadOnly))
-        throw std::runtime_error("Cannot read NVR config");
-    QJsonParseError error;
-    auto doc = QJsonDocument::fromJson(f.readAll(), &error);
-    if (error.error != QJsonParseError::NoError || !doc.isObject())
-        throw std::runtime_error("Invalid NVR JSON config");
-    const auto j = doc.object();
-    Options o;
-    const auto resolve = [&](const char *name) {
-        const auto text = j[name].toString();
-        return text.isEmpty()
-                   ? std::string{}
-                   : QDir(QFileInfo(f).absolutePath()).absoluteFilePath(text).toStdString();
-    };
-    o.model = resolve("model");
-    o.single_model = resolve("single_model");
-    o.model_info = resolve("model_info");
-    if (j.contains("recording_root"))
-        o.recording_root = resolve("recording_root");
-    else
-        o.recording_root =
-            QDir(QFileInfo(f).absolutePath()).absoluteFilePath("recordings").toStdString();
-    const auto number = [&](const char *key, double fallback) {
-        if (!j.contains(key))
-            return fallback;
-        if (!j[key].isDouble())
-            throw std::runtime_error(std::string("Expected numeric ") + key);
-        return j[key].toDouble();
-    };
-    const double batch = number("batch_size", 4), seconds = number("segment_seconds", 60);
-    if (batch != 1 && batch != 2 && batch != 4 && batch != 8 && batch != 16)
-        throw std::runtime_error("Invalid batch size");
-    if (seconds != std::floor(seconds) || seconds < 1 || seconds > 86400)
-        throw std::runtime_error("Invalid segment duration");
-    if (j.contains("background_ai_enabled") && !j["background_ai_enabled"].isBool())
-        throw std::runtime_error("Expected boolean background_ai_enabled");
-    o.background_ai_enabled = j["background_ai_enabled"].toBool(false);
-    const double interval = number("background_ai_interval_seconds", 5);
-    if (interval != std::floor(interval) || interval < 1 || interval > 3600)
-        throw std::runtime_error("Invalid background AI interval");
-    o.background_ai_interval_seconds = unsigned(interval);
-    o.batch = unsigned(batch);
-    const int segment = int(seconds);
-    const double quota = number("quota_gib", 100), reserve = number("reserve_gib", 1);
-    if (segment < 1 || segment > 86400 || !std::isfinite(quota) || quota <= 0 || quota > 1000000 ||
-        !std::isfinite(reserve) || reserve < 0 || reserve > 1000000)
-        throw std::runtime_error("Invalid segment or storage limits");
-    o.segment_seconds = unsigned(segment);
-    o.quota = uint64_t(quota * 1024 * 1024 * 1024);
-    o.reserve = uint64_t(reserve * 1024 * 1024 * 1024);
-    std::set<std::string> ids;
-    if (o.model.empty() || o.model_info.empty() || (o.batch > 1 && o.single_model.empty()))
-        throw std::runtime_error("model, model_info and single_model are required");
-    if (j.contains("sources") && !j["sources"].isArray())
-        throw std::runtime_error("sources must be an array");
-    for (const auto v : j["sources"].toArray()) {
-        const auto s = v.toObject();
-        Source source{
-            s["id"].toString(QUuid::createUuid().toString(QUuid::WithoutBraces)).toStdString(),
-            s["name"].toString().toStdString(), s["uri"].toString().toStdString(),
-            s["selected"].toBool()};
-        source.uri = validated_uri(source.uri);
-        if (source.id.empty())
-            source.id = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
-        if (source.id.find_first_not_of(
-                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_") !=
-                std::string::npos ||
-            !ids.insert(source.id).second)
-            throw std::runtime_error("Invalid or duplicate channel ID");
-        if (source.name.empty())
-            source.name = source.id;
-        o.sources.push_back(std::move(source));
-    }
-    return o;
-}
-void save_config(const std::string &path, const Options &o) {
-    QJsonObject j{{"model", qs(o.model)},
-                  {"single_model", qs(o.single_model)},
-                  {"model_info", qs(o.model_info)},
-                  {"recording_root", qs(o.recording_root)},
-                  {"batch_size", int(o.batch)},
-                  {"background_ai_enabled", o.background_ai_enabled},
-                  {"background_ai_interval_seconds", int(o.background_ai_interval_seconds)},
-                  {"segment_seconds", int(o.segment_seconds)},
-                  {"quota_gib", double(o.quota) / (1024 * 1024 * 1024)},
-                  {"reserve_gib", double(o.reserve) / (1024 * 1024 * 1024)}};
-    QJsonArray sources;
-    for (const auto &s : o.sources)
-        sources.append(QJsonObject{
-            {"id", qs(s.id)}, {"name", qs(s.name)}, {"uri", qs(s.uri)}, {"selected", s.selected}});
-    j["sources"] = sources;
-    QSaveFile f(qs(path));
-    if (!f.open(QIODevice::WriteOnly))
-        throw std::runtime_error("Cannot save NVR config");
-    f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
-    if (f.write(QJsonDocument(j).toJson()) < 0 || !f.commit())
-        throw std::runtime_error("Cannot commit NVR config");
 }
 Window::Window(Controller &c, Options options, std::string config)
     : controller_(c), options_(std::move(options)), config_(std::move(config)) {
@@ -538,12 +430,15 @@ void Window::refresh() {
                                             : QString{}));
     }
     updating_ = false;
-    summary_->setText(QString("%1 sources · batch %2 · %3 ms\n%4\n%5")
+    const auto publication=controller_.publication_status();
+    summary_->setText(QString("%1 sources · batch %2 · %3 ms\nResults: %6 delivered · %7 dropped · %8 errors\n%4\n%5\n%9")
                           .arg(statuses.size())
                           .arg(controller_.last_batch())
                           .arg(controller_.batch_ms(), 0, 'f', 1)
                           .arg(qs(controller_.fatal()))
-                          .arg(qs(tiles_->error())));
+                          .arg(qs(tiles_->error()))
+                          .arg(publication.delivered).arg(publication.dropped).arg(publication.errors)
+                          .arg(qs(publication.last_error)));
     static unsigned ticks = 0;
     if (++ticks % 30 == 0) {
         try {

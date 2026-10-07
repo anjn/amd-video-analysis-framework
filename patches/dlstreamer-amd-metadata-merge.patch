@@ -1,0 +1,19 @@
+--- a/src/monolithic/gst/elements/gvametaaggregate/metaaggregate.c
++++ b/src/monolithic/gst/elements/gvametaaggregate/metaaggregate.c
+@@ -460,6 +460,16 @@
+             }
+         } else if (meta->info->api == GST_ANALYTICS_RELATION_META_API_TYPE) {
+             // Already copied all analytics mtd above. Nothing to do here
++        } else if (gst_meta_api_type_has_tag(meta->info->api, g_quark_from_static_string("amd-analysis"))) {
++            /* Optional GPU payload extension: preserve ownership and remap ROI IDs
++             * without linking this upstream plugin against the AMD framework. */
++            struct { GHashTable *ids; gfloat scale_x, scale_y; } transform = {id_map, 1.f / scale_x, 1.f / scale_y};
++            if (!meta->info->transform_func ||
++                !meta->info->transform_func(buf, meta, buf_with_meta,
++                    g_quark_from_static_string("amd-analytics-merge"), &transform)) {
++                g_hash_table_destroy(id_map);
++                return FALSE;
++            }
+         } else if (meta->info->transform_func) {
+             // Try to copy the whole meta from sink buffer to out buffer
+             GstMetaTransformCopy copy_data = {.region = FALSE, .offset = 0, .size = -1};
