@@ -182,3 +182,45 @@ re-exposes it, minimizes it and remaps it. It checks that decode continues while
 presentation is paused and that repeated drawing never inflates the new-image
 count. The explicit hide/remap restoration accommodates Wayland compositors
 that do not implement a programmatic unminimize request.
+
+## Recorded hardware validation
+
+The machine-readable [validation report](telemetry-validation-results.json)
+records fixtures, runtime hashes, stage counts, correspondence counters and
+observed latency/FPS/resource statistics on Ryzen AI 9 HX 370 / Radeon 890M.
+
+All 16 CTest contracts passed. The framework GPU copy audit retained timing
+metadata through processing, watermark, aggregation and mux/demux without a
+copy-audit violation. H.264 and H.265 B-frame fixtures each produced 60 decoded
+frames with normal delivery and with injected reordering/duplication; injected
+packet loss produced 59. All six cases retained exact input/decode
+correspondence. A separate live renderer test covered hiding, showing,
+minimizing, remapping and resizing. Installed standalone SDK examples processed
+both RTSP codecs, and a Qt-free headless build reported presentation unavailable.
+
+The NVR regression used 20 received/recorded sources, 16 selected sources and
+four background slots, dynamic selection/add/remove, RTSP restart and codec
+replacement. The 90-second regression finalized 45 valid recordings and
+recovered receive/record activity 7.50 seconds after restart. The one-hour run completed 100 dynamic cycles, finalized 1,315 valid
+recordings and recovered 7.00 seconds after restart. Maximum post-warmup growth
+was 30,284 KiB RSS, 27,456 KiB GPU allocation and four FDs. It uses
+a frozen intermediate runtime; its hashes and the later changes covered by
+separate final-build tests are recorded explicitly. The intermediate runtime
+lacked input correspondence after background keyframe header prepending; the
+final comparison verifies the repaired path for all four hidden sources. Concurrent regression tests
+ran during part of that long run. The sequential telemetry-on/off comparison
+uses the final runtime after those jobs have finished.
+
+The report's latency statistics summarize ten-second window P99 observations;
+they are not whole-run percentiles. They and the single telemetry-on/off pair
+are observations, without latency/FPS acceptance thresholds or a performance
+guarantee. Existing soak recording and resource guards remain in place.
+
+In the isolated final-runtime comparison, selected preview FPS medians were
+29.88 with telemetry and 29.93 without it. Process CPU averaged 130.12% versus
+123.94% of one logical core, a 6.18 percentage-point difference (4.99% relative).
+These runs include the validator's snapshot/JSON output. The telemetry-on
+input→decode and input→swap window-P99 medians were 31.75 ms and 66.21 ms across
+selected sources and observation windows, respectively. Both 90-second runs
+passed the existing recording/resource checks. All four hidden sources produced
+background input→decode samples with zero unmatched decoder observations.

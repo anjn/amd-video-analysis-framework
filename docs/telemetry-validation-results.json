@@ -1,0 +1,2715 @@
+{
+  "schema": 1,
+  "validated_at": "2026-10-07T18:49:46.213578+09:00",
+  "implementation_commit": "b80d3a4f722385b62874f3454083d3b63d13c531",
+  "hardware": {
+    "cpu": "AMD Ryzen AI 9 HX 370",
+    "gpu": "AMD Radeon 890M",
+    "gpu_arch": "gfx1150",
+    "vpe": "6.1.0",
+    "kernel": "6.17.0-1032-oem",
+    "linux_memtotal_kib": 14964912
+  },
+  "software": {
+    "gstreamer": "1.28.2",
+    "rocm": "7.2.0",
+    "migraphx": "2.15",
+    "qt": "6.4.2",
+    "mesa": "25.2.8",
+    "dlstreamer": "v2026.2.0",
+    "paho_mqtt": "1.3.13",
+    "librdkafka": "2.3.0"
+  },
+  "measurement_scope": "Receiver userspace first video RTP packet to decoder buffer delivery, GL draw submission and Qt frameSwapped notification. No camera clock, physical GPU completion or monitor scanout measurement.",
+  "revision_scope": "The final contract and telemetry-on/off runs include generic buffer-list support, pause/generation gap closure and background header-prepend trace retention. Earlier hardware RTP, renderer, SDK/headless and 90-second regression runs exercise the same timing paths before those targeted refinements; the frozen hour run has the additional differences listed below.",
+  "classification": "Correctness tests and existing recording/resource guards have assertions. Latency and FPS are observations without operational pass/fail thresholds.",
+  "ctest": {
+    "tests": 16,
+    "failures": 0,
+    "passed": true,
+    "duration_s": 17.63
+  },
+  "gpu_pipeline_audit": {
+    "passed": true,
+    "violations": 0,
+    "artifact_log": "artifacts/timing-pipeline-audit-final.log",
+    "timing_metadata_preserved": true
+  },
+  "rtp_b_frames": {
+    "fixtures": "640x360 BT.709 limited 8-bit, 30 FPS, keyint=30, bframes=3; RTP timestamp/sequence offsets force wrap. Matroska retains original reorder timestamps.",
+    "cases": {
+      "h264-normal": {
+        "frames": 60,
+        "reordered_outputs": 28,
+        "network_mutations": 0,
+        "timing": {
+          "source": "h264-normal",
+          "generation": 1,
+          "continuous_counts": {
+            "input": 60,
+            "access_unit": 60,
+            "decode_input": 60,
+            "decode_output": 60,
+            "preview_ready": 0,
+            "draw": 0,
+            "swap": 0
+          },
+          "presentation_supported": {
+            "preview_ready": false,
+            "draw": false,
+            "swap": false
+          },
+          "input_decode_ms": {
+            "samples": 60,
+            "truncated": false,
+            "effective_window_ms": 1917.764514,
+            "mean_ms": 77.78503548,
+            "p95_ms": 200.239799,
+            "p99_ms": 200.274806,
+            "maximum_ms": 200.274806
+          },
+          "input_swap_ms": {
+            "samples": 0,
+            "truncated": false,
+            "effective_window_ms": 0,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "maximum_ms": null
+          },
+          "counters": {
+            "encoded_discarded": 0,
+            "latest_replaced": 0,
+            "preview_discarded": 0,
+            "unmatched_rtp": 0,
+            "ambiguous_pts": 0,
+            "unmatched_decode": 0,
+            "expired": 0,
+            "capacity_evicted": 0,
+            "stale": 0,
+            "invalid_time": 0,
+            "submitted_without_output": 0,
+            "presentation_unobserved": 0
+          }
+        }
+      },
+      "h264-reorder": {
+        "frames": 60,
+        "reordered_outputs": 28,
+        "network_mutations": 5,
+        "timing": {
+          "source": "h264-reorder",
+          "generation": 1,
+          "continuous_counts": {
+            "input": 60,
+            "access_unit": 60,
+            "decode_input": 60,
+            "decode_output": 60,
+            "preview_ready": 0,
+            "draw": 0,
+            "swap": 0
+          },
+          "presentation_supported": {
+            "preview_ready": false,
+            "draw": false,
+            "swap": false
+          },
+          "input_decode_ms": {
+            "samples": 60,
+            "truncated": false,
+            "effective_window_ms": 1751.031698,
+            "mean_ms": 71.69028007,
+            "p95_ms": 200.213573,
+            "p99_ms": 200.33409,
+            "maximum_ms": 200.33409
+          },
+          "input_swap_ms": {
+            "samples": 0,
+            "truncated": false,
+            "effective_window_ms": 0,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "maximum_ms": null
+          },
+          "counters": {
+            "encoded_discarded": 0,
+            "latest_replaced": 0,
+            "preview_discarded": 0,
+            "unmatched_rtp": 0,
+            "ambiguous_pts": 0,
+            "unmatched_decode": 0,
+            "expired": 0,
+            "capacity_evicted": 0,
+            "stale": 0,
+            "invalid_time": 0,
+            "submitted_without_output": 0,
+            "presentation_unobserved": 0
+          }
+        }
+      },
+      "h264-loss": {
+        "frames": 59,
+        "reordered_outputs": 28,
+        "network_mutations": 1,
+        "timing": {
+          "source": "h264-loss",
+          "generation": 1,
+          "continuous_counts": {
+            "input": 59,
+            "access_unit": 59,
+            "decode_input": 59,
+            "decode_output": 59,
+            "preview_ready": 0,
+            "draw": 0,
+            "swap": 0
+          },
+          "presentation_supported": {
+            "preview_ready": false,
+            "draw": false,
+            "swap": false
+          },
+          "input_decode_ms": {
+            "samples": 59,
+            "truncated": false,
+            "effective_window_ms": 1917.475161,
+            "mean_ms": 83.79798739,
+            "p95_ms": 200.323525,
+            "p99_ms": 235.715957,
+            "maximum_ms": 235.715957
+          },
+          "input_swap_ms": {
+            "samples": 0,
+            "truncated": false,
+            "effective_window_ms": 0,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "maximum_ms": null
+          },
+          "counters": {
+            "encoded_discarded": 0,
+            "latest_replaced": 0,
+            "preview_discarded": 0,
+            "unmatched_rtp": 0,
+            "ambiguous_pts": 0,
+            "unmatched_decode": 0,
+            "expired": 0,
+            "capacity_evicted": 0,
+            "stale": 0,
+            "invalid_time": 0,
+            "submitted_without_output": 0,
+            "presentation_unobserved": 0
+          }
+        }
+      },
+      "h265-normal": {
+        "frames": 60,
+        "reordered_outputs": 29,
+        "network_mutations": 0,
+        "timing": {
+          "source": "h265-normal",
+          "generation": 1,
+          "continuous_counts": {
+            "input": 60,
+            "access_unit": 60,
+            "decode_input": 60,
+            "decode_output": 60,
+            "preview_ready": 0,
+            "draw": 0,
+            "swap": 0
+          },
+          "presentation_supported": {
+            "preview_ready": false,
+            "draw": false,
+            "swap": false
+          },
+          "input_decode_ms": {
+            "samples": 60,
+            "truncated": false,
+            "effective_window_ms": 1905.36561,
+            "mean_ms": 65.23757755,
+            "p95_ms": 166.92848,
+            "p99_ms": 167.173175,
+            "maximum_ms": 167.173175
+          },
+          "input_swap_ms": {
+            "samples": 0,
+            "truncated": false,
+            "effective_window_ms": 0,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "maximum_ms": null
+          },
+          "counters": {
+            "encoded_discarded": 0,
+            "latest_replaced": 0,
+            "preview_discarded": 0,
+            "unmatched_rtp": 0,
+            "ambiguous_pts": 0,
+            "unmatched_decode": 0,
+            "expired": 0,
+            "capacity_evicted": 0,
+            "stale": 0,
+            "invalid_time": 0,
+            "submitted_without_output": 0,
+            "presentation_unobserved": 0
+          }
+        }
+      },
+      "h265-reorder": {
+        "frames": 60,
+        "reordered_outputs": 27,
+        "network_mutations": 5,
+        "timing": {
+          "source": "h265-reorder",
+          "generation": 1,
+          "continuous_counts": {
+            "input": 60,
+            "access_unit": 60,
+            "decode_input": 60,
+            "decode_output": 60,
+            "preview_ready": 0,
+            "draw": 0,
+            "swap": 0
+          },
+          "presentation_supported": {
+            "preview_ready": false,
+            "draw": false,
+            "swap": false
+          },
+          "input_decode_ms": {
+            "samples": 60,
+            "truncated": false,
+            "effective_window_ms": 1735.495604,
+            "mean_ms": 59.67546547,
+            "p95_ms": 166.901685,
+            "p99_ms": 166.957292,
+            "maximum_ms": 166.957292
+          },
+          "input_swap_ms": {
+            "samples": 0,
+            "truncated": false,
+            "effective_window_ms": 0,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "maximum_ms": null
+          },
+          "counters": {
+            "encoded_discarded": 0,
+            "latest_replaced": 0,
+            "preview_discarded": 0,
+            "unmatched_rtp": 0,
+            "ambiguous_pts": 0,
+            "unmatched_decode": 0,
+            "expired": 0,
+            "capacity_evicted": 0,
+            "stale": 0,
+            "invalid_time": 0,
+            "submitted_without_output": 0,
+            "presentation_unobserved": 0
+          }
+        }
+      },
+      "h265-loss": {
+        "frames": 59,
+        "reordered_outputs": 28,
+        "network_mutations": 1,
+        "timing": {
+          "source": "h265-loss",
+          "generation": 1,
+          "continuous_counts": {
+            "input": 59,
+            "access_unit": 59,
+            "decode_input": 59,
+            "decode_output": 59,
+            "preview_ready": 0,
+            "draw": 0,
+            "swap": 0
+          },
+          "presentation_supported": {
+            "preview_ready": false,
+            "draw": false,
+            "swap": false
+          },
+          "input_decode_ms": {
+            "samples": 59,
+            "truncated": false,
+            "effective_window_ms": 1904.604747,
+            "mean_ms": 68.63377453,
+            "p95_ms": 167.131891,
+            "p99_ms": 212.136278,
+            "maximum_ms": 212.136278
+          },
+          "input_swap_ms": {
+            "samples": 0,
+            "truncated": false,
+            "effective_window_ms": 0,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "maximum_ms": null
+          },
+          "counters": {
+            "encoded_discarded": 0,
+            "latest_replaced": 0,
+            "preview_discarded": 0,
+            "unmatched_rtp": 0,
+            "ambiguous_pts": 0,
+            "unmatched_decode": 0,
+            "expired": 0,
+            "capacity_evicted": 0,
+            "stale": 0,
+            "invalid_time": 0,
+            "submitted_without_output": 0,
+            "presentation_unobserved": 0
+          }
+        }
+      }
+    }
+  },
+  "renderer": {
+    "passed": true,
+    "duration_s": 24,
+    "phases": [
+      "visible",
+      "hidden while decode continues",
+      "shown",
+      "minimized",
+      "hide/remap restored",
+      "resized"
+    ],
+    "sources": [
+      {
+        "source": "cam0",
+        "generation": 4,
+        "continuous_counts": {
+          "input": 725,
+          "access_unit": 725,
+          "decode_input": 710,
+          "decode_output": 710,
+          "preview_ready": 547,
+          "draw": 546,
+          "swap": 546
+        },
+        "presentation_supported": {
+          "preview_ready": true,
+          "draw": true,
+          "swap": true
+        },
+        "input_decode_ms": {
+          "samples": 300,
+          "truncated": false,
+          "effective_window_ms": 9982.061943,
+          "mean_ms": 5.379207333,
+          "p95_ms": 9.873285,
+          "p99_ms": 10.282082,
+          "maximum_ms": 10.438927
+        },
+        "input_swap_ms": {
+          "samples": 225,
+          "truncated": false,
+          "effective_window_ms": 9997.17404,
+          "mean_ms": 26.67739584,
+          "p95_ms": 27.083995,
+          "p99_ms": 32.679179,
+          "maximum_ms": 2557.675415
+        },
+        "counters": {
+          "encoded_discarded": 0,
+          "latest_replaced": 163,
+          "preview_discarded": 1,
+          "unmatched_rtp": 0,
+          "ambiguous_pts": 0,
+          "unmatched_decode": 0,
+          "expired": 0,
+          "capacity_evicted": 0,
+          "stale": 0,
+          "invalid_time": 0,
+          "submitted_without_output": 0,
+          "presentation_unobserved": 0
+        }
+      },
+      {
+        "source": "cam1",
+        "generation": 3,
+        "continuous_counts": {
+          "input": 725,
+          "access_unit": 725,
+          "decode_input": 720,
+          "decode_output": 719,
+          "preview_ready": 556,
+          "draw": 555,
+          "swap": 555
+        },
+        "presentation_supported": {
+          "preview_ready": true,
+          "draw": true,
+          "swap": true
+        },
+        "input_decode_ms": {
+          "samples": 300,
+          "truncated": false,
+          "effective_window_ms": 9970.350617,
+          "mean_ms": 38.92140503,
+          "p95_ms": 43.329301,
+          "p99_ms": 48.875918,
+          "maximum_ms": 49.82076
+        },
+        "input_swap_ms": {
+          "samples": 225,
+          "truncated": false,
+          "effective_window_ms": 9997.285276,
+          "mean_ms": 59.90155056,
+          "p95_ms": 59.795771,
+          "p99_ms": 66.182961,
+          "maximum_ms": 2591.163007
+        },
+        "counters": {
+          "encoded_discarded": 0,
+          "latest_replaced": 163,
+          "preview_discarded": 1,
+          "unmatched_rtp": 0,
+          "ambiguous_pts": 0,
+          "unmatched_decode": 0,
+          "expired": 0,
+          "capacity_evicted": 0,
+          "stale": 0,
+          "invalid_time": 0,
+          "submitted_without_output": 0,
+          "presentation_unobserved": 0
+        }
+      }
+    ]
+  },
+  "installed_sdk": {
+    "qt_required": false,
+    "duration_s_per_codec": 15,
+    "sources": {
+      "h264": {
+        "source": "camera",
+        "generation": 1,
+        "continuous_counts": {
+          "input": 419,
+          "access_unit": 419,
+          "decode_input": 419,
+          "decode_output": 418,
+          "preview_ready": 0,
+          "draw": 0,
+          "swap": 0
+        },
+        "presentation_supported": {
+          "preview_ready": false,
+          "draw": false,
+          "swap": false
+        },
+        "input_decode_ms": {
+          "samples": 300,
+          "truncated": false,
+          "effective_window_ms": 9987.774617,
+          "mean_ms": 33.68426659,
+          "p95_ms": 34.094734,
+          "p99_ms": 39.138886,
+          "maximum_ms": 39.660794
+        },
+        "input_swap_ms": {
+          "samples": 0,
+          "truncated": false,
+          "effective_window_ms": 0,
+          "mean_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "maximum_ms": null
+        },
+        "counters": {
+          "encoded_discarded": 0,
+          "latest_replaced": 0,
+          "preview_discarded": 0,
+          "unmatched_rtp": 0,
+          "ambiguous_pts": 0,
+          "unmatched_decode": 0,
+          "expired": 0,
+          "capacity_evicted": 0,
+          "stale": 0,
+          "invalid_time": 0,
+          "submitted_without_output": 0,
+          "presentation_unobserved": 0
+        }
+      },
+      "h265": {
+        "source": "camera",
+        "generation": 1,
+        "continuous_counts": {
+          "input": 420,
+          "access_unit": 420,
+          "decode_input": 420,
+          "decode_output": 420,
+          "preview_ready": 0,
+          "draw": 0,
+          "swap": 0
+        },
+        "presentation_supported": {
+          "preview_ready": false,
+          "draw": false,
+          "swap": false
+        },
+        "input_decode_ms": {
+          "samples": 300,
+          "truncated": false,
+          "effective_window_ms": 9979.60681,
+          "mean_ms": 0.2607202033,
+          "p95_ms": 0.386216,
+          "p99_ms": 0.56966,
+          "maximum_ms": 0.636467
+        },
+        "input_swap_ms": {
+          "samples": 0,
+          "truncated": false,
+          "effective_window_ms": 0,
+          "mean_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "maximum_ms": null
+        },
+        "counters": {
+          "encoded_discarded": 0,
+          "latest_replaced": 0,
+          "preview_discarded": 0,
+          "unmatched_rtp": 0,
+          "ambiguous_pts": 0,
+          "unmatched_decode": 0,
+          "expired": 0,
+          "capacity_evicted": 0,
+          "stale": 0,
+          "invalid_time": 0,
+          "submitted_without_output": 0,
+          "presentation_unobserved": 0
+        }
+      }
+    }
+  },
+  "headless": {
+    "nvr_build_enabled": false,
+    "qt_linked": false,
+    "display_server": false,
+    "duration_s": 30,
+    "sources": [
+      {
+        "source": "cam0",
+        "generation": 4,
+        "continuous_counts": {
+          "input": 870,
+          "access_unit": 870,
+          "decode_input": 856,
+          "decode_output": 856,
+          "preview_ready": 0,
+          "draw": 0,
+          "swap": 0
+        },
+        "presentation_supported": {
+          "preview_ready": false,
+          "draw": false,
+          "swap": false
+        },
+        "input_decode_ms": {
+          "samples": 301,
+          "truncated": false,
+          "effective_window_ms": 9994.237591,
+          "mean_ms": 5.489407581,
+          "p95_ms": 10.029152,
+          "p99_ms": 10.363352,
+          "maximum_ms": 10.501278
+        },
+        "input_swap_ms": {
+          "samples": 0,
+          "truncated": false,
+          "effective_window_ms": 0,
+          "mean_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "maximum_ms": null
+        },
+        "counters": {
+          "encoded_discarded": 0,
+          "latest_replaced": 0,
+          "preview_discarded": 0,
+          "unmatched_rtp": 0,
+          "ambiguous_pts": 0,
+          "unmatched_decode": 0,
+          "expired": 0,
+          "capacity_evicted": 0,
+          "stale": 0,
+          "invalid_time": 0,
+          "submitted_without_output": 0,
+          "presentation_unobserved": 0
+        }
+      },
+      {
+        "source": "cam1",
+        "generation": 3,
+        "continuous_counts": {
+          "input": 870,
+          "access_unit": 870,
+          "decode_input": 866,
+          "decode_output": 865,
+          "preview_ready": 0,
+          "draw": 0,
+          "swap": 0
+        },
+        "presentation_supported": {
+          "preview_ready": false,
+          "draw": false,
+          "swap": false
+        },
+        "input_decode_ms": {
+          "samples": 301,
+          "truncated": false,
+          "effective_window_ms": 9994.53587,
+          "mean_ms": 39.01246124,
+          "p95_ms": 43.45214,
+          "p99_ms": 44.038618,
+          "maximum_ms": 52.559149
+        },
+        "input_swap_ms": {
+          "samples": 0,
+          "truncated": false,
+          "effective_window_ms": 0,
+          "mean_ms": null,
+          "p95_ms": null,
+          "p99_ms": null,
+          "maximum_ms": null
+        },
+        "counters": {
+          "encoded_discarded": 0,
+          "latest_replaced": 0,
+          "preview_discarded": 0,
+          "unmatched_rtp": 0,
+          "ambiguous_pts": 0,
+          "unmatched_decode": 0,
+          "expired": 0,
+          "capacity_evicted": 0,
+          "stale": 0,
+          "invalid_time": 0,
+          "submitted_without_output": 0,
+          "presentation_unobserved": 0
+        }
+      }
+    ]
+  },
+  "nvr_regression": {
+    "soak": {
+      "passed": true,
+      "failure": null,
+      "duration_s": 90,
+      "cycles": 5,
+      "server_restarted": true,
+      "recovery_s": 7.500261576999996,
+      "warmup_s": 60,
+      "maximum_growth": {
+        "rss_kib": 2324,
+        "gpu_alloc_kib": 6020,
+        "fds": 3
+      },
+      "recordings_checked": 45,
+      "invalid_recordings": [],
+      "background": {
+        "maximum_active": 4,
+        "minimum_observed_interval_s": 5.000196,
+        "hidden_channels": [
+          {
+            "id": "cam16",
+            "background_ai": 19,
+            "background_decoded": 19,
+            "background_attempts": 19
+          },
+          {
+            "id": "cam17",
+            "background_ai": 16,
+            "background_decoded": 16,
+            "background_attempts": 16
+          },
+          {
+            "id": "cam18",
+            "background_ai": 16,
+            "background_decoded": 16,
+            "background_attempts": 16
+          },
+          {
+            "id": "cam19",
+            "background_ai": 11,
+            "background_decoded": 11,
+            "background_attempts": 11
+          }
+        ]
+      }
+    },
+    "statistics": {
+      "artifact_directory": "artifacts/timing-nvr-final-smoke",
+      "window_start_s": 60.0,
+      "observed_snapshots": 61,
+      "source_generations": 74,
+      "notes": "Window P99 summaries are not whole-run percentiles. CPU percent is relative to one logical core. No latency or FPS pass/fail classification.",
+      "rolling_window_p99_ms": {
+        "continuous.decode_preview": {
+          "samples": 976,
+          "minimum": 15.035879,
+          "median": 25.148918,
+          "maximum": 31.65017
+        },
+        "continuous.decoder": {
+          "samples": 976,
+          "minimum": 0.619646,
+          "median": 23.628087999999998,
+          "maximum": 49.881805
+        },
+        "continuous.draw_swap": {
+          "samples": 976,
+          "minimum": 0.686154,
+          "median": 7.90329,
+          "maximum": 16.79513
+        },
+        "continuous.input_decode": {
+          "samples": 976,
+          "minimum": 12.77062,
+          "median": 36.0867815,
+          "maximum": 57.208652
+        },
+        "continuous.input_draw": {
+          "samples": 976,
+          "minimum": 44.191037,
+          "median": 70.053166,
+          "maximum": 94.803871
+        },
+        "continuous.input_swap": {
+          "samples": 976,
+          "minimum": 44.706125,
+          "median": 73.751506,
+          "maximum": 97.8183
+        },
+        "continuous.preview_draw": {
+          "samples": 976,
+          "minimum": 28.254199,
+          "median": 34.234792,
+          "maximum": 42.995646
+        },
+        "background.decoder": {
+          "samples": 244,
+          "minimum": 4.448639,
+          "median": 12.257601,
+          "maximum": 29.964601
+        }
+      },
+      "rolling_interval_p99_ms": {
+        "continuous.access_unit": {
+          "samples": 1220,
+          "minimum": 33.47212,
+          "median": 35.4816555,
+          "maximum": 40.520741
+        },
+        "continuous.decode_input": {
+          "samples": 976,
+          "minimum": 43.118279,
+          "median": 45.307411,
+          "maximum": 49.049157
+        },
+        "continuous.decode_output": {
+          "samples": 976,
+          "minimum": 43.044742,
+          "median": 45.5184305,
+          "maximum": 50.094534
+        },
+        "continuous.draw": {
+          "samples": 976,
+          "minimum": 63.669925,
+          "median": 67.960588,
+          "maximum": 81.111706
+        },
+        "continuous.input": {
+          "samples": 1220,
+          "minimum": 33.384692,
+          "median": 33.643076,
+          "maximum": 34.194673
+        },
+        "continuous.preview_ready": {
+          "samples": 976,
+          "minimum": 46.170071,
+          "median": 51.711686,
+          "maximum": 64.798931
+        },
+        "continuous.swap": {
+          "samples": 976,
+          "minimum": 63.270194,
+          "median": 69.700537,
+          "maximum": 81.217743
+        }
+      },
+      "observed_fps": {
+        "continuous.access_unit": {
+          "samples": 1220,
+          "minimum": 30,
+          "median": 30.0,
+          "maximum": 30.12205479
+        },
+        "continuous.decode_input": {
+          "samples": 976,
+          "minimum": 29.9,
+          "median": 30.0,
+          "maximum": 30.15627827
+        },
+        "continuous.decode_output": {
+          "samples": 976,
+          "minimum": 29.9,
+          "median": 30.0,
+          "maximum": 30.12631824
+        },
+        "continuous.draw": {
+          "samples": 976,
+          "minimum": 28.1,
+          "median": 29.1,
+          "maximum": 29.8
+        },
+        "continuous.input": {
+          "samples": 1220,
+          "minimum": 29.9954543,
+          "median": 30.0,
+          "maximum": 30.10531407
+        },
+        "continuous.preview_ready": {
+          "samples": 976,
+          "minimum": 29.7,
+          "median": 30.0,
+          "maximum": 30.16303063
+        },
+        "continuous.swap": {
+          "samples": 976,
+          "minimum": 28.1,
+          "median": 29.1,
+          "maximum": 29.8
+        },
+        "background.decode_input": {
+          "samples": 1,
+          "minimum": 492.0741615,
+          "median": 492.0741615,
+          "maximum": 492.0741615
+        }
+      },
+      "legacy_selected_display_fps": {
+        "samples": 976,
+        "minimum": 27.86356735204836,
+        "median": 29.89078165444189,
+        "maximum": 30.98452515072777
+      },
+      "legacy_selected_ai_fps": {
+        "samples": 976,
+        "minimum": 2.9850855840604176,
+        "median": 4.9509938841976675,
+        "maximum": 5.996737474976738
+      },
+      "process_cpu_percent": 135.3163662105669,
+      "rss_kib": {
+        "samples": 6,
+        "minimum": 1666300.0,
+        "median": 1683970.0,
+        "maximum": 1685156.0
+      },
+      "gpu_alloc_kib": {
+        "samples": 6,
+        "minimum": 1473620.0,
+        "median": 1477590.0,
+        "maximum": 1479640.0
+      },
+      "last_counters_by_source": {
+        "cam0": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1570,
+          "invalid_time": 0,
+          "latest_replaced": 135,
+          "presentation_unobserved": 0,
+          "preview_discarded": 94,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam1": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1564,
+          "invalid_time": 0,
+          "latest_replaced": 132,
+          "presentation_unobserved": 0,
+          "preview_discarded": 81,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam10": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1563,
+          "invalid_time": 0,
+          "latest_replaced": 134,
+          "presentation_unobserved": 0,
+          "preview_discarded": 54,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam11": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1347,
+          "invalid_time": 0,
+          "latest_replaced": 123,
+          "presentation_unobserved": 0,
+          "preview_discarded": 67,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam12": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1567,
+          "invalid_time": 0,
+          "latest_replaced": 116,
+          "presentation_unobserved": 0,
+          "preview_discarded": 57,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam13": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1558,
+          "invalid_time": 0,
+          "latest_replaced": 121,
+          "presentation_unobserved": 0,
+          "preview_discarded": 67,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam14": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1579,
+          "invalid_time": 0,
+          "latest_replaced": 121,
+          "presentation_unobserved": 0,
+          "preview_discarded": 49,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam15": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1564,
+          "invalid_time": 0,
+          "latest_replaced": 118,
+          "presentation_unobserved": 0,
+          "preview_discarded": 45,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 5,
+          "unmatched_rtp": 0
+        },
+        "cam16": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1565,
+          "invalid_time": 0,
+          "latest_replaced": 2,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 5,
+          "unmatched_decode": 19,
+          "unmatched_rtp": 0
+        },
+        "cam17": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1559,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 16,
+          "unmatched_rtp": 0
+        },
+        "cam18": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1320,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 16,
+          "unmatched_rtp": 0
+        },
+        "cam19": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 692,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 11,
+          "unmatched_rtp": 0
+        },
+        "cam2": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1334,
+          "invalid_time": 0,
+          "latest_replaced": 133,
+          "presentation_unobserved": 0,
+          "preview_discarded": 89,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam3": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1328,
+          "invalid_time": 0,
+          "latest_replaced": 127,
+          "presentation_unobserved": 0,
+          "preview_discarded": 79,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam4": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1323,
+          "invalid_time": 0,
+          "latest_replaced": 126,
+          "presentation_unobserved": 0,
+          "preview_discarded": 60,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam5": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1323,
+          "invalid_time": 0,
+          "latest_replaced": 132,
+          "presentation_unobserved": 0,
+          "preview_discarded": 69,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam6": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1326,
+          "invalid_time": 0,
+          "latest_replaced": 127,
+          "presentation_unobserved": 0,
+          "preview_discarded": 82,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam7": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1302,
+          "invalid_time": 0,
+          "latest_replaced": 116,
+          "presentation_unobserved": 0,
+          "preview_discarded": 67,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam8": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1397,
+          "invalid_time": 0,
+          "latest_replaced": 122,
+          "presentation_unobserved": 0,
+          "preview_discarded": 63,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam9": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 1565,
+          "invalid_time": 0,
+          "latest_replaced": 131,
+          "presentation_unobserved": 0,
+          "preview_discarded": 61,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        }
+      },
+      "background_by_source": {
+        "cam15": {
+          "decode_output_count": 5,
+          "input_decode_ms": {
+            "effective_window_ms": 0,
+            "maximum_ms": null,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "samples": 0,
+            "truncated": false
+          }
+        },
+        "cam16": {
+          "decode_output_count": 19,
+          "input_decode_ms": {
+            "effective_window_ms": 0,
+            "maximum_ms": null,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "samples": 0,
+            "truncated": false
+          }
+        },
+        "cam17": {
+          "decode_output_count": 16,
+          "input_decode_ms": {
+            "effective_window_ms": 0,
+            "maximum_ms": null,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "samples": 0,
+            "truncated": false
+          }
+        },
+        "cam18": {
+          "decode_output_count": 16,
+          "input_decode_ms": {
+            "effective_window_ms": 0,
+            "maximum_ms": null,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "samples": 0,
+            "truncated": false
+          }
+        },
+        "cam19": {
+          "decode_output_count": 11,
+          "input_decode_ms": {
+            "effective_window_ms": 0,
+            "maximum_ms": null,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "samples": 0,
+            "truncated": false
+          }
+        }
+      }
+    }
+  },
+  "hour_soak": {
+    "soak": {
+      "passed": true,
+      "failure": null,
+      "duration_s": 3600,
+      "cycles": 100,
+      "server_restarted": true,
+      "recovery_s": 6.999818464999976,
+      "warmup_s": 230,
+      "maximum_growth": {
+        "rss_kib": 30284,
+        "gpu_alloc_kib": 27456,
+        "fds": 4
+      },
+      "recordings_checked": 1315,
+      "invalid_recordings": [],
+      "background": {
+        "maximum_active": 4,
+        "minimum_observed_interval_s": 5.000006,
+        "hidden_channels": [
+          {
+            "id": "cam16",
+            "background_ai": 708,
+            "background_decoded": 708,
+            "background_attempts": 708
+          },
+          {
+            "id": "cam17",
+            "background_ai": 639,
+            "background_decoded": 639,
+            "background_attempts": 639
+          },
+          {
+            "id": "cam18",
+            "background_ai": 645,
+            "background_decoded": 645,
+            "background_attempts": 645
+          },
+          {
+            "id": "cam19",
+            "background_ai": 602,
+            "background_decoded": 602,
+            "background_attempts": 602
+          }
+        ]
+      }
+    },
+    "statistics": {
+      "artifact_directory": "artifacts/timing-nvr-hour-final",
+      "window_start_s": 720.0,
+      "observed_snapshots": 5761,
+      "source_generations": 174,
+      "notes": "Window P99 summaries are not whole-run percentiles. CPU percent is relative to one logical core. No latency or FPS pass/fail classification.",
+      "rolling_window_p99_ms": {
+        "continuous.decode_preview": {
+          "samples": 92176,
+          "minimum": 6.293814,
+          "median": 12.73899,
+          "maximum": 101.847107
+        },
+        "continuous.decoder": {
+          "samples": 92176,
+          "minimum": 0.534504,
+          "median": 37.884237,
+          "maximum": 102.226068
+        },
+        "continuous.draw_swap": {
+          "samples": 92176,
+          "minimum": 0.460347,
+          "median": 3.729126,
+          "maximum": 47.459172
+        },
+        "continuous.input_decode": {
+          "samples": 92176,
+          "minimum": 10.270611,
+          "median": 44.711847,
+          "maximum": 141.289902
+        },
+        "continuous.input_draw": {
+          "samples": 92176,
+          "minimum": 38.161677,
+          "median": 72.60787350000001,
+          "maximum": 200.185914
+        },
+        "continuous.input_swap": {
+          "samples": 92176,
+          "minimum": 38.302023,
+          "median": 73.07646,
+          "maximum": 224.855088
+        },
+        "continuous.preview_draw": {
+          "samples": 92176,
+          "minimum": 22.351521,
+          "median": 31.821103,
+          "maximum": 67.378237
+        }
+      },
+      "rolling_interval_p99_ms": {
+        "continuous.access_unit": {
+          "samples": 92176,
+          "minimum": 33.477202,
+          "median": 35.289124,
+          "maximum": 41.254934
+        },
+        "continuous.decode_input": {
+          "samples": 92176,
+          "minimum": 41.559008,
+          "median": 43.558231,
+          "maximum": 102.017662
+        },
+        "continuous.decode_output": {
+          "samples": 92176,
+          "minimum": 41.613076,
+          "median": 43.668279999999996,
+          "maximum": 102.077621
+        },
+        "continuous.draw": {
+          "samples": 92176,
+          "minimum": 59.337994,
+          "median": 66.713048,
+          "maximum": 150.187969
+        },
+        "continuous.input": {
+          "samples": 92176,
+          "minimum": 33.356907,
+          "median": 33.669469500000005,
+          "maximum": 34.64668
+        },
+        "continuous.preview_ready": {
+          "samples": 92176,
+          "minimum": 40.342603,
+          "median": 46.936516,
+          "maximum": 129.452355
+        },
+        "continuous.swap": {
+          "samples": 92176,
+          "minimum": 59.217077,
+          "median": 67.070659,
+          "maximum": 150.246198
+        },
+        "background.access_unit": {
+          "samples": 23044,
+          "minimum": 33.475666,
+          "median": 35.351,
+          "maximum": 40.22704
+        },
+        "background.input": {
+          "samples": 23044,
+          "minimum": 33.363161,
+          "median": 33.662333000000004,
+          "maximum": 34.649579
+        }
+      },
+      "observed_fps": {
+        "continuous.access_unit": {
+          "samples": 92176,
+          "minimum": 29.9,
+          "median": 30.0,
+          "maximum": 30.1
+        },
+        "continuous.decode_input": {
+          "samples": 92176,
+          "minimum": 29.7,
+          "median": 30.0,
+          "maximum": 30.3
+        },
+        "continuous.decode_output": {
+          "samples": 92176,
+          "minimum": 29.7,
+          "median": 30.0,
+          "maximum": 30.3
+        },
+        "continuous.draw": {
+          "samples": 92176,
+          "minimum": 24.9,
+          "median": 29.4,
+          "maximum": 30.1
+        },
+        "continuous.input": {
+          "samples": 92176,
+          "minimum": 29.9,
+          "median": 30.0,
+          "maximum": 30.1
+        },
+        "continuous.preview_ready": {
+          "samples": 92176,
+          "minimum": 25.6,
+          "median": 30.0,
+          "maximum": 30.1
+        },
+        "continuous.swap": {
+          "samples": 92176,
+          "minimum": 24.9,
+          "median": 29.4,
+          "maximum": 30.1
+        },
+        "background.access_unit": {
+          "samples": 23044,
+          "minimum": 30,
+          "median": 30.0,
+          "maximum": 30
+        },
+        "background.input": {
+          "samples": 23044,
+          "minimum": 30,
+          "median": 30.0,
+          "maximum": 30
+        },
+        "background.decode_input": {
+          "samples": 2,
+          "minimum": 9.229490904,
+          "median": 9.3763408915,
+          "maximum": 9.523190879
+        },
+        "background.decode_output": {
+          "samples": 2,
+          "minimum": 9.229697052,
+          "median": 9.376577739,
+          "maximum": 9.523458426
+        }
+      },
+      "legacy_selected_display_fps": {
+        "samples": 92176,
+        "minimum": 10.64576764920905,
+        "median": 29.881375868230148,
+        "maximum": 30.999843543789638
+      },
+      "legacy_selected_ai_fps": {
+        "samples": 92176,
+        "minimum": 0.9984353370068465,
+        "median": 5.966631962779442,
+        "maximum": 6.999933353634541
+      },
+      "process_cpu_percent": 128.63266055974253,
+      "rss_kib": {
+        "samples": 575,
+        "minimum": 1676936.0,
+        "median": 1705120.0,
+        "maximum": 1712300.0
+      },
+      "gpu_alloc_kib": {
+        "samples": 575,
+        "minimum": 1474992.0,
+        "median": 1477044.0,
+        "maximum": 1498816.0
+      },
+      "last_counters_by_source": {
+        "cam0": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211963,
+          "invalid_time": 0,
+          "latest_replaced": 138,
+          "presentation_unobserved": 0,
+          "preview_discarded": 3608,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam1": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 212131,
+          "invalid_time": 0,
+          "latest_replaced": 120,
+          "presentation_unobserved": 0,
+          "preview_discarded": 3314,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam10": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211945,
+          "invalid_time": 0,
+          "latest_replaced": 116,
+          "presentation_unobserved": 0,
+          "preview_discarded": 1606,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam11": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211904,
+          "invalid_time": 0,
+          "latest_replaced": 119,
+          "presentation_unobserved": 0,
+          "preview_discarded": 2192,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam12": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211949,
+          "invalid_time": 0,
+          "latest_replaced": 113,
+          "presentation_unobserved": 0,
+          "preview_discarded": 1791,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam13": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211930,
+          "invalid_time": 0,
+          "latest_replaced": 114,
+          "presentation_unobserved": 0,
+          "preview_discarded": 2275,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam14": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211974,
+          "invalid_time": 0,
+          "latest_replaced": 127,
+          "presentation_unobserved": 0,
+          "preview_discarded": 1680,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam15": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 212140,
+          "invalid_time": 0,
+          "latest_replaced": 109,
+          "presentation_unobserved": 0,
+          "preview_discarded": 1740,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 200,
+          "unmatched_rtp": 0
+        },
+        "cam16": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211883,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 18,
+          "stale": 0,
+          "submitted_without_output": 100,
+          "unmatched_decode": 1416,
+          "unmatched_rtp": 0
+        },
+        "cam17": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211891,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 1278,
+          "unmatched_rtp": 0
+        },
+        "cam18": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211966,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 1290,
+          "unmatched_rtp": 0
+        },
+        "cam19": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 198807,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 1204,
+          "unmatched_rtp": 0
+        },
+        "cam2": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211982,
+          "invalid_time": 0,
+          "latest_replaced": 142,
+          "presentation_unobserved": 0,
+          "preview_discarded": 2451,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam3": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 212180,
+          "invalid_time": 0,
+          "latest_replaced": 122,
+          "presentation_unobserved": 0,
+          "preview_discarded": 2436,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam4": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211916,
+          "invalid_time": 0,
+          "latest_replaced": 119,
+          "presentation_unobserved": 0,
+          "preview_discarded": 2072,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam5": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211926,
+          "invalid_time": 0,
+          "latest_replaced": 107,
+          "presentation_unobserved": 0,
+          "preview_discarded": 1922,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam6": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 212142,
+          "invalid_time": 0,
+          "latest_replaced": 126,
+          "presentation_unobserved": 0,
+          "preview_discarded": 1951,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam7": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 211933,
+          "invalid_time": 0,
+          "latest_replaced": 102,
+          "presentation_unobserved": 0,
+          "preview_discarded": 2081,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam8": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 212150,
+          "invalid_time": 0,
+          "latest_replaced": 125,
+          "presentation_unobserved": 0,
+          "preview_discarded": 1865,
+          "stale": 0,
+          "submitted_without_output": 1,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam9": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 212188,
+          "invalid_time": 0,
+          "latest_replaced": 107,
+          "presentation_unobserved": 0,
+          "preview_discarded": 1610,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        }
+      },
+      "background_by_source": {
+        "cam15": {
+          "decode_output_count": 100,
+          "input_decode_ms": {
+            "effective_window_ms": 0,
+            "maximum_ms": null,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "samples": 0,
+            "truncated": false
+          }
+        },
+        "cam16": {
+          "decode_output_count": 708,
+          "input_decode_ms": {
+            "effective_window_ms": 0,
+            "maximum_ms": null,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "samples": 0,
+            "truncated": false
+          }
+        },
+        "cam17": {
+          "decode_output_count": 639,
+          "input_decode_ms": {
+            "effective_window_ms": 0,
+            "maximum_ms": null,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "samples": 0,
+            "truncated": false
+          }
+        },
+        "cam18": {
+          "decode_output_count": 645,
+          "input_decode_ms": {
+            "effective_window_ms": 0,
+            "maximum_ms": null,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "samples": 0,
+            "truncated": false
+          }
+        },
+        "cam19": {
+          "decode_output_count": 602,
+          "input_decode_ms": {
+            "effective_window_ms": 0,
+            "maximum_ms": null,
+            "mean_ms": null,
+            "p95_ms": null,
+            "p99_ms": null,
+            "samples": 0,
+            "truncated": false
+          }
+        }
+      }
+    },
+    "runtime_sha256": {
+      "libamdva_runtime.so": "61d2b790fb4df150cda494aff7b4a3657d64a2a487a6e17f2445c1685beb6bca",
+      "src/gst/libamdva_gst_support.so": "9a79bac33162fe3cdca102772bbfa2ba9369485be847217b4f61a65e92e9ac21",
+      "src/streaming/libamdva_streaming.so": "f738f989399bf3e54b65cead6c970728f36e5d368117d26785182438c8767a41",
+      "src/nvr/amdva-nvr-validate": "bb4d2505382557aa3c4c032ee49909752448660cdfe3a20e13cab0331cf1fc55"
+    },
+    "runtime_scope": "Background input/decode correspondence was unavailable in this intermediate runtime; the final on/off run verifies its repair. Concurrent regression tests ran during part of this soak; final on/off runs are isolated. Frozen intermediate runtime: before final B-frame identity preservation, partial-input/audio filtering, hide/repaint and canonical timestamp refinements, generic buffer-list support, final-gap retirement accounting and background header-prepend trace retention. Hour fixtures contain no B frames/audio/hide operations. Final runtime is covered separately by correctness, real B-frame/RTP, renderer, SDK/headless and on/off runs."
+  },
+  "telemetry_overhead": {
+    "note": "Sequential isolated 90-second runs on identical 20-input/16-selected fixtures, statistics after 60 seconds, including validator snapshots/JSON serialization. A single pair is an observation, not a performance guarantee or acceptance decision.",
+    "runtime_sha256": {
+      "libamdva_runtime.so": "265d312377926019fc18cb312e8974f594faafeb5b49587285c97a3557337d39",
+      "src/gst/libamdva_gst_support.so": "39063e9a8620b4daf2e9237fa76da490e0ec9158fd3450249edcc3b7f82bb04f",
+      "src/streaming/libamdva_streaming.so": "51c07091ac00d334ae05bfbdcec1c77d5e4edf26e2aa0e74a74491cadf9ce63b",
+      "src/nvr/amdva-nvr-validate": "90ee6f98fb85821ac3db7926cc06fbe0b0c348847dc1ae2767fce72de18e5790"
+    },
+    "enabled": {
+      "artifact_directory": "artifacts/timing-perf-bg-on",
+      "window_start_s": 60.0,
+      "observed_snapshots": 61,
+      "source_generations": 20,
+      "notes": "Window P99 summaries are not whole-run percentiles. CPU percent is relative to one logical core. No latency or FPS pass/fail classification.",
+      "rolling_window_p99_ms": {
+        "continuous.decode_preview": {
+          "samples": 976,
+          "minimum": 16.101469,
+          "median": 20.876577,
+          "maximum": 26.087829
+        },
+        "continuous.decoder": {
+          "samples": 976,
+          "minimum": 1.255502,
+          "median": 22.5208045,
+          "maximum": 49.875599
+        },
+        "continuous.draw_swap": {
+          "samples": 976,
+          "minimum": 0.529074,
+          "median": 4.5613980000000005,
+          "maximum": 7.427378
+        },
+        "continuous.input_decode": {
+          "samples": 976,
+          "minimum": 11.196166,
+          "median": 31.7463915,
+          "maximum": 54.867156
+        },
+        "continuous.input_draw": {
+          "samples": 976,
+          "minimum": 39.038893,
+          "median": 64.53529950000001,
+          "maximum": 94.14266
+        },
+        "continuous.input_swap": {
+          "samples": 976,
+          "minimum": 39.75554,
+          "median": 66.205956,
+          "maximum": 94.502239
+        },
+        "continuous.preview_draw": {
+          "samples": 976,
+          "minimum": 21.532266,
+          "median": 31.1181945,
+          "maximum": 44.051283
+        },
+        "background.decoder": {
+          "samples": 244,
+          "minimum": 2.214004,
+          "median": 11.1216385,
+          "maximum": 16.940044
+        },
+        "background.input_decode": {
+          "samples": 244,
+          "minimum": 13.600557,
+          "median": 23.021383,
+          "maximum": 59.253128
+        }
+      },
+      "rolling_interval_p99_ms": {
+        "continuous.access_unit": {
+          "samples": 1220,
+          "minimum": 33.502207,
+          "median": 35.3793175,
+          "maximum": 43.39285
+        },
+        "continuous.decode_input": {
+          "samples": 976,
+          "minimum": 42.101642,
+          "median": 43.43167,
+          "maximum": 49.724784
+        },
+        "continuous.decode_output": {
+          "samples": 976,
+          "minimum": 41.638303,
+          "median": 43.709606,
+          "maximum": 49.652726
+        },
+        "continuous.draw": {
+          "samples": 976,
+          "minimum": 60.758508,
+          "median": 67.831262,
+          "maximum": 75.061798
+        },
+        "continuous.input": {
+          "samples": 1220,
+          "minimum": 33.376848,
+          "median": 33.607399,
+          "maximum": 34.159359
+        },
+        "continuous.preview_ready": {
+          "samples": 976,
+          "minimum": 42.078436,
+          "median": 51.913907,
+          "maximum": 61.367596
+        },
+        "continuous.swap": {
+          "samples": 976,
+          "minimum": 60.841896,
+          "median": 67.820774,
+          "maximum": 77.510693
+        }
+      },
+      "observed_fps": {
+        "continuous.access_unit": {
+          "samples": 1220,
+          "minimum": 30,
+          "median": 30.0,
+          "maximum": 30
+        },
+        "continuous.decode_input": {
+          "samples": 976,
+          "minimum": 29.9,
+          "median": 30.0,
+          "maximum": 30.1
+        },
+        "continuous.decode_output": {
+          "samples": 976,
+          "minimum": 29.9,
+          "median": 30.0,
+          "maximum": 30.1
+        },
+        "continuous.draw": {
+          "samples": 976,
+          "minimum": 27.9,
+          "median": 29.1,
+          "maximum": 30.1
+        },
+        "continuous.input": {
+          "samples": 1220,
+          "minimum": 30,
+          "median": 30.0,
+          "maximum": 30
+        },
+        "continuous.preview_ready": {
+          "samples": 976,
+          "minimum": 29.8,
+          "median": 30.0,
+          "maximum": 30.1
+        },
+        "continuous.swap": {
+          "samples": 976,
+          "minimum": 27.9,
+          "median": 29.1,
+          "maximum": 30.1
+        },
+        "background.decode_input": {
+          "samples": 10,
+          "minimum": 13.47663234,
+          "median": 15.27181837,
+          "maximum": 43.28131395
+        },
+        "background.decode_output": {
+          "samples": 10,
+          "minimum": 13.47731345,
+          "median": 15.272385735,
+          "maximum": 43.28423646
+        }
+      },
+      "legacy_selected_display_fps": {
+        "samples": 976,
+        "minimum": 28.84827581092416,
+        "median": 29.881140413245777,
+        "maximum": 30.954632426396383
+      },
+      "legacy_selected_ai_fps": {
+        "samples": 976,
+        "minimum": 4.942670733221992,
+        "median": 5.969500336375872,
+        "maximum": 6.993648312653262
+      },
+      "process_cpu_percent": 130.12340303088536,
+      "rss_kib": {
+        "samples": 7,
+        "minimum": 1623752.0,
+        "median": 1650896.0,
+        "maximum": 1652760.0
+      },
+      "gpu_alloc_kib": {
+        "samples": 7,
+        "minimum": 1475636.0,
+        "median": 1482628.0,
+        "maximum": 1486092.0
+      },
+      "last_counters_by_source": {
+        "cam0": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3602,
+          "invalid_time": 0,
+          "latest_replaced": 44,
+          "presentation_unobserved": 0,
+          "preview_discarded": 121,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam1": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3578,
+          "invalid_time": 0,
+          "latest_replaced": 47,
+          "presentation_unobserved": 0,
+          "preview_discarded": 120,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam10": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3603,
+          "invalid_time": 0,
+          "latest_replaced": 45,
+          "presentation_unobserved": 0,
+          "preview_discarded": 65,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam11": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3576,
+          "invalid_time": 0,
+          "latest_replaced": 44,
+          "presentation_unobserved": 0,
+          "preview_discarded": 63,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam12": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3602,
+          "invalid_time": 0,
+          "latest_replaced": 43,
+          "presentation_unobserved": 0,
+          "preview_discarded": 45,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam13": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3576,
+          "invalid_time": 0,
+          "latest_replaced": 44,
+          "presentation_unobserved": 0,
+          "preview_discarded": 63,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam14": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3602,
+          "invalid_time": 0,
+          "latest_replaced": 44,
+          "presentation_unobserved": 0,
+          "preview_discarded": 53,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam15": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3602,
+          "invalid_time": 0,
+          "latest_replaced": 44,
+          "presentation_unobserved": 0,
+          "preview_discarded": 49,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam16": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3602,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam17": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3601,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam18": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3602,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam19": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3604,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam2": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3602,
+          "invalid_time": 0,
+          "latest_replaced": 48,
+          "presentation_unobserved": 0,
+          "preview_discarded": 97,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam3": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3578,
+          "invalid_time": 0,
+          "latest_replaced": 47,
+          "presentation_unobserved": 0,
+          "preview_discarded": 107,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam4": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3602,
+          "invalid_time": 0,
+          "latest_replaced": 46,
+          "presentation_unobserved": 0,
+          "preview_discarded": 103,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam5": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3602,
+          "invalid_time": 0,
+          "latest_replaced": 46,
+          "presentation_unobserved": 0,
+          "preview_discarded": 70,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam6": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3603,
+          "invalid_time": 0,
+          "latest_replaced": 44,
+          "presentation_unobserved": 0,
+          "preview_discarded": 83,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam7": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3604,
+          "invalid_time": 0,
+          "latest_replaced": 46,
+          "presentation_unobserved": 0,
+          "preview_discarded": 70,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam8": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3602,
+          "invalid_time": 0,
+          "latest_replaced": 44,
+          "presentation_unobserved": 0,
+          "preview_discarded": 101,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam9": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 3574,
+          "invalid_time": 0,
+          "latest_replaced": 45,
+          "presentation_unobserved": 0,
+          "preview_discarded": 70,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        }
+      },
+      "background_by_source": {
+        "cam16": {
+          "decode_output_count": 16,
+          "input_decode_ms": {
+            "effective_window_ms": 4066.437386,
+            "maximum_ms": 13.600557,
+            "mean_ms": 13.600557,
+            "p95_ms": 13.600557,
+            "p99_ms": 13.600557,
+            "samples": 1,
+            "truncated": false
+          }
+        },
+        "cam17": {
+          "decode_output_count": 17,
+          "input_decode_ms": {
+            "effective_window_ms": 7057.61469,
+            "maximum_ms": 21.623418,
+            "mean_ms": 19.7405795,
+            "p95_ms": 21.623418,
+            "p99_ms": 21.623418,
+            "samples": 2,
+            "truncated": false
+          }
+        },
+        "cam18": {
+          "decode_output_count": 16,
+          "input_decode_ms": {
+            "effective_window_ms": 5048.52163,
+            "maximum_ms": 29.230063,
+            "mean_ms": 29.230063,
+            "p95_ms": 29.230063,
+            "p99_ms": 29.230063,
+            "samples": 1,
+            "truncated": false
+          }
+        },
+        "cam19": {
+          "decode_output_count": 16,
+          "input_decode_ms": {
+            "effective_window_ms": 4056.605238,
+            "maximum_ms": 18.487741,
+            "mean_ms": 18.487741,
+            "p95_ms": 18.487741,
+            "p99_ms": 18.487741,
+            "samples": 1,
+            "truncated": false
+          }
+        }
+      }
+    },
+    "disabled": {
+      "artifact_directory": "artifacts/timing-perf-bg-off",
+      "window_start_s": 60.0,
+      "observed_snapshots": 61,
+      "source_generations": 20,
+      "notes": "Window P99 summaries are not whole-run percentiles. CPU percent is relative to one logical core. No latency or FPS pass/fail classification.",
+      "rolling_window_p99_ms": {},
+      "rolling_interval_p99_ms": {},
+      "observed_fps": {},
+      "legacy_selected_display_fps": {
+        "samples": 976,
+        "minimum": 28.986955493197637,
+        "median": 29.926215598687946,
+        "maximum": 30.959851357638968
+      },
+      "legacy_selected_ai_fps": {
+        "samples": 976,
+        "minimum": 4.94325895532236,
+        "median": 5.981810641800249,
+        "maximum": 6.9812450248656
+      },
+      "process_cpu_percent": 123.93943843644826,
+      "rss_kib": {
+        "samples": 7,
+        "minimum": 1632608.0,
+        "median": 1654680.0,
+        "maximum": 1656492.0
+      },
+      "gpu_alloc_kib": {
+        "samples": 7,
+        "minimum": 1475636.0,
+        "median": 1475640.0,
+        "maximum": 1488464.0
+      },
+      "last_counters_by_source": {
+        "cam0": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam1": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam10": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam11": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam12": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam13": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam14": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam15": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam16": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam17": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam18": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam19": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam2": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam3": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam4": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam5": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam6": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam7": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam8": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        },
+        "cam9": {
+          "ambiguous_pts": 0,
+          "capacity_evicted": 0,
+          "encoded_discarded": 0,
+          "expired": 0,
+          "invalid_time": 0,
+          "latest_replaced": 0,
+          "presentation_unobserved": 0,
+          "preview_discarded": 0,
+          "stale": 0,
+          "submitted_without_output": 0,
+          "unmatched_decode": 0,
+          "unmatched_rtp": 0
+        }
+      },
+      "background_by_source": {}
+    }
+  }
+}

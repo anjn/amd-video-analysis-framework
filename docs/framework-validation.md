@@ -133,3 +133,9 @@ Validate packaging by installing to a temporary prefix and building
 `AMDVA_BUILD_NVR=OFF` build must succeed without Qt and its `amdva-streams`
 executable must process real RTSP sources without a display server. The test
 report records these results separately from GUI presentation evidence.
+
+
+Telemetry-specific boundaries, manual validation tools and recorded hardware
+results are described in [Decode and presentation telemetry](telemetry.md).
+Its [validation report](telemetry-validation-results.json) separates the frozen
+long-run runtime from final SDK, renderer, RTP and telemetry-on/off checks.
