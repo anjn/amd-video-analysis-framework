@@ -139,3 +139,22 @@ impose latency/FPS acceptance thresholds. Framebuffer captures are diagnostics
 from the test tool, not production frame-processing operations. Qt widget
 screenshots alone may omit native QWindow content; the separate live/playback
 framebuffer captures verify the actual imported video images.
+
+### Recorded results
+
+The [validation record](vms-validation-results.json) identifies the code revisions,
+hardware, runtime hashes and local artifact paths. All 17 CTest cases passed.
+A 600-second run received 20 cameras, selected 16 live streams and exercised
+one playback decoder, with an RTSP server restart and codec changes. All 1,201
+recordings finalized and passed media inspection. After the 240-second warmup,
+maximum growth was 9,652 KiB RSS, 18,360 KiB GPU allocation and four FDs, within
+the existing guards. The frozen runtime predates the final small refinements
+listed in the validation record.
+
+The final implementation passed a separate 150-second, 25-phase GUI run with
+317 valid finalized recordings, including camera add/remove, retained history,
+16-view replacement, swapping, clearing and persisted configuration checks.
+Both GUI runs completed without GPU copy auditor violations. Installed SDK
+playback decoded 300 frames for each codec. A build with `AMDVA_BUILD_NVR=OFF`
+also completed without a Qt dependency. These are correctness and resource
+checks, not a performance certification.

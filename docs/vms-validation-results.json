@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "validated_at": "2026-10-08T12:06:47.264164+09:00",
+  "implementation_commit": "d3951238c1992bc71017dc0ee79e8539b11ba27f",
+  "hardware": {
+    "cpu": "AMD Ryzen AI 9 HX 370",
+    "gpu": "AMD Radeon 890M",
+    "gpu_arch": "gfx1150",
+    "vpe": "6.1.0",
+    "kernel": "6.17.0-1032-oem",
+    "linux_memtotal_kib": 14964912
+  },
+  "software": {
+    "gstreamer": "1.28.2",
+    "rocm": "7.2.0",
+    "migraphx": "2.15",
+    "qt": "6.4.2",
+    "mesa": "25.2.8",
+    "dlstreamer": "v2026.2.0",
+    "paho_mqtt": "1.3.13",
+    "librdkafka": "2.3.0"
+  },
+  "ctest": {
+    "tests": 17,
+    "failures": 0,
+    "passed": true,
+    "duration_s": 18.08
+  },
+  "scope": "Functional correctness, finalized recordings, existing memory/FD growth guards and GPU copy auditing. No operational FPS or latency thresholds.",
+  "ten_minute": {
+    "passed": true,
+    "failure": null,
+    "duration_s": 600,
+    "server_restarted": true,
+    "warmup_s": 240,
+    "maximum_growth": {
+      "rss_kib": 9652,
+      "gpu_alloc_kib": 18360,
+      "fds": 4
+    },
+    "recordings_checked": 1201,
+    "invalid_recordings": [],
+    "completed_phases": 16,
+    "catalog_states": {
+      "finalized": 1201
+    },
+    "artifact_directory": "artifacts/vms-ten-minute",
+    "copy_auditor_violations": 0
+  },
+  "ten_minute_revision_scope": "Frozen runtime before the final unit formatting, GUI test object names, historical-camera-name query and null display argument guard. The final GUI run uses the committed implementation and expanded 25-phase validator.",
+  "frozen_runtime_sha256": {
+    "libamdva_runtime.so": "265d312377926019fc18cb312e8974f594faafeb5b49587285c97a3557337d39",
+    "src/gst/libamdva_inference.so": "8030bff49534043fdd37dbcffef384dd5244b3cbf45a932827d56bbe08aa3f1b",
+    "src/gst/libamdva_gst_support.so": "39063e9a8620b4daf2e9237fa76da490e0ec9158fd3450249edcc3b7f82bb04f",
+    "src/gst/libamdva_copy_audit.so": "f1045b694cb829e14a362eb8860116966b70f0bd5ba2294c248b66dfcc8c06c0",
+    "src/streaming/libamdva_streaming.so": "5ac0b027150a1164ca0cb0ac0a9134f77fd227636b8eeb16a96e7751cd421db2",
+    "src/nvr/amdva-vms-validate": "ef8b702a4d4beded0d955a5bd02b9444ed84989df60bd1ee3235f1510a0cb608"
+  },
+  "headless_build": {
+    "passed": true,
+    "qt_dependency": false,
+    "artifact_directory": "artifacts/vms-headless-build",
+    "revision_scope": "Built before the final camera-history query and null-display argument guard; installed SDK playback above uses the final streaming library."
+  },
+  "validator_commit": "1d3e969463094e547cfef97ec6b9a88cca29a200",
+  "final_gui": {
+    "passed": true,
+    "failure": null,
+    "duration_s": 150,
+    "server_restarted": false,
+    "warmup_s": 240,
+    "maximum_growth": {
+      "rss_kib": 0,
+      "gpu_alloc_kib": 0,
+      "fds": 0
+    },
+    "recordings_checked": 317,
+    "invalid_recordings": [],
+    "completed_phases": 25,
+    "artifact_directory": "artifacts/vms-final-gui-2",
+    "copy_auditor_violations": 0,
+    "resource_guard_scope": "Short run does not reach the 240-second warmup; resource guards are covered by the 600-second run.",
+    "catalog_states": {
+      "finalized": 317
+    },
+    "persisted_configuration": {
+      "camera_count": 20,
+      "selected_camera_count": 16,
+      "layout": 16,
+      "cells": [
+        "cam0",
+        "cam1",
+        "cam2",
+        "cam3",
+        "cam4",
+        "cam5",
+        "cam6",
+        "cam7",
+        "cam8",
+        "cam9",
+        "cam10",
+        "cam11",
+        "cam12",
+        "cam13",
+        "cam14",
+        "cam15"
+      ],
+      "config_and_sidecar_permissions": "0600",
+      "renamed_camera": "Renamed entrance",
+      "original_rtsp_url_restored": true,
+      "removed_camera_history_retained": true
+    }
+  },
+  "sdk_playback": {
+    "h264": {
+      "passed": true,
+      "frames": 300,
+      "duration_ns": 10000333333,
+      "artifact_log": "artifacts/vms-sdk-h264-final.log"
+    },
+    "h265": {
+      "passed": true,
+      "frames": 300,
+      "duration_ns": 10000333333,
+      "artifact_log": "artifacts/vms-sdk-h265-final.log"
+    }
+  }
+}
