@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
                     QTimer::singleShot(30, [] {
                         if (auto *dialog =
                                 qobject_cast<QMessageBox *>(QApplication::activeModalWidget()))
-                            dialog->done(QMessageBox::Yes);
+                            dialog->button(QMessageBox::Yes)->click();
                     });
                     button("camera-remove");
                     phase++;
