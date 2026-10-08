@@ -71,6 +71,7 @@ struct Plane {
     Clock::time_point time;
 };
 struct Slot {
+    std::atomic<bool> preview_visible{true};
     std::mutex mutex;
     std::unique_ptr<VaSession> va, preview_va;
     std::array<unsigned, 4> preview_geometry{}, ai_geometry{};
@@ -98,6 +99,13 @@ class Controller {
     ~Controller();
     void add(Source source);
     void remove(const std::string &id);
+    void update_source(Source source);
+    std::vector<Recording> recordings(const RecordingQuery &q = {}) const;
+    std::shared_ptr<RecordingFile> open_recording(const std::string &name);
+    StorageStatus storage() const;
+    void recording_duration(const std::string &, int64_t);
+    std::vector<std::pair<std::string, std::string>> recording_cameras() const;
+    void preview_sources(const std::vector<std::string> &ids);
     void select(const std::string &id, bool selected);
     std::vector<Status> status() const;
     std::array<Slot, 16> &gpu_slots() { return slots_; }

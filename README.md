@@ -109,3 +109,5 @@ of closed managed MKV recordings. See [NVR setup, architecture and verification]
 and [the example configuration](examples/nvr.json). Optional background AI
 decodes only independently decodable keyframes from hidden sources, at a
 configurable interval (five seconds by default), using four bounded AI slots.
+
+The desktop sample includes fixed live layouts, camera management, recording search and hardware playback; see the [VMS GUI guide](docs/vms.md).

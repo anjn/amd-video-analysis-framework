@@ -1,7 +1,9 @@
 #include "amdva/streaming/controller.hpp"
 #include "amdva/batching.hpp"
 #include "amdva/preprocess.hpp"
+#include "amdva/streaming/config.hpp"
 #include "amdva/streaming/keyframe.hpp"
+#include "amdva/streaming/playback.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -88,7 +90,7 @@ struct Controller::Channel {
         Channel *owner{};
         GstElement *pipe{};
         GstElement *input{};
-        std::string session{identifier()};
+        std::string session{identifier()}, camera_name, channel;
         GstClockTime origin{GST_CLOCK_TIME_NONE};
         bool ending{};
         Clock::time_point deadline;
@@ -101,7 +103,7 @@ struct Controller::Channel {
             destroy(pipe);
             for (const auto &f : files) {
                 try {
-                    owner->controller.catalog_->closed(f);
+                    owner->controller.catalog_->interrupted(f);
                 } catch (...) {
                 }
             }
@@ -109,10 +111,16 @@ struct Controller::Channel {
         static gchar *location(GstElement *, guint fragment, gpointer data) {
             auto &r = *static_cast<Recorder *>(data);
             const auto now = g_get_real_time();
-            const auto name = std::to_string(now) + "-" + r.owner->state.source.id + "-" +
-                              r.session + "-" + std::to_string(fragment) + ".mkv";
+            const auto name = std::to_string(now) + "-" + r.channel + "-" + r.session + "-" +
+                              std::to_string(fragment) + ".mkv";
             try {
-                r.owner->controller.catalog_->opened(name, r.owner->state.source.id);
+                std::string camera_name;
+                {
+                    std::lock_guard<std::mutex> l(r.mutex);
+                    camera_name = r.camera_name;
+                }
+                r.owner->controller.catalog_->opened(name, r.channel, camera_name, r.session,
+                                                     fragment);
                 std::lock_guard<std::mutex> l(r.mutex);
                 r.files.push_back(name);
             } catch (...) {
@@ -138,7 +146,10 @@ struct Controller::Channel {
                         const char *loc = gst_structure_get_string(s, "location");
                         if (loc) {
                             const auto name = std::filesystem::path(loc).filename().string();
-                            owner->controller.catalog_->closed(name);
+                            guint64 duration = GST_CLOCK_TIME_NONE;
+                            gst_structure_get_uint64(s, "fragment-duration", &duration);
+                            owner->controller.catalog_->closed(
+                                name, GST_CLOCK_TIME_IS_VALID(duration) ? int64_t(duration) : -1);
                             std::lock_guard<std::mutex> lock(mutex);
                             files.erase(std::remove(files.begin(), files.end(), name), files.end());
                         }
@@ -160,7 +171,7 @@ struct Controller::Channel {
                 destroy(pipe);
                 std::lock_guard<std::mutex> l(mutex);
                 for (const auto &f : files)
-                    owner->controller.catalog_->closed(f);
+                    owner->controller.catalog_->interrupted(f);
             }
             return done;
         }
@@ -549,6 +560,8 @@ struct Controller::Channel {
     void start_record(GstCaps *caps) {
         auto r = std::make_unique<Recorder>();
         r->owner = this;
+        r->camera_name = state.source.name;
+        r->channel = state.source.id;
         r->pipe =
             parse(std::string("appsrc name=input is-live=true format=time block=false ! ") +
                   (codec == 1 ? "h264parse ! video/x-h264,stream-format=avc,alignment=au"
@@ -603,6 +616,7 @@ struct Controller::Channel {
         timing->availability(TimingStage::PreviewReady, controller.options_.preview_enabled,
                              controller.options_.preview_enabled &&
                                  controller.presentation_observed_.load() && state.slot >= 0 &&
+                                 controller.slots_[state.slot].preview_visible.load() &&
                                  state.connection == "live");
         recordings.erase(std::remove_if(recordings.begin(), recordings.end(),
                                         [this](auto &r) {
@@ -1117,7 +1131,9 @@ void Controller::preview_loop() {
                     continue;
                 auto it = std::find_if(s.preview.begin(), s.preview.end(),
                                        [](const auto &p) { return p.state == 0; });
-                if (options_.preview_enabled && it == s.preview.end())
+                const bool preview = options_.preview_enabled && presentation_observed_.load() &&
+                                     s.preview_visible.load();
+                if (preview && it == s.preview.end())
                     continue;
                 auto frame = s.latest;
                 auto *buffer = gst_sample_get_buffer(frame.sample.get());
@@ -1159,33 +1175,14 @@ void Controller::preview_loop() {
                         }
                     }
                 }
-                if (!options_.preview_enabled) {
+                if (!preview) {
                     s.latest.preview_consumed = true;
                     previous[index] = frame.sample;
                     s.processed++;
                     continue;
                 }
-                const auto surface = gst_va_buffer_get_surface(buffer);
-                if (surface == VA_INVALID_SURFACE)
-                    throw std::runtime_error("Missing VA decode surface");
-                const double factor =
-                    std::clamp(std::min(double(std::min(1920u, s.target_width)) / frame.width,
-                                        double(std::min(1080u, s.target_height)) / frame.height),
-                               1.0 / 6.0, 16.0);
-                // Keep VPE within the validated single-stage reduction range even
-                // when the desktop window is minimized; GL handles further reduction.
-                it->width = std::max(2u, 2 * unsigned(std::ceil(frame.width * factor / 2)));
-                it->height = std::max(2u, 2 * unsigned(std::ceil(frame.height * factor / 2)));
-                const std::array<unsigned, 4> geometry{frame.width, frame.height, it->width,
-                                                       it->height};
-                if (!s.preview_va || s.preview_geometry != geometry) {
-                    s.preview_va.reset();
-                    s.preview_va = std::make_unique<VaSession>(
-                        static_cast<VADisplay>(gst_va_display_get_va_dpy(display_)));
-                    s.preview_geometry = geometry;
-                }
-                s.preview_va->scale(surface, it->surface, frame.width, frame.height, it->width,
-                                    it->height);
+                prepare_preview(display_, s, *it, frame.sample.get(), frame.generation,
+                                s.sequence + 1);
                 frame.timing.mark(TimingStage::PreviewReady);
                 s.latest.timing = frame.timing;
                 s.latest.preview_consumed = true;
@@ -1501,9 +1498,56 @@ void Controller::presentation_active(bool active) {
             continue;
         it->second->availability(TimingStage::PreviewReady, options_.preview_enabled,
                                  options_.preview_enabled && active && state.slot >= 0 &&
+                                     slots_[state.slot].preview_visible.load() &&
                                      state.connection == "live");
-        it->second->availability(TimingStage::Draw, true, active && state.slot >= 0);
-        it->second->availability(TimingStage::Swap, true, active && state.slot >= 0);
+        it->second->availability(TimingStage::Draw, true,
+                                 active && state.slot >= 0 &&
+                                     slots_[state.slot].preview_visible.load());
+        it->second->availability(TimingStage::Swap, true,
+                                 active && state.slot >= 0 &&
+                                     slots_[state.slot].preview_visible.load());
     }
+}
+
+void Controller::preview_sources(const std::vector<std::string> &ids) {
+    const auto states = status();
+    for (const auto &state : states)
+        if (state.slot >= 0)
+            slots_[state.slot].preview_visible =
+                std::find(ids.begin(), ids.end(), state.source.id) != ids.end();
+    presentation_active(presentation_observed_.load());
+}
+std::vector<Recording> Controller::recordings(const RecordingQuery &q) const {
+    return catalog_->list(q);
+}
+std::shared_ptr<RecordingFile> Controller::open_recording(const std::string &name) {
+    return catalog_->open_recording(name);
+}
+StorageStatus Controller::storage() const { return catalog_->storage(); }
+void Controller::recording_duration(const std::string &name, int64_t ns) {
+    catalog_->duration(name, ns);
+}
+std::vector<std::pair<std::string, std::string>> Controller::recording_cameras() const {
+    return catalog_->cameras();
+}
+void Controller::update_source(Source source) {
+    source.uri = validated_uri(source.uri);
+    command([this, source] {
+        for (auto &c : channels_)
+            if (!c->removed && c->state.source.id == source.id) {
+                if (c->state.source.uri != source.uri) {
+                    c->failed("Camera configuration changed");
+                    c->state.source.uri = source.uri;
+                    c->reconnect = Clock::now();
+                    c->retries = 0;
+                }
+                c->state.source.name = source.name;
+                for (auto &r : c->recordings) {
+                    std::lock_guard<std::mutex> l(r->mutex);
+                    r->camera_name = source.name;
+                }
+                return;
+            }
+    });
 }
 } // namespace amdva::streaming

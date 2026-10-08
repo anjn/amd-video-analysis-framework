@@ -179,11 +179,12 @@ void input_only_test(bool audio) {
 void buffer_list_test() {
     auto metrics = std::make_shared<Telemetry>("buffer-list");
     metrics->begin_generation(1);
-    auto *pipe = gst_parse_launch("appsrc name=input format=time ! identity name=mark ! "
+    auto *pipe = gst_parse_launch("appsrc name=input format=time ! "
                                   "appsink name=output sync=false buffer-list=true",
                                   nullptr);
     auto *input = gst_bin_get_by_name(GST_BIN(pipe), "input"),
-         *output = gst_bin_get_by_name(GST_BIN(pipe), "output"), *mark = pad(pipe, "mark", "src");
+         *output = gst_bin_get_by_name(GST_BIN(pipe), "output");
+    auto *mark = pad(pipe, "input", "src");
     auto adapter = std::make_unique<PipelineTelemetry>(metrics);
     adapter->attach_stage(mark, TimingStage::Draw);
     gst_element_set_state(pipe, GST_STATE_PLAYING);

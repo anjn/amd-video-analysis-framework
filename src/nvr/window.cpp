@@ -10,8 +10,11 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeyEvent>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QMouseEvent>
+#include <QPainter>
 #include <QPushButton>
 #include <QSaveFile>
 #include <QTimer>
@@ -69,13 +72,14 @@ GLuint program(QOpenGLExtraFunctions *gl, const char *vertex, const char *fragme
     return result;
 }
 } // namespace
-Tiles::Tiles(Controller &c) : QOpenGLWindow(QOpenGLWindow::NoPartialUpdate), controller_(c) {
+Tiles::Tiles(Controller &c, Slot *playback)
+    : QOpenGLWindow(QOpenGLWindow::NoPartialUpdate), controller_(c), playback_(playback) {
     connect(this, &QOpenGLWindow::frameSwapped, this, [this] {
         const auto now = Telemetry::monotonic_ns();
         for (auto &pending : pending_swap_) {
             if (!pending.timing.mark(TimingStage::Swap, now))
                 continue;
-            auto &slot = controller_.gpu_slots()[pending.slot];
+            auto &slot = this->slot(pending.slot);
             std::lock_guard<std::mutex> lock(slot.mutex);
             auto &trace = slot.preview[pending.plane].timing;
             if (trace.telemetry == pending.timing.telemetry &&
@@ -94,7 +98,8 @@ Tiles::Tiles(Controller &c) : QOpenGLWindow(QOpenGLWindow::NoPartialUpdate), con
 }
 void Tiles::observe_visibility() {
     const bool active = isVisible() && isExposed() && visibility() != QWindow::Minimized;
-    controller_.presentation_active(active);
+    if (!playback_)
+        controller_.presentation_active(active);
     if (!active) {
         for (const auto &pending : pending_swap_)
             if (pending.timing.telemetry)
@@ -148,8 +153,8 @@ void Tiles::initializeGL() {
             eglGetProcAddress("glEGLImageTargetTexture2DOES"));
         if (!create_ || !destroy_ || !target_)
             throw std::runtime_error("EGL DMA-BUF import unavailable");
-        for (unsigned i = 0; i < 16; ++i) {
-            auto &s = controller_.gpu_slots()[i];
+        for (unsigned i = 0; i < slot_count(); ++i) {
+            auto &s = slot(i);
             std::lock_guard<std::mutex> l(s.mutex);
             for (unsigned j = 0; j < 3; ++j) {
                 auto d = s.va->export_surface(s.preview[j].surface);
@@ -222,7 +227,7 @@ void Tiles::release_current(unsigned slot) {
     const int old = current_[slot];
     if (old < 0)
         return;
-    auto &s = controller_.gpu_slots()[slot];
+    auto &s = this->slot(slot);
     auto &t = textures_[slot][old];
     if (t.fence)
         gl_->glDeleteSync(t.fence);
@@ -231,11 +236,15 @@ void Tiles::release_current(unsigned slot) {
     current_[slot] = -1;
 }
 void Tiles::paintGL() {
-    controller_.presentation_active(isExposed() && visibility() != QWindow::Minimized);
+    if (!playback_)
+        controller_.presentation_active(isExposed() && visibility() != QWindow::Minimized);
     for (const auto &pending : pending_swap_)
         if (pending.timing.telemetry)
             pending.timing.telemetry->counter(TimingCounter::PresentationUnobserved);
     pending_swap_.clear();
+    gl_->glDisable(GL_SCISSOR_TEST);
+    gl_->glDisable(GL_BLEND);
+    gl_->glDisable(GL_DEPTH_TEST);
     gl_->glViewport(0, 0, int(width() * devicePixelRatio()), int(height() * devicePixelRatio()));
     gl_->glClearColor(0.025f, 0.025f, 0.035f, 1);
     gl_->glClear(GL_COLOR_BUFFER_BIT);
@@ -243,12 +252,25 @@ void Tiles::paintGL() {
         return;
     const auto statuses = controller_.status();
     std::vector<int> active;
-    for (const auto &status : statuses)
-        if (status.slot >= 0)
-            active.push_back(status.slot);
+    if (playback_)
+        active.push_back(0);
+    else if (cell_count_) {
+        for (unsigned tile = 0; tile < cell_count_; ++tile) {
+            if (focus_ >= 0 && int(tile) != focus_)
+                continue;
+            int index = -1;
+            for (const auto &s : statuses)
+                if (s.source.id == cells_[tile])
+                    index = s.slot;
+            active.push_back(index);
+        }
+    } else
+        for (const auto &s : statuses)
+            if (s.slot >= 0)
+                active.push_back(s.slot);
     const unsigned side = active.empty() ? 1 : unsigned(std::ceil(std::sqrt(active.size())));
-    for (unsigned i = 0; i < 16; ++i) {
-        auto &s = controller_.gpu_slots()[i];
+    for (unsigned i = 0; i < slot_count(); ++i) {
+        auto &s = slot(i);
         std::lock_guard<std::mutex> l(s.mutex);
         for (unsigned j = 0; j < 3; ++j) {
             auto &p = s.preview[j];
@@ -297,11 +319,15 @@ void Tiles::paintGL() {
         }
     }
     for (unsigned tile = 0; tile < active.size(); ++tile) {
+        if (active[tile] < 0)
+            continue;
         const unsigned index = active[tile];
-        auto &s = controller_.gpu_slots()[index];
+        auto &s = slot(index);
         std::lock_guard<std::mutex> l(s.mutex);
         s.target_width = std::max(2u, unsigned(width() * devicePixelRatio() / side));
         s.target_height = std::max(2u, unsigned(height() * devicePixelRatio() / side));
+        if (!playback_ && cell_count_ && s.channel != cells_[focus_ >= 0 ? unsigned(focus_) : tile])
+            continue;
         const int image = current_[index];
         if (image < 0 || s.channel.empty() || s.preview[image].generation != s.generation)
             continue;
@@ -352,6 +378,29 @@ void Tiles::paintGL() {
         }
     }
     gl_->glFlush();
+    if (cell_count_ && !playback_) {
+        QPainter painter(this);
+        const unsigned shown = focus_ >= 0 ? 1 : cell_count_;
+        const unsigned side = unsigned(std::ceil(std::sqrt(shown)));
+        for (unsigned tile = 0; tile < shown; tile++) {
+            const unsigned cell = focus_ >= 0 ? unsigned(focus_) : tile;
+            QRect rect(int(tile % side) * width() / side, int(tile / side) * height() / side,
+                       width() / side, height() / side);
+            QString label = QString("%1 · Empty tile").arg(cell + 1);
+            for (const auto &s : statuses)
+                if (s.source.id == cells_[cell])
+                    label = QString("%1 · %2 · %3")
+                                .arg(cell + 1)
+                                .arg(qs(s.source.name), qs(s.connection));
+            painter.fillRect(QRect(rect.left(), rect.top(), rect.width(), 26),
+                             QColor(15, 20, 28, 215));
+            painter.setPen(Qt::white);
+            painter.drawText(rect.adjusted(8, 2, -8, -2), Qt::AlignLeft | Qt::AlignTop, label);
+            painter.setPen(QPen(cell == selected_ ? QColor(75, 170, 255) : QColor(75, 80, 90),
+                                cell == selected_ ? 3 : 1));
+            painter.drawRect(rect.adjusted(1, 1, -2, -2));
+        }
+    }
 }
 void install_shutdown_signals(QCoreApplication &app) {
     shutdown_requested = 0;
@@ -364,214 +413,40 @@ void install_shutdown_signals(QCoreApplication &app) {
     });
     timer->start(100);
 }
-Window::Window(Controller &c, Options options, std::string config)
-    : controller_(c), options_(std::move(options)), config_(std::move(config)) {
-    setWindowTitle("AMD Video Analytics NVR");
-    resize(1500, 900);
-    auto *widget = new QWidget;
-    setCentralWidget(widget);
-    auto *layout = new QHBoxLayout(widget);
-    auto *sidebar = new QVBoxLayout;
-    layout->addLayout(sidebar, 0);
-    auto *add = new QPushButton("Add RTSP");
-    auto *remove = new QPushButton("Remove selected row");
-    sidebar->addWidget(add);
-    sidebar->addWidget(remove);
-    table_ = new QTableWidget(0, 8);
-    table_->setHorizontalHeaderLabels({"View", "Channel", "Connection", "Recording",
-                                       "Decode / swap / AI FPS", "Status", "Input→decode P99 ms",
-                                       "Input→swap P99 ms"});
-    table_->setSelectionBehavior(QAbstractItemView::SelectRows);
-    table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    table_->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-    sidebar->addWidget(table_);
-    summary_ = new QLabel;
-    summary_->setWordWrap(true);
-    sidebar->addWidget(summary_);
-    tiles_ = new Tiles(c);
-    layout->addWidget(QWidget::createWindowContainer(tiles_), 1);
-    connect(add, &QPushButton::clicked, this, [this] {
-        bool ok = false;
-        const auto uri =
-            QInputDialog::getText(this, "Add camera", "RTSP URL", QLineEdit::Normal, {}, &ok);
-        if (!ok || uri.isEmpty())
-            return;
-        std::string normalized;
-        try {
-            normalized = validated_uri(uri.toStdString());
-        } catch (const std::exception &e) {
-            QMessageBox::warning(this, "Invalid URL", qs(e.what()));
-            return;
-        }
-        const auto name =
-            QInputDialog::getText(this, "Camera name", "Name", QLineEdit::Normal, "Camera", &ok);
-        if (!ok)
-            return;
-        Source s{QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString(),
-                 name.toStdString(), normalized, false};
-        controller_.add(s);
-    });
-    connect(remove, &QPushButton::clicked, this, [this] {
-        const auto row = table_->currentRow();
-        if (row >= 0)
-            controller_.remove(table_->item(row, 1)->data(Qt::UserRole).toString().toStdString());
-    });
-    connect(table_, &QTableWidget::itemChanged, this, [this](QTableWidgetItem *item) {
-        if (updating_ || item->column() != 0)
-            return;
-        controller_.select(
-            table_->item(item->row(), 1)->data(Qt::UserRole).toString().toStdString(),
-            item->checkState() == Qt::Checked);
-    });
-    auto *timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, [this] {
-        refresh();
-        tiles_->update();
-    });
-    timer->start(33);
+
+void Tiles::layout(const std::array<std::string, 16> &cells, unsigned count, int focus) {
+    cells_ = cells;
+    cell_count_ = count;
+    focus_ = focus;
+    if (!playback_) {
+        std::vector<std::string> visible;
+        for (unsigned i = 0; i < count; i++)
+            if ((focus < 0 || int(i) == focus) && !cells[i].empty())
+                visible.push_back(cells[i]);
+        controller_.preview_sources(visible);
+    }
+    update();
 }
-Window::~Window() {
-    controller_.shutdown();
-    try {
-        persist();
-    } catch (...) {
-    }
+unsigned Tiles::picked(const QPointF &p) const {
+    if (focus_ >= 0)
+        return unsigned(focus_);
+    const auto side = std::max(1u, unsigned(std::ceil(std::sqrt(cell_count_ ? cell_count_ : 1))));
+    return std::min(side * side - 1,
+                    unsigned(std::max(0., p.x()) * side / std::max(1, width())) +
+                        side * unsigned(std::max(0., p.y()) * side / std::max(1, height())));
 }
-void Window::persist() {
-    if (!controller_.status_ready() || !controller_.fatal().empty())
-        return;
-    const auto status = controller_.status();
-    std::vector<Source> sources;
-    for (const auto &s : status)
-        sources.push_back(s.source);
-    bool same = sources.size() == options_.sources.size();
-    if (same)
-        for (unsigned i = 0; i < sources.size(); ++i) {
-            const auto &a = sources[i];
-            const auto &b = options_.sources[i];
-            same &= a.id == b.id && a.name == b.name && a.uri == b.uri && a.selected == b.selected;
-        }
-    if (same)
-        return;
-    const auto previous = options_.sources;
-    options_.sources = std::move(sources);
-    try {
-        save_config(config_, options_);
-    } catch (...) {
-        options_.sources = previous;
-        throw;
-    }
+void Tiles::mousePressEvent(QMouseEvent *e) {
+    if (activated)
+        activated(picked(e->position()), false);
 }
-void Window::refresh() {
-    const auto statuses = controller_.status();
-    const auto timing_snapshots = controller_.telemetry();
-    updating_ = true;
-    table_->setRowCount(int(statuses.size()));
-    for (unsigned row = 0; row < statuses.size(); ++row) {
-        const auto &s = statuses[row];
-        for (unsigned col = 0; col < 8; ++col)
-            if (!table_->item(row, col))
-                table_->setItem(row, col, new QTableWidgetItem);
-        auto *check = table_->item(row, 0);
-        check->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
-        check->setCheckState(s.source.selected ? Qt::Checked : Qt::Unchecked);
-        table_->item(row, 1)->setText(qs(s.source.name));
-        table_->item(row, 1)->setData(Qt::UserRole, qs(s.source.id));
-        table_->item(row, 2)->setText(qs(s.connection));
-        table_->item(row, 3)->setText(qs(s.recording));
-        table_->item(row, 4)->setText(
-            QString("%1 / %2").arg(s.display_fps, 0, 'f', 1).arg(s.ai_fps, 0, 'f', 1));
-        for (const auto &metrics : timing_snapshots)
-            if (metrics.source == s.source.id) {
-                auto text = [](const TimingDistribution &d) {
-                    return d.samples ? QString::number(d.p99_ms, 'f', 1) : QString("N/A");
-                };
-                table_->item(row, 4)->setText(
-                    QString("decode %1 / swap %2 / AI %3")
-                        .arg(metrics.stages[0][unsigned(TimingStage::DecodeOutput)].fps, 0, 'f', 1)
-                        .arg(metrics.stages[0][unsigned(TimingStage::Swap)].fps, 0, 'f', 1)
-                        .arg(s.ai_fps, 0, 'f', 1));
-                table_->item(row, 6)->setText(text(metrics.latency[0][0]));
-                table_->item(row, 7)->setText(text(metrics.latency[0][3]));
-                if (!metrics.enabled)
-                    table_->item(row, 4)->setText(
-                        QString("Timing off / AI %1").arg(s.ai_fps, 0, 'f', 1));
-                QString details = "Latency: mean / P95 / P99 / maximum (ms)\n";
-                const char *names[] = {"Input → decode", "Decoder input → output", "Input → draw",
-                                       "Input → swap",   "Decode → preview",       "Preview → draw",
-                                       "Draw → swap"};
-                for (unsigned i = 0; i < 7; i++) {
-                    const auto &d = metrics.latency[0][i];
-                    details += QString::fromUtf8(names[i]) + ": ";
-                    if (!d.samples)
-                        details += "N/A\n";
-                    else
-                        details += QString("%1 / %2 / %3 / %4 (%5 samples%6)\n")
-                                       .arg(d.mean_ms, 0, 'f', 1)
-                                       .arg(d.p95_ms, 0, 'f', 1)
-                                       .arg(d.p99_ms, 0, 'f', 1)
-                                       .arg(d.maximum_ms, 0, 'f', 1)
-                                       .arg(qulonglong(d.samples))
-                                       .arg(d.truncated ? ", partial window" : "");
-                }
-                for (auto stage : {TimingStage::DecodeOutput, TimingStage::Swap}) {
-                    const auto &v = metrics.stages[0][unsigned(stage)];
-                    details +=
-                        QString("%1: %2 frames; interval P99 %3 ms; %4 stops, longest %5 ms%6\n")
-                            .arg(stage == TimingStage::Swap ? "New-image swap" : "Decoder output")
-                            .arg(qulonglong(v.count))
-                            .arg(text(v.intervals))
-                            .arg(qulonglong(v.stops))
-                            .arg(v.longest_stop_ms, 0, 'f', 1)
-                            .arg(!v.supported ? " (unavailable)"
-                                 : !v.active  ? " (paused)"
-                                              : "");
-                }
-                details +=
-                    QString("Discards: compressed %1, latest %2, preview %3\nUnmatched: RTP %4, "
-                            "decoder %5; ambiguous/missing PTS %6\nBackground: %7 decoded, input → "
-                            "decode P99 %8 ms\nRecent window: up to 10 seconds / 4096 samples")
-                        .arg(qulonglong(metrics.encoded_discarded))
-                        .arg(qulonglong(metrics.latest_replaced))
-                        .arg(qulonglong(metrics.preview_discarded))
-                        .arg(qulonglong(metrics.unmatched_rtp))
-                        .arg(qulonglong(metrics.unmatched_decode))
-                        .arg(qulonglong(metrics.ambiguous_pts))
-                        .arg(qulonglong(
-                            metrics.stages[1][unsigned(TimingStage::DecodeOutput)].count))
-                        .arg(text(metrics.latency[1][0]));
-                for (unsigned col : {4u, 6u, 7u})
-                    table_->item(row, col)->setToolTip(details);
-            }
-        table_->item(row, 5)->setText(
-            qs(s.error) + QString(" · gaps %1 · AI age %2 ms").arg(s.gaps).arg(s.ai_age_ms) +
-            (options_.background_ai_enabled ? QString(" · BG %1 · runs %2 · boxes %3 · age %4 ms")
-                                                  .arg(qs(s.background_state))
-                                                  .arg(s.background_ai)
-                                                  .arg(s.background_detections.size())
-                                                  .arg(s.background_age_ms)
-                                            : QString{}));
-    }
-    updating_ = false;
-    const auto publication = controller_.publication_status();
-    summary_->setText(QString("%1 sources · batch %2 · %3 ms\nResults: %6 delivered · %7 dropped · "
-                              "%8 errors\n%4\n%5\n%9")
-                          .arg(statuses.size())
-                          .arg(controller_.last_batch())
-                          .arg(controller_.batch_ms(), 0, 'f', 1)
-                          .arg(qs(controller_.fatal()))
-                          .arg(qs(tiles_->error()))
-                          .arg(publication.delivered)
-                          .arg(publication.dropped)
-                          .arg(publication.errors)
-                          .arg(qs(publication.last_error)));
-    static unsigned ticks = 0;
-    if (++ticks % 30 == 0) {
-        try {
-            persist();
-        } catch (const std::exception &e) {
-            summary_->setText(qs(e.what()));
-        }
-    }
+void Tiles::mouseDoubleClickEvent(QMouseEvent *e) {
+    if (activated)
+        activated(picked(e->position()), true);
+}
+void Tiles::keyPressEvent(QKeyEvent *e) {
+    if (e->key() == Qt::Key_Escape && focus_ >= 0 && activated)
+        activated(unsigned(focus_), true);
+    else
+        QOpenGLWindow::keyPressEvent(e);
 }
 } // namespace amdva::nvr

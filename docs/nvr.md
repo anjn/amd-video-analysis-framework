@@ -34,13 +34,15 @@ selects the EGL integration. An AMD hardware OpenGL ES 3 context and DMA-BUF
 import are required. Software rendering is rejected. No CPU image upload fallback
 is provided.
 
-Add a source using **Add RTSP**, remove the selected table row using **Remove
-selected row**, and use **View** to enable or disable decoding, display and AI.
-A seventeenth view selection is rejected without replacing an existing view.
-Recordings continue when a source is not selected. The table shows connection,
-recording state, processed display FPS, AI FPS, AI age and recording gaps.
-Configuration changes are saved atomically with owner-only permissions. The
-application's status messages omit URLs that may contain credentials.
+Use **Live** to assign cameras to fixed 1/4/9/16-view tiles and double-click a
+tile for single-view focus. **Cameras** provides add/edit/remove and status
+information. **Recordings** provides camera/time search, a coverage timeline,
+and hardware playback with pause, seek and segment continuation. Every
+registered camera records regardless of its live-view selection. See the
+[VMS GUI guide](vms.md) for operation, playback boundaries and catalog migration.
+Configuration changes are saved atomically with owner-only permissions; the
+UI arrangement is stored separately in `<config>.ui.json`. Status messages omit
+URLs that may contain credentials.
 
 The config keys are demonstrated in `examples/nvr.json`. Batch size is one of
 1, 2, 4, 8 or 16; `model` must match that size and `single_model` must be a
@@ -82,8 +84,8 @@ dropped and error counts. Output is best effort and is not a durable event log.
 
 ## Background AI for hidden sources
 
-Set `background_ai_enabled` to `true` to analyze every source whose **View**
-checkbox is unchecked. `background_ai_interval_seconds` is an integer from 1
+Set `background_ai_enabled` to `true` to analyze every source that is not selected
+by the active live layout. `background_ai_interval_seconds` is an integer from 1
 through 3600 and defaults to 5. An omitted enable flag defaults to false for
 existing configurations; `examples/nvr.json` enables the feature. Selected
 sources continue using their normal display inference scheduler.

@@ -249,3 +249,8 @@ percentiles, frame rates, update gaps and known local discard counters.
 NVR and headless commands publish statistics separately from AI result JSON.
 No latency/FPS acceptance thresholds or automatic controls are imposed. See
 [timing boundaries, SDK adapters and validation](telemetry.md).
+
+
+Recording queries, protected playback handles and the Qt-free recording player
+are part of `amdva_streaming`. See the [VMS interfaces and migration](vms.md#framework-interfaces-and-migration)
+and [SDK playback example](../examples/sdk/playback.cpp).

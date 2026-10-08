@@ -58,7 +58,35 @@ Catalog::Catalog(const std::filesystem::path &root) {
             "active INTEGER NOT NULL);");
         // Exclusive root lock proves no previous writer is alive. Crash leftovers
         // stay catalogued, but are not advertised as successfully finalized.
-        sql("UPDATE recordings SET active=0 WHERE active=1;");
+        // Idempotent migration of the original four-column catalog.
+        sql("BEGIN IMMEDIATE;");
+        try {
+            std::vector<std::string> columns;
+            {
+                Statement q(db_, "PRAGMA table_info(recordings)");
+                while (sqlite3_step(q.p) == SQLITE_ROW)
+                    columns.emplace_back(
+                        reinterpret_cast<const char *>(sqlite3_column_text(q.p, 1)));
+            }
+            for (const auto &column : std::vector<std::pair<std::string, std::string>>{
+                     {"camera_name", "TEXT NOT NULL DEFAULT ''"},
+                     {"session", "TEXT NOT NULL DEFAULT ''"},
+                     {"fragment", "INTEGER NOT NULL DEFAULT 0"},
+                     {"duration_ns", "INTEGER NOT NULL DEFAULT -1"},
+                     {"state", "TEXT NOT NULL DEFAULT 'legacy'"}})
+                if (std::find(columns.begin(), columns.end(), column.first) == columns.end())
+                    sql(("ALTER TABLE recordings ADD COLUMN " + column.first + " " + column.second)
+                            .c_str());
+            sql("UPDATE recordings SET state='interrupted',active=0 WHERE active=1;");
+            sql("CREATE INDEX IF NOT EXISTS recordings_time ON recordings(created DESC,name "
+                "DESC);");
+            sql("CREATE INDEX IF NOT EXISTS recordings_channel_time ON recordings(channel,created "
+                "DESC,name DESC);");
+            sql("COMMIT;");
+        } catch (...) {
+            sql("ROLLBACK;");
+            throw;
+        }
     } catch (...) {
         if (db_)
             sqlite3_close(db_);
@@ -75,10 +103,19 @@ Catalog::~Catalog() {
     if (directory_ >= 0)
         close(directory_);
 }
-void Catalog::opened(const std::string &name, const std::string &channel) {
+void Catalog::opened(const std::string &name, const std::string &channel,
+                     const std::string &camera_name, const std::string &session,
+                     unsigned fragment) {
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
     if (!safe(name))
         throw std::runtime_error("Unsafe recording filename");
-    Statement s(db_, "INSERT INTO recordings VALUES(?1,?2,?3,1)");
+    Statement s(
+        db_,
+        "INSERT INTO recordings(name,channel,created,active,camera_name,session,fragment,state) "
+        "VALUES(?1,?2,?3,1,?4,?5,?6,'recording')");
+    s.text(4, camera_name);
+    s.text(5, session);
+    sqlite3_bind_int64(s.p, 6, fragment);
     s.text(1, name);
     s.text(2, channel);
     sqlite3_bind_int64(s.p, 3,
@@ -87,12 +124,16 @@ void Catalog::opened(const std::string &name, const std::string &channel) {
                            .count());
     s.done();
 }
-void Catalog::closed(const std::string &name) {
-    Statement s(db_, "UPDATE recordings SET active=0 WHERE name=?1");
+void Catalog::closed(const std::string &name, int64_t duration_ns) {
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
+    Statement s(db_,
+                "UPDATE recordings SET active=0,state='finalized',duration_ns=?2 WHERE name=?1");
+    sqlite3_bind_int64(s.p, 2, duration_ns);
     s.text(1, name);
     s.done();
 }
 uint64_t Catalog::bytes() const {
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
     Statement s(db_, "SELECT name FROM recordings");
     uint64_t total = 0;
     while (sqlite3_step(s.p) == SQLITE_ROW) {
@@ -105,6 +146,10 @@ uint64_t Catalog::bytes() const {
     return total;
 }
 bool Catalog::enforce(uint64_t quota, uint64_t reserve) {
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
+    playing_.erase(
+        std::remove_if(playing_.begin(), playing_.end(), [](auto &p) { return p.expired(); }),
+        playing_.end());
     uint64_t total = bytes();
     auto free = std::filesystem::space(root_).available;
     if (total <= quota && free >= reserve)
@@ -121,6 +166,12 @@ bool Catalog::enforce(uint64_t quota, uint64_t reserve) {
         }
     }
     for (const auto &item : candidates) {
+        bool pinned = false;
+        for (const auto &weak : playing_)
+            if (auto file = weak.lock())
+                pinned |= file->recording().name == item.first;
+        if (pinned)
+            continue;
         // unlinkat never follows a replacement symlink. The candidate came only
         // from this application's catalog; no directory scanning is used.
         if (unlinkat(directory_, item.first.c_str(), 0) != 0)
@@ -134,5 +185,115 @@ bool Catalog::enforce(uint64_t quota, uint64_t reserve) {
             return true;
     }
     return false;
+}
+
+RecordingFile::~RecordingFile() {
+    if (fd_ >= 0)
+        ::close(fd_);
+}
+void Catalog::interrupted(const std::string &name) {
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
+    Statement s(db_,
+                "UPDATE recordings SET active=0,state='interrupted' WHERE name=?1 AND active=1");
+    s.text(1, name);
+    s.done();
+}
+std::vector<Recording> Catalog::list(const RecordingQuery &q) const {
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
+    Statement s(db_,
+                "SELECT name,channel,camera_name,session,state,created,duration_ns,fragment FROM "
+                "recordings WHERE (?1='' OR channel=?1) AND (created>=?2 OR (duration_ns>=0 AND "
+                "created+duration_ns/1000000>=?2)) AND created<=?3 AND (created<?4 OR (created=?4 "
+                "AND (?5='' OR name<?5))) ORDER BY created DESC,name DESC LIMIT ?6");
+    s.text(1, q.channel);
+    sqlite3_bind_int64(s.p, 2, q.from_ms);
+    sqlite3_bind_int64(s.p, 3, q.to_ms);
+    sqlite3_bind_int64(s.p, 4, q.before_ms);
+    s.text(5, q.before_name);
+    sqlite3_bind_int(s.p, 6, std::clamp(q.limit, 1u, 200u));
+    std::vector<Recording> result;
+    int status;
+    while ((status = sqlite3_step(s.p)) == SQLITE_ROW) {
+        auto text = [&](int n) {
+            return std::string(reinterpret_cast<const char *>(sqlite3_column_text(s.p, n)));
+        };
+        Recording r;
+        r.name = text(0);
+        r.channel = text(1);
+        r.camera_name = text(2);
+        r.session = text(3);
+        r.state = text(4);
+        r.started_ms = sqlite3_column_int64(s.p, 5);
+        r.duration_ns = sqlite3_column_int64(s.p, 6);
+        r.fragment = sqlite3_column_int(s.p, 7);
+        struct stat st {};
+        r.available = safe(r.name) &&
+                      fstatat(directory_, r.name.c_str(), &st, AT_SYMLINK_NOFOLLOW) == 0 &&
+                      S_ISREG(st.st_mode);
+        if (r.available)
+            r.size = st.st_size;
+        result.push_back(std::move(r));
+    }
+    if (status != SQLITE_DONE)
+        throw std::runtime_error("Cannot query recordings");
+    return result;
+}
+std::shared_ptr<RecordingFile> Catalog::open_recording(const std::string &name) {
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
+    if (!safe(name))
+        throw std::runtime_error("Unsafe recording filename");
+    Statement q(db_, "SELECT active,state,channel,camera_name,session,created,duration_ns,fragment "
+                     "FROM recordings WHERE name=?1");
+    q.text(1, name);
+    if (sqlite3_step(q.p) != SQLITE_ROW || sqlite3_column_int(q.p, 0))
+        throw std::runtime_error("Recording is unavailable or still active");
+    auto text = [&](int n) {
+        return std::string(reinterpret_cast<const char *>(sqlite3_column_text(q.p, n)));
+    };
+    if (text(1) != "finalized" && text(1) != "legacy")
+        throw std::runtime_error("Recording was interrupted");
+    auto result = std::make_shared<RecordingFile>();
+    result->fd_ = openat(directory_, name.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    struct stat st {};
+    if (result->fd_ < 0 || fstat(result->fd_, &st) != 0 || !S_ISREG(st.st_mode))
+        throw std::runtime_error("Recording file is unavailable");
+    auto &r = result->recording_;
+    r.name = name;
+    r.state = text(1);
+    r.channel = text(2);
+    r.camera_name = text(3);
+    r.session = text(4);
+    r.started_ms = sqlite3_column_int64(q.p, 5);
+    r.duration_ns = sqlite3_column_int64(q.p, 6);
+    r.fragment = sqlite3_column_int(q.p, 7);
+    r.size = st.st_size;
+    r.available = true;
+    playing_.push_back(result);
+    return result;
+}
+StorageStatus Catalog::storage() const {
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
+    return {bytes(), std::filesystem::space(root_).available};
+}
+std::vector<std::pair<std::string, std::string>> Catalog::cameras() const {
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
+    Statement s(db_, "SELECT groups.channel,(SELECT COALESCE(NULLIF(camera_name,''),channel) "
+                     "FROM recordings newest WHERE newest.channel=groups.channel "
+                     "ORDER BY created DESC,name DESC LIMIT 1) FROM "
+                     "(SELECT DISTINCT channel FROM recordings) groups ORDER BY groups.channel");
+    std::vector<std::pair<std::string, std::string>> result;
+    while (sqlite3_step(s.p) == SQLITE_ROW)
+        result.emplace_back(reinterpret_cast<const char *>(sqlite3_column_text(s.p, 0)),
+                            reinterpret_cast<const char *>(sqlite3_column_text(s.p, 1)));
+    return result;
+}
+void Catalog::duration(const std::string &name, int64_t ns) {
+    if (ns < 0)
+        return;
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
+    Statement s(db_, "UPDATE recordings SET duration_ns=?2 WHERE name=?1 AND active=0");
+    s.text(1, name);
+    sqlite3_bind_int64(s.p, 2, ns);
+    s.done();
 }
 } // namespace amdva::streaming
