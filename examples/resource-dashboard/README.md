@@ -31,6 +31,21 @@ The date and time follow sample timestamps in the browser's local timezone.
 
 ![Example dashboard with synthetic data](preview.png)
 
+## Startup power limit
+
+The default Power bar scale is **48 W**. Pass `powerMaxW` in the URL to set a
+positive, finite upper limit in watts, for example `index.html?powerMaxW=48`
+or `index.html?video=1&powerMaxW=65`. The video-only link preserves the setting.
+The controls show the selected scale. Missing settings use 48 W; invalid,
+zero or negative settings fall back to 48 W with a note beside the controls.
+
+The bar represents current socket power / configured upper limit. Readings
+above the configured limit remain visible; only the bar saturates at 100%.
+Missing/invalid readings display `N/A` with a striped bar. This setting is a
+visualization scale, not a detected hardware limit or a command to change the
+machine's power limit. `snapshot().config.powerMaxW` reports the active setting.
+The HTML still uses synthetic power readings.
+
 ## Memory accounting
 
 The fixture models **32 GiB**, divided into 30 GiB of Host capacity and 2 GiB

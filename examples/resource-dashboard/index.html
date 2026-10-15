@@ -56,7 +56,7 @@ canvas { display: block; width: 100%; height: 260px; }
 .engine-meter { height: var(--bar-height); background: #293b4d; border-radius: 6px; overflow: hidden; }
 .engine-meter div { height: 100%; width: 0; background: #61dcf3; }
 .engine-meter.unavailable { background: repeating-linear-gradient(135deg, #293b4d 0 10px, #1a293a 10px 20px); }
-.power-mark { height: var(--bar-height); width: 46px; border-radius: 6px; background: #f6bd69; }
+#power-meter { background: #f6bd69; }
 body.video .controls { display: none; }
 </style>
 </head>
@@ -66,7 +66,8 @@ body.video .controls { display: none; }
   <label>Scenario <select id="scenario"><option value="mixed">Mixed load</option><option value="idle">Idle</option><option value="cpu">CPU load</option><option value="gpu">GPU load</option></select></label>
   <button id="pause" type="button">Pause</button>
   <label><input id="missing" type="checkbox"> Simulate missing GPU metrics</label>
-  <a href="?video=1">Video-only view ↗</a>
+  <span id="power-config"></span>
+  <a id="video-link" href="?video=1">Video-only view ↗</a>
   <span id="status" class="hint" role="status">Synthetic data · no hardware access · 1920 × 1080 composition</span>
 </nav>
 <div id="viewport">
@@ -93,7 +94,7 @@ body.video .controls { display: none; }
       </div>
     </article>
     <div class="engines">
-      <article class="panel engine"><h2>Power</h2><div class="number"><span id="socket-value">—</span><small>W</small></div><div class="power-mark"></div></article>
+      <article class="panel engine"><h2>Power</h2><div class="number"><span id="socket-value">—</span><small>W</small></div><div class="engine-meter" id="power-track" role="img" aria-label="Power relative to configured upper limit"><div id="power-meter"></div></div></article>
       <article class="panel engine"><h2>VCN</h2><div class="number"><span id="vcn-value">—</span><small>%</small></div><div class="engine-meter" id="vcn-track" role="img" aria-label="VCN utilization"><div id="vcn-meter"></div></div></article>
       <article class="panel engine"><h2>VPE</h2><div class="number"><span id="vpe-value">—</span><small>%</small></div><div class="engine-meter" id="vpe-track" role="img" aria-label="VPE utilization of observable DRM clients"><div id="vpe-meter"></div></div></article>
     </div>
@@ -104,6 +105,14 @@ body.video .controls { display: none; }
 'use strict';
 (() => {
   const $ = id => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  const requestedPowerMaxW = params.has('powerMaxW') ? Number(params.get('powerMaxW')) : 48;
+  const powerConfigValid = Number.isFinite(requestedPowerMaxW) && requestedPowerMaxW > 0;
+  const config = Object.freeze({powerMaxW: powerConfigValid ? requestedPowerMaxW : 48});
+  $('power-config').textContent = `Power scale: ${config.powerMaxW} W` + (powerConfigValid ? '' : ' (invalid setting; using default)');
+  const videoParams = new URLSearchParams(params);
+  videoParams.set('video', '1');
+  $('video-link').href = '?' + videoParams.toString();
   const period = 100, windowMs = 60000, maxSamples = windowMs / period + 1;
   const history = [];
   let scenario = 'mixed', paused = false, missing = false, phase = 0;
@@ -203,7 +212,10 @@ body.video .controls { display: none; }
     $('gpu-value').textContent = format(s.gpuPct);
     $('dram-value').textContent = format(total);
     memory(s);
-    $('socket-value').textContent = format(s.socketW, '', 1);
+    const powerKnown = nonnegative(s.socketW);
+    $('socket-value').textContent = format(powerKnown ? s.socketW : null, '', 1);
+    meter('power-track', [['power-meter', clamp(s.socketW / config.powerMaxW * 100, 0, 100)]], powerKnown,
+      'Socket power relative to configured ' + config.powerMaxW + ' W upper limit: ' + (powerKnown ? format(s.socketW, ' W') : 'unavailable'));
     for (const engine of ['vcn', 'vpe']) {
       const value = s[engine + 'Pct'];
       const known = valid(value) && value >= 0 && value <= 100;
@@ -231,7 +243,7 @@ body.video .controls { display: none; }
     paused = !paused; $('pause').textContent = paused ? 'Resume' : 'Pause'; lastTick = performance.now(); render();
   });
   $('missing').addEventListener('change', event => { missing = event.target.checked; });
-  if (new URLSearchParams(location.search).get('video') === '1') document.body.classList.add('video');
+  if (params.get('video') === '1') document.body.classList.add('video');
   window.addEventListener('resize', fit);
   for (let i = -600; i <= 0; ++i) ingest(mockSample(time + i * period, i * period / 1000));
   fit(); render();
@@ -243,7 +255,7 @@ body.video .controls { display: none; }
   }, period);
   window.ResourceDashboard = Object.freeze({
     ingest(sample) { const ok = ingest(sample); if (ok) render(); return ok; },
-    snapshot() { return {sample: {...history.at(-1)}, samples: history.length, maxSamples, paused, scenario}; }
+    snapshot() { return {sample: {...history.at(-1)}, samples: history.length, maxSamples, paused, scenario, config: {...config}}; }
   });
 })();
 </script>
