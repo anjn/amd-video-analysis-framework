@@ -111,3 +111,7 @@ decodes only independently decodable keyframes from hidden sources, at a
 configurable interval (five seconds by default), using four bounded AI slots.
 
 The desktop sample includes fixed live layouts, camera management, recording search and hardware playback; see the [VMS GUI guide](docs/vms.md).
+
+The [resource dashboard prototype](examples/resource-dashboard/README.md) is a
+standalone HTML preview of CPU, GPU and DRAM monitoring, with simulated readings
+and a 1080p video composition. It does not yet collect live metrics or stream RTSP.
