@@ -45,9 +45,14 @@ The main bar has a capacity of `hostTotalGiB + vramReservedGiB` and shows:
 The headline reports **Host used + VRAM reserved**, relative to that capacity.
 It measures unavailable/allocated capacity, not application-resident bytes.
 The main segments never include GTT as an additional allocation. Two independent
-lower bars show **GTT allocation / Host capacity** and **VRAM used / VRAM reserved**.
+lower bars show **GTT allocation / GTT allocation limit** and **VRAM used / VRAM reserved**.
 GTT is not subtracted from Host; its accounting does not define an exact,
 independent physical pool. These bars must not be added to the main bar.
+The GTT fixture uses a 24 GiB allocation limit, independent of the 30 GiB Host
+capacity. GTT is displayed as used / limit, with the bar normalized to that
+limit. Missing, zero or invalid limits make the GTT reading unavailable; Host
+capacity is never substituted. The inspected development PC reports 24 GiB
+from `mem_info_gtt_total`, but live collection must detect this value.
 
 If a required input is unavailable or inconsistent, the affected bar is striped
 and its reading is `N/A`, rather than treating the value as zero. Known Host
@@ -76,7 +81,7 @@ These sources are documented here; this version does not collect them.
 | GPU | amdgpu `gpu_busy_percent`; device-wide |
 | Host used / capacity | `/proc/meminfo`, `MemTotal − MemAvailable` / `MemTotal` |
 | VRAM reservation / used | amdgpu `mem_info_vram_total` / `mem_info_vram_used` |
-| GTT allocation | amdgpu `mem_info_gtt_used`; `mem_info_gtt_total` is an allocation limit, not installed RAM |
+| GTT allocation / limit | amdgpu `mem_info_gtt_used` / `mem_info_gtt_total`; the limit is not installed RAM |
 | DRAM read / write | `gpu_metrics` v3.0 `dram_reads` / `dram_writes`, MB/s converted to GB/s; SoC-wide, CPU and GPU combined |
 | Socket power | `gpu_metrics` v3.0 socket power, mW converted to W |
 | VCN | `vcn_busy_percent`; codec-engine utilization where supported |
@@ -109,7 +114,7 @@ collector integration. The sample fields are:
 {
   timestampMs,
   cpuPct, gpuPct, dramReadGBs, dramWriteGBs,
-  hostUsedGiB, hostTotalGiB, vramReservedGiB, vramGiB, gttGiB,
+  hostUsedGiB, hostTotalGiB, vramReservedGiB, vramGiB, gttGiB, gttTotalGiB,
   socketW, vcnPct, vpePct
 }
 ```

@@ -128,9 +128,9 @@ body.video .controls { display: none; }
     const hostUsed = 6.6 + base[1] * .045 + Math.sin(p * .11) * .25;
     const s = {timestampMs: t, cpuPct: cpu, gpuPct: gpu, dramReadGBs: bandwidth * .66,
       dramWriteGBs: bandwidth * .34, hostUsedGiB: hostUsed, hostTotalGiB: 30,
-      vramGiB: .48, vramReservedGiB: 2, gttGiB: 1.4 + base[1] * .025, socketW: 9 + cpu * .18 + gpu * .23,
+      vramGiB: .48, vramReservedGiB: 2, gttGiB: 1.4 + base[1] * .025, gttTotalGiB: 24, socketW: 9 + cpu * .18 + gpu * .23,
       vcnPct: clamp(base[1] * .65 + wave, 0, 100), vpePct: clamp(base[1] * .38 + wave * .5, 0, 100)};
-    if (missing) for (const k of ['gpuPct', 'dramReadGBs', 'dramWriteGBs', 'vramGiB', 'vramReservedGiB', 'gttGiB', 'socketW', 'vcnPct', 'vpePct']) s[k] = null;
+    if (missing) for (const k of ['gpuPct', 'dramReadGBs', 'dramWriteGBs', 'vramGiB', 'vramReservedGiB', 'gttGiB', 'gttTotalGiB', 'socketW', 'vcnPct', 'vpePct']) s[k] = null;
     return s;
   }
   // Data boundary for a future collector. null/absent/non-finite metrics are gaps.
@@ -197,9 +197,9 @@ body.video .controls { display: none; }
     $('available-detail').textContent = 'Available ' + format(hostKnown ? s.hostTotalGiB - s.hostUsedGiB : null);
     meter('system-meter', [['host-meter', s.hostUsedGiB / capacity * 100], ['reserved-meter', s.vramReservedGiB / capacity * 100]], totalKnown,
       'Host including GTT, reserved VRAM, and available memory in GiB: ' + $('memory-value').textContent);
-    const gttKnown = nonnegative(s.gttGiB) && valid(s.hostTotalGiB) && s.hostTotalGiB > 0 && s.gttGiB <= s.hostTotalGiB;
-    $('gtt-value').textContent = format(gttKnown ? s.gttGiB : null, ' GiB');
-    meter('gtt-track', [['gtt-meter', s.gttGiB / s.hostTotalGiB * 100]], gttKnown, 'GTT allocation relative to host capacity: ' + $('gtt-value').textContent);
+    const gttKnown = nonnegative(s.gttGiB) && valid(s.gttTotalGiB) && s.gttTotalGiB > 0 && s.gttGiB <= s.gttTotalGiB;
+    $('gtt-value').textContent = gttKnown ? format(s.gttGiB) + ' / ' + format(s.gttTotalGiB, ' GiB', Number.isInteger(s.gttTotalGiB) ? 0 : 1) : 'N/A';
+    meter('gtt-track', [['gtt-meter', s.gttGiB / s.gttTotalGiB * 100]], gttKnown, 'GTT allocation relative to its allocation limit: ' + $('gtt-value').textContent);
     const vramKnown = nonnegative(s.vramGiB) && valid(s.vramReservedGiB) && s.vramReservedGiB > 0 && s.vramGiB <= s.vramReservedGiB;
     $('vram-value').textContent = vramKnown ? format(s.vramGiB) + ' / ' + format(s.vramReservedGiB, ' GiB', Number.isInteger(s.vramReservedGiB) ? 0 : 1) : 'N/A';
     meter('vram-track', [['vram-meter', s.vramGiB / s.vramReservedGiB * 100]], vramKnown, 'VRAM usage within reserved capacity: ' + $('vram-value').textContent);
