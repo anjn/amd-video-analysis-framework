@@ -199,3 +199,21 @@ helper for a single selected dashboard source. It verifies live decoding,
 rendering and AI, catalog recording and hardware playback. Use a separate config
 and recording root with five-second segments. The installed production server
 does not depend on this helper or Qt.
+
+### Recorded results
+
+The [validation record](resource-dashboard-validation-results.json) identifies
+the implementation revision, frozen-runtime differences, hashes and local
+artifacts. All 23 CTest cases passed. A 600-second headless run passed shared
+clients, all-client disconnect/idle/reconnect and abrupt-client disconnect;
+all three recordings were valid 1080p H.264 at 10fps. After warmup, maximum
+growth was 68 KiB RSS, zero GPU allocation and three FDs, within existing guards.
+There were no copy-audit violations.
+
+The final implementation passed a separate 110-second RTSP regression and
+30fps/65W LAN-listener test. The latter recorded 1,501 frames over 50 seconds
+with BT.709 primaries/transfer/matrix and limited range. NVR live rendering, AI,
+recording search and hardware playback passed; all NVR fragments finalized and
+passed media inspection. Active-client timed server shutdown completed without
+GStreamer criticals. A dashboard-only build linked neither Qt nor MIGraphX, and
+an installed CMake SDK client used `AMDVA::amdva_monitor` successfully.

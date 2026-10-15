@@ -1,0 +1,235 @@
+{
+  "schema": 1,
+  "validated_at": "2026-10-15T17:23:22.862559+09:00",
+  "implementation_commit": "326773a04b9ddcd9cd725edbbcf9a7ef0296b568",
+  "hardware": {
+    "cpu": "AMD Ryzen AI 9 HX 370",
+    "gpu": "AMD Radeon 890M",
+    "gpu_arch": "gfx1150",
+    "vpe": "6.1.0",
+    "kernel": "6.17.0-1032-oem",
+    "linux_memtotal_kib": 14964912
+  },
+  "software": {
+    "gstreamer": "1.28.2",
+    "rocm": "7.2.0",
+    "migraphx": "2.15",
+    "qt": "6.4.2",
+    "mesa": "25.2.8",
+    "dlstreamer": "v2026.2.0",
+    "paho_mqtt": "1.3.13",
+    "librdkafka": "2.3.0"
+  },
+  "scope": "Functional RTSP delivery, no CPU pixel transfers, known recording/resource guards. FPS and resource usage are observations, not operational performance certification.",
+  "ctest": {
+    "passed": true,
+    "tests": 23,
+    "failures": 0,
+    "seconds": 17.71
+  },
+  "bootstrap_cache": {
+    "passed": true,
+    "checked": 89,
+    "invalid": []
+  },
+  "ten_minute": {
+    "passed": true,
+    "failure": null,
+    "seconds": 600,
+    "scenarios": [
+      "second simultaneous RTSP client",
+      "all clients disconnected, idle encoding stopped, new connection resumed",
+      "abrupt client disconnect with another client active"
+    ],
+    "maximum_growth": {
+      "rss_kib": 68,
+      "gpu_alloc_kib": 0,
+      "fds": 3
+    },
+    "warmup_seconds": 240,
+    "resource_samples": 119,
+    "videos": [
+      {
+        "file": "shared-client.mkv",
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080,
+            "avg_frame_rate": "10/1",
+            "nb_read_frames": "151"
+          }
+        ],
+        "format": {
+          "duration": "15.000000"
+        }
+      },
+      {
+        "file": "initial.mkv",
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080,
+            "avg_frame_rate": "10/1",
+            "nb_read_frames": "501"
+          }
+        ],
+        "format": {
+          "duration": "50.000000"
+        }
+      },
+      {
+        "file": "reconnected.mkv",
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080,
+            "avg_frame_rate": "10/1",
+            "nb_read_frames": "5341"
+          }
+        ],
+        "format": {
+          "duration": "534.000000"
+        }
+      }
+    ],
+    "copy_audit_violations": 0
+  },
+  "final_rtsp": {
+    "passed": true,
+    "failure": null,
+    "seconds": 110,
+    "scenarios": [
+      "second simultaneous RTSP client",
+      "all clients disconnected, idle encoding stopped, new connection resumed",
+      "abrupt client disconnect with another client active"
+    ],
+    "maximum_growth": {
+      "rss_kib": 0,
+      "gpu_alloc_kib": 0,
+      "fds": 0
+    },
+    "warmup_seconds": 240,
+    "resource_samples": 22,
+    "videos": [
+      {
+        "file": "shared-client.mkv",
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080,
+            "avg_frame_rate": "10/1",
+            "nb_read_frames": "151"
+          }
+        ],
+        "format": {
+          "duration": "15.000000"
+        }
+      },
+      {
+        "file": "initial.mkv",
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080,
+            "avg_frame_rate": "10/1",
+            "nb_read_frames": "501"
+          }
+        ],
+        "format": {
+          "duration": "50.000000"
+        }
+      },
+      {
+        "file": "reconnected.mkv",
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080,
+            "avg_frame_rate": "10/1",
+            "nb_read_frames": "479"
+          }
+        ],
+        "format": {
+          "duration": "47.800000"
+        }
+      }
+    ],
+    "copy_audit_violations": 0,
+    "resource_guard_scope": "Short run does not reach the 240-second warmup; long-run guards are covered by ten_minute."
+  },
+  "revision_scope": "The frozen 600-second runtime predates local-font preference, explicit BT709 SPS signaling, transient procfs read-error handling and final shutdown/invalid-bar refinements. The 110-second and 30fps/NVR/active-shutdown tests cover the committed implementation; raw GPU image sharing/conversion/encoding is unchanged.",
+  "ten_minute_runtime_sha256": {
+    "amdva-dashboard": "554f27e9ecdfc34188aa6a3fa6233f323f9198aa347868f1996b96c7f6590bc1",
+    "libamdva_runtime.so": "265d312377926019fc18cb312e8974f594faafeb5b49587285c97a3557337d39",
+    "libamdva_monitor.so": "470727886f33c9608226207aa10271dc567c1b68a960214d1fc73916ef9502fc",
+    "libamdva_copy_audit.so": "e593840ee8e5227b1770601d66694c9439449839d8ead9157bf1b471948eaa29"
+  },
+  "final_runtime_sha256": {
+    "build/examples/resource-dashboard/amdva-dashboard": "b1116fa58621288c8d86c250cdbd0b80f83eb8793dd3b871f7580baca87d7639",
+    "build/libamdva_monitor.so": "426c3b964562f8d2196beb111611b2367e08bb6c0e388bac315ae1ab6b28e5dc",
+    "build/src/gst/libamdva_copy_audit.so": "e593840ee8e5227b1770601d66694c9439449839d8ead9157bf1b471948eaa29"
+  },
+  "final_30fps_nvr": {
+    "passed": true,
+    "power_max_w": 65,
+    "bind": "0.0.0.0",
+    "stream": {
+      "codec_name": "h264",
+      "width": 1920,
+      "height": 1080,
+      "color_range": "tv",
+      "color_space": "bt709",
+      "color_transfer": "bt709",
+      "color_primaries": "bt709",
+      "avg_frame_rate": "30/1",
+      "nb_read_frames": "1501"
+    },
+    "live_display_ai": true,
+    "catalog_and_hardware_playback": true,
+    "recording_states": {
+      "finalized": 7
+    },
+    "copy_audit_violations": 0,
+    "artifact_directory": "artifacts/dashboard-nvr-sps"
+  },
+  "active_client_timed_shutdown": {
+    "passed": true,
+    "gstreamer_criticals": 0,
+    "copy_audit_violations": 0,
+    "artifact_log": "artifacts/dashboard-native/active-shutdown.log"
+  },
+  "headless_build": {
+    "passed": true,
+    "qt_dependency": false,
+    "migraphx_dependency": false,
+    "plugins_and_nvr_disabled": true,
+    "artifact_directory": "artifacts/dashboard-headless-build"
+  },
+  "installed_sdk": {
+    "passed": true,
+    "cmake_target": "AMDVA::amdva_monitor",
+    "artifact_log": "artifacts/dashboard-native/sdk-cmake-final.log"
+  },
+  "limitations": [
+    "Radeon 890M VPE does not support NV12 output; VA processing uses the GPU compositor for RGB-to-NV12.",
+    "VPE utilization covers readable DRM clients; absent when no counter is observable.",
+    "Managed memory capacity on this PC reflects mem=16G plus 2 GiB VRAM reservation, not installed RAM."
+  ],
+  "artifact_directories": [
+    "artifacts/dashboard-ten-minute",
+    "artifacts/dashboard-final-3",
+    "artifacts/dashboard-nvr-sps"
+  ]
+}
