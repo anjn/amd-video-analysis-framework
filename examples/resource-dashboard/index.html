@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AMD APU · Resource Monitor</title>
 <style>
-:root { color-scheme: dark; font-family: Inter, "Segoe UI", sans-serif; background: #080e16; color: #edf3fc; }
+:root { --bar-height: 20px; color-scheme: dark; font-family: Inter, "Segoe UI", sans-serif; background: #080e16; color: #edf3fc; }
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, select { font: inherit; color: #edf3fc; background: #162333; border: 1px solid #35465c; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
@@ -40,7 +40,7 @@ canvas { display: block; width: 100%; height: 300px; }
 .memory { height: 332px; padding: 22px 26px; }
 .memory-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 #memory-value { font-size: 40px; font-weight: 550; font-variant-numeric: tabular-nums; }
-.meter { display: flex; height: 38px; background: #293b4d; border-radius: 7px; overflow: hidden; }
+.meter { display: flex; height: var(--bar-height); background: #293b4d; border-radius: 7px; overflow: hidden; }
 .meter > div { height: 100%; flex: 0 0 auto; width: 0; }
 .meter.unavailable { background: repeating-linear-gradient(135deg, #293b4d 0 12px, #1a293a 12px 24px); }
 #host-meter { background: #60dcb0; } #reserved-meter { background: #ad9aff; }
@@ -49,17 +49,15 @@ canvas { display: block; width: 100%; height: 300px; }
 .memory-legend .amount { font-weight: 500; }
 .gpu-memory { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
 .gpu-memory .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 32px; font-variant-numeric: tabular-nums; }
-.gpu-memory .meter { height: 20px; }
 #gtt-meter { background: #f6bd69; } #vram-meter { background: #ad9aff; }
 .engines { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .engine { height: 332px; padding: 28px 18px; display: flex; flex-direction: column; justify-content: space-between; }
 .engine h2 { line-height: 1.25; min-height: 86px; }
-.engine .number { font-size: 68px; letter-spacing: -2px; }
-.engine .number small { font-size: 32px; margin-left: 3px; }
-.engine-meter { height: 18px; background: #293b4d; border-radius: 6px; overflow: hidden; }
+.engine .number { width: 100%; text-align: right; }
+.engine-meter { height: var(--bar-height); background: #293b4d; border-radius: 6px; overflow: hidden; }
 .engine-meter div { height: 100%; width: 0; background: #61dcf3; }
 .engine-meter.unavailable { background: repeating-linear-gradient(135deg, #293b4d 0 10px, #1a293a 10px 20px); }
-.power-mark { height: 18px; width: 46px; border-radius: 6px; background: #f6bd69; }
+.power-mark { height: var(--bar-height); width: 46px; border-radius: 6px; background: #f6bd69; }
 body.video .controls { display: none; }
 </style>
 </head>
@@ -205,12 +203,12 @@ body.video .controls { display: none; }
     $('gpu-value').textContent = format(s.gpuPct);
     $('dram-value').textContent = format(total);
     memory(s);
-    $('socket-value').textContent = format(s.socketW, '', 0);
+    $('socket-value').textContent = format(s.socketW, '', 1);
     for (const engine of ['vcn', 'vpe']) {
       const value = s[engine + 'Pct'];
       const known = valid(value) && value >= 0 && value <= 100;
-      $(engine + '-value').textContent = format(known ? value : null, '', 0);
-      meter(engine + '-track', [[engine + '-meter', value]], known, engine.toUpperCase() + ' utilization: ' + (known ? format(value, '%', 0) : 'unavailable'));
+      $(engine + '-value').textContent = format(known ? value : null, '', 1);
+      meter(engine + '-track', [[engine + '-meter', value]], known, engine.toUpperCase() + ' utilization: ' + (known ? format(value, '%', 1) : 'unavailable'));
     }
     const d = new Date(s.timestampMs);
     $('clock').textContent = d.toLocaleTimeString('en-GB', {hour12: false});
