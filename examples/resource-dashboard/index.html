@@ -16,46 +16,51 @@ a { color: #78e4ed; }
 .controls label { display: flex; align-items: center; gap: 9px; }
 .controls .hint { color: #acbed2; margin-left: auto; }
 #viewport { width: 100%; overflow: hidden; }
-#dashboard { width: 1920px; height: 1080px; transform-origin: top left; padding: 38px 48px 26px; background: radial-gradient(ellipse at 95% 0%, #142938 0%, #0b131f 48%); }
-header { display: flex; align-items: center; justify-content: space-between; height: 72px; margin-bottom: 20px; }
-.eyebrow { font-size: 15px; font-weight: 650; letter-spacing: 3px; color: #90a7bf; text-transform: uppercase; }
-h1 { margin: 8px 0 0; font-size: 37px; letter-spacing: -1px; font-weight: 600; }
+#dashboard { width: 1920px; height: 1080px; transform-origin: top left; padding: 32px 40px; background: radial-gradient(ellipse at 95% 0%, #142938 0%, #0b131f 48%); }
+header { display: flex; align-items: center; justify-content: space-between; height: 120px; margin-bottom: 20px; }
+.hardware { font-size: 44px; font-weight: 550; line-height: 1.3; letter-spacing: -.7px; }
+.hardware div:last-child { color: #b4c5d8; }
 .header-right { display: flex; align-items: center; gap: 28px; text-align: right; }
-.host { font-size: 18px; color: #b4c5d8; margin-top: 7px; }
-.badge { font-size: 15px; font-weight: 700; letter-spacing: 1px; padding: 9px 13px; border: 1px solid #b99245; border-radius: 5px; color: #f5c76f; background: #352b1b; }
-#clock { font: 500 27px ui-monospace, monospace; font-variant-numeric: tabular-nums; }
-#date { font-size: 15px; color: #9db2c9; margin-top: 6px; }
-.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 20px; }
+.badge { font-size: 28px; font-weight: 700; padding: 9px 13px; border: 1px solid #b99245; border-radius: 6px; color: #f5c76f; background: #352b1b; }
+#clock { font: 550 64px ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+#date { font-size: 36px; color: #b4c5d8; margin-top: 4px; }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px; }
 .panel { background: #111e2ce6; border: 1px solid #2a3a4e; border-radius: 12px; overflow: hidden; }
-.kpi { height: 168px; padding: 22px 26px; position: relative; }
-.kpi::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: var(--accent); }
-.label { font-size: 17px; font-weight: 600; color: #bdcce0; }
-.number { font-size: 58px; line-height: 1.2; letter-spacing: -2px; margin: 9px 0 5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.number small { font-size: 25px; letter-spacing: 0; font-weight: 400; color: #a5b9ce; margin-left: 7px; }
-.sub { font-size: 16px; color: #9eb2c9; }
-.cpu { --accent: #61dcf3; } .gpu { --accent: #ad9aff; } .dram { --accent: #f6bd69; } .memory { --accent: #60dcb0; }
+.kpi { height: 156px; padding: 18px 28px; position: relative; display: flex; align-items: center; justify-content: space-between; }
+.kpi::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--accent); }
+.label { font-size: 36px; font-weight: 550; color: #bdcce0; }
+.number { font-size: 80px; line-height: 1.15; letter-spacing: -2px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.number small { font-size: 36px; letter-spacing: 0; font-weight: 400; color: #a5b9ce; margin-left: 7px; }
+.cpu { --accent: #61dcf3; } .gpu { --accent: #ad9aff; } .dram { --accent: #f6bd69; }
 .charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px; }
-.chart { height: 390px; padding: 22px 20px 12px; }
-.chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-h2 { font-size: 21px; font-weight: 550; margin: 0; }
-.legend { display: flex; gap: 16px; font-size: 14px; color: #c0cfe1; }
-.legend span::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; background: var(--line); }
-canvas { display: block; width: 100%; height: 300px; }
-.details { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 20px; }
-.detail { height: 260px; padding: 22px 26px; }
-.detail h2 { margin-bottom: 14px; }
-.row { display: flex; justify-content: space-between; gap: 18px; font-size: 18px; margin: 12px 0; color: #b4c6db; }
-.row strong { font-weight: 500; color: #edf3fc; font-variant-numeric: tabular-nums; }
-.meter { height: 7px; background: #243749; border-radius: 5px; margin: 13px 0 17px; overflow: hidden; }
-.meter div { height: 100%; background: #60dcb0; width: 0; }
-.muted { font-size: 14px; line-height: 1.5; color: #8fa7c0; }
-.inline-values { display: flex; justify-content: space-between; margin-bottom: 18px; }
-.inline-values strong { display: block; margin: 10px 0 4px; font-size: 29px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.inline-values small { color: #a8bdd3; font-size: 15px; }
-.process { margin-top: 14px; padding-top: 10px; border-top: 1px solid #2a3a4e; display: flex; justify-content: space-between; font-size: 17px; color: #b4c6db; }
-footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 24px; font-size: 15px; color: #8fa7c0; }
-.status { color: #70dfb6; }
-.status::before { content: ''; display: inline-block; height: 8px; width: 8px; border-radius: 50%; background: currentColor; margin-right: 9px; }
+.chart { height: 330px; padding: 22px 24px 18px; }
+.chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; height: 40px; }
+h2 { font-size: 36px; font-weight: 550; margin: 0; }
+.legend { display: flex; gap: 20px; font-size: 32px; color: #c0cfe1; }
+.legend span::before, .key::before { content: ''; display: inline-block; width: 16px; height: 16px; border-radius: 4px; margin-right: 10px; background: var(--line); }
+canvas { display: block; width: 100%; height: 230px; }
+.details { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; }
+.memory { height: 332px; padding: 22px 26px; }
+.memory-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+#memory-value { font-size: 40px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.meter { display: flex; height: 38px; background: #293b4d; border-radius: 7px; overflow: hidden; }
+.meter > div { height: 100%; flex: 0 0 auto; width: 0; }
+.meter.unavailable { background: repeating-linear-gradient(135deg, #293b4d 0 12px, #1a293a 12px 24px); }
+#host-meter { background: #60dcb0; } #reserved-meter { background: #ad9aff; }
+.memory-legend { display: flex; justify-content: space-between; font-size: 32px; margin: 13px 0 20px; color: #bdcce0; font-variant-numeric: tabular-nums; }
+.gpu-memory { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.gpu-memory .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 32px; font-variant-numeric: tabular-nums; }
+.gpu-memory .meter { height: 20px; }
+#gtt-meter { background: #f6bd69; } #vram-meter { background: #ad9aff; }
+.engines { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.engine { height: 332px; padding: 28px 18px; display: flex; flex-direction: column; justify-content: space-between; }
+.engine h2 { font-size: 34px; line-height: 1.25; min-height: 86px; }
+.engine .number { font-size: 68px; letter-spacing: -2px; }
+.engine .number small { font-size: 32px; margin-left: 3px; }
+.engine-meter { height: 18px; background: #293b4d; border-radius: 6px; overflow: hidden; }
+.engine-meter div { height: 100%; width: 0; background: #61dcf3; }
+.engine-meter.unavailable { background: repeating-linear-gradient(135deg, #293b4d 0 10px, #1a293a 10px 20px); }
+.power-mark { height: 18px; width: 46px; border-radius: 6px; background: #f6bd69; }
 body.video .controls { display: none; }
 </style>
 </head>
@@ -65,33 +70,41 @@ body.video .controls { display: none; }
   <label>Scenario <select id="scenario"><option value="mixed">Mixed load</option><option value="idle">Idle</option><option value="cpu">CPU load</option><option value="gpu">GPU load</option></select></label>
   <button id="pause" type="button">Pause</button>
   <label><input id="missing" type="checkbox"> Simulate missing GPU metrics</label>
-  <label><input id="process" type="checkbox" checked> Show example process</label>
   <a href="?video=1">Video-only view ↗</a>
-  <span class="hint">Synthetic data · no hardware access · 1920 × 1080 composition</span>
+  <span id="status" class="hint" role="status">Synthetic data · no hardware access · 1920 × 1080 composition</span>
 </nav>
 <div id="viewport">
 <main id="dashboard" aria-label="System resource dashboard with simulated metrics">
   <header>
-    <div><div class="eyebrow">AMD APU / System telemetry</div><h1>Resource Monitor</h1></div>
-    <div class="header-right"><div><div class="badge">DEMO DATA</div><div class="host">amd-apu-demo · Ryzen AI 9 HX 370 / Radeon 890M</div></div><div><div id="clock">--:--:--</div><div id="date">—</div></div></div>
+    <div class="hardware"><div>AMD Ryzen AI 9 HX 370</div><div>AMD Radeon 890M</div></div>
+    <div class="header-right"><div class="badge">DEMO DATA</div><div><div id="clock">--:--:--</div><div id="date">—</div></div></div>
   </header>
   <section class="kpis" aria-label="Current readings">
-    <article class="panel kpi cpu"><div class="label">CPU utilization</div><div class="number"><span id="cpu-value">—</span><small>%</small></div><div class="sub">Whole system · 16 logical CPUs</div></article>
-    <article class="panel kpi gpu"><div class="label">GPU utilization</div><div class="number"><span id="gpu-value">—</span><small>%</small></div><div class="sub">Device busy · system-wide</div></article>
-    <article class="panel kpi dram"><div class="label">DRAM bandwidth</div><div class="number"><span id="dram-value">—</span><small>GB/s</small></div><div class="sub">Read + write · CPU and GPU combined</div></article>
-    <article class="panel kpi memory"><div class="label">Host memory used</div><div class="number"><span id="memory-value">—</span><small>GiB</small></div><div class="sub" id="memory-sub">Used / total · total − available</div></article>
+    <article class="panel kpi cpu"><div class="label">CPU</div><div class="number"><span id="cpu-value">—</span><small>%</small></div></article>
+    <article class="panel kpi gpu"><div class="label">GPU</div><div class="number"><span id="gpu-value">—</span><small>%</small></div></article>
+    <article class="panel kpi dram"><div class="label">DRAM</div><div class="number"><span id="dram-value">—</span><small>GB/s</small></div></article>
   </section>
   <section class="charts" aria-label="Last 60 seconds">
-    <article class="panel chart"><div class="chart-head"><h2>CPU activity</h2><div class="legend"><span style="--line:#61dcf3">System</span></div></div><canvas id="cpu-chart" width="1100" height="600" role="img" aria-label="CPU utilization over the last 60 seconds, 0 to 100 percent"></canvas></article>
-    <article class="panel chart"><div class="chart-head"><h2>GPU activity</h2><div class="legend"><span style="--line:#ad9aff">Device busy</span></div></div><canvas id="gpu-chart" width="1100" height="600" role="img" aria-label="GPU utilization over the last 60 seconds, 0 to 100 percent"></canvas></article>
-    <article class="panel chart"><div class="chart-head"><h2>DRAM throughput</h2><div class="legend"><span style="--line:#f6bd69">Read</span><span style="--line:#60dcb0">Write</span></div></div><canvas id="dram-chart" width="1100" height="600" role="img" aria-label="DRAM read and write bandwidth over the last 60 seconds in gigabytes per second"></canvas></article>
+    <article class="panel chart"><div class="chart-head"><h2>CPU</h2></div><canvas id="cpu-chart" width="1100" height="460" role="img" aria-label="CPU utilization over the last 60 seconds, 0 to 100 percent"></canvas></article>
+    <article class="panel chart"><div class="chart-head"><h2>GPU</h2></div><canvas id="gpu-chart" width="1100" height="460" role="img" aria-label="GPU utilization over the last 60 seconds, 0 to 100 percent"></canvas></article>
+    <article class="panel chart"><div class="chart-head"><h2>DRAM</h2><div class="legend"><span style="--line:#f6bd69">Read</span><span style="--line:#60dcb0">Write</span></div></div><canvas id="dram-chart" width="1100" height="460" role="img" aria-label="DRAM read and write bandwidth over the last 60 seconds in gigabytes per second"></canvas></article>
   </section>
-  <section class="details" aria-label="Additional readings">
-    <article class="panel detail"><h2>Memory allocation</h2><div class="row"><span>Host used / total</span><strong id="host-detail">—</strong></div><div class="meter"><div id="memory-meter"></div></div><div class="row"><span>VRAM allocated</span><strong id="vram-value">—</strong></div><div class="row"><span>GTT allocated</span><strong id="gtt-value">—</strong></div><div class="muted">Shared APU memory: these values overlap. Do not sum.</div></article>
-    <article class="panel detail"><h2>Power</h2><div class="inline-values"><div><small>Socket</small><strong id="socket-value">—</strong></div><div><small>APU</small><strong id="apu-value">—</strong></div><div><small>GFX</small><strong id="gfx-power-value">—</strong></div></div><div class="muted">SMU-filtered values, approximately 1 second.<br>Power readings are not additive.</div><div class="process" id="process-row"><span>Example NVR process tree</span><span id="process-value">—</span></div></article>
-    <article class="panel detail"><h2>Clock frequencies</h2><div class="row"><span>Graphics / GFXCLK</span><strong id="gfx-clock-value">—</strong></div><div class="row"><span>Fabric / FCLK</span><strong id="fabric-clock-value">—</strong></div><div class="row"><span>Memory / UCLK</span><strong id="memory-clock-value">—</strong></div><div class="muted">Process CPU: 100% = one logical CPU.<br>RSS can include GPU-mapped pages.</div></article>
+  <section class="details" aria-label="Memory and hardware engines">
+    <article class="panel memory">
+      <div class="memory-heading"><h2>Memory</h2><strong id="memory-value">—</strong></div>
+      <div class="meter" id="system-meter" role="img" aria-label="Host usage and reserved VRAM"><div id="host-meter"></div><div id="reserved-meter"></div></div>
+      <div class="memory-legend"><span class="key" style="--line:#60dcb0" id="host-detail">Host —</span><span class="key" style="--line:#ad9aff" id="reserved-detail">Reserved —</span><span class="key" style="--line:#293b4d" id="available-detail">Available —</span></div>
+      <div class="gpu-memory">
+        <div><div class="row"><span>GTT</span><span id="gtt-value">—</span></div><div class="meter" id="gtt-track" role="img" aria-label="GTT allocation"><div id="gtt-meter"></div></div></div>
+        <div><div class="row"><span>VRAM</span><span id="vram-value">—</span></div><div class="meter" id="vram-track" role="img" aria-label="VRAM usage within its reservation"><div id="vram-meter"></div></div></div>
+      </div>
+    </article>
+    <div class="engines">
+      <article class="panel engine"><h2>Socket<br>power</h2><div class="number"><span id="socket-value">—</span><small>W</small></div><div class="power-mark"></div></article>
+      <article class="panel engine"><h2>VCN</h2><div class="number"><span id="vcn-value">—</span><small>%</small></div><div class="engine-meter" id="vcn-track" role="img" aria-label="VCN utilization"><div id="vcn-meter"></div></div></article>
+      <article class="panel engine"><h2>VPE</h2><div class="number"><span id="vpe-value">—</span><small>%</small></div><div class="engine-meter" id="vpe-track" role="img" aria-label="VPE utilization of observable DRM clients"><div id="vpe-meter"></div></div></article>
+    </div>
   </section>
-  <footer><span><span class="status" id="status">SIMULATED · MIXED LOAD</span> &nbsp; / &nbsp; 100 ms sampling · 60 s history</span><span>DRAM: SoC-wide · GB/s decimal &nbsp; / &nbsp; Memory: GiB binary</span><span>Visual prototype · not a live monitor</span></footer>
 </main>
 </div>
 <script>
@@ -114,12 +127,10 @@ body.video .controls { display: none; }
     const bandwidth = Math.max(.2, base[2] + wave * .45 + Math.sin(p * .37) * 4);
     const hostUsed = 6.6 + base[1] * .045 + Math.sin(p * .11) * .25;
     const s = {timestampMs: t, cpuPct: cpu, gpuPct: gpu, dramReadGBs: bandwidth * .66,
-      dramWriteGBs: bandwidth * .34, hostUsedGiB: hostUsed, hostTotalGiB: 14.3,
-      vramGiB: .48, gttGiB: 1.4 + base[1] * .025, socketW: 9 + cpu * .18 + gpu * .23,
-      apuW: 7 + cpu * .16 + gpu * .21, gfxW: 1 + gpu * .18,
-      gfxMHz: 400 + gpu * 24, fclkMHz: 1600 + bandwidth * 4, uclkMHz: 1000 + bandwidth * 5,
-      processCpuPct: cpu * 4.1, processRssGiB: 1.61};
-    if (missing) for (const k of ['gpuPct', 'dramReadGBs', 'dramWriteGBs', 'vramGiB', 'gttGiB', 'socketW', 'apuW', 'gfxW', 'gfxMHz', 'fclkMHz', 'uclkMHz']) s[k] = null;
+      dramWriteGBs: bandwidth * .34, hostUsedGiB: hostUsed, hostTotalGiB: 30,
+      vramGiB: .48, vramReservedGiB: 2, gttGiB: 1.4 + base[1] * .025, socketW: 9 + cpu * .18 + gpu * .23,
+      vcnPct: clamp(base[1] * .65 + wave, 0, 100), vpePct: clamp(base[1] * .38 + wave * .5, 0, 100)};
+    if (missing) for (const k of ['gpuPct', 'dramReadGBs', 'dramWriteGBs', 'vramGiB', 'vramReservedGiB', 'gttGiB', 'socketW', 'vcnPct', 'vpePct']) s[k] = null;
     return s;
   }
   // Data boundary for a future collector. null/absent/non-finite metrics are gaps.
@@ -131,38 +142,67 @@ body.video .controls { display: none; }
     while (history.length && (history[0].timestampMs < cutoff || history.length > maxSamples)) history.shift();
     return true;
   }
-  function chart(id, fields, colors, maximum, unit) {
+  function chart(id, fields, colors, maximum) {
     const canvas = $(id), ctx = canvas.getContext('2d');
     const w = canvas.width / 2, h = canvas.height / 2;
     ctx.setTransform(2, 0, 0, 2, 0, 0); ctx.clearRect(0, 0, w, h);
-    const left = 49, right = w - 12, top = 18, bottom = h - 32;
-    ctx.font = '13px "Segoe UI", sans-serif'; ctx.lineWidth = 1;
+    const left = 3, right = w - 3, top = 8, bottom = h - 4;
+    ctx.lineWidth = 1; ctx.strokeStyle = '#29394c';
     for (let i = 0; i <= 4; ++i) {
       const y = top + (bottom - top) * i / 4;
-      ctx.strokeStyle = '#29394c'; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
-      ctx.fillStyle = '#90a7bf'; ctx.textAlign = 'right'; ctx.fillText(String(maximum * (4 - i) / 4), left - 9, y + 4);
-    }
-    ctx.fillStyle = '#90a7bf'; ctx.textAlign = 'left'; ctx.fillText(unit, 0, 10);
-    for (let i = 0; i <= 4; ++i) {
-      const x = left + (right - left) * i / 4;
-      ctx.textAlign = i === 0 ? 'left' : i === 4 ? 'right' : 'center';
-      ctx.fillText(i === 4 ? 'now' : '−' + (60 - i * 15) + 's', x, h - 8);
+      ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
     }
     if (!history.length) return;
     const end = history.at(-1).timestampMs;
     fields.forEach((field, index) => {
-      ctx.beginPath(); ctx.strokeStyle = colors[index]; ctx.lineWidth = 2.2;
-      let connected = false, previous = 0;
+      // Close and fill each contiguous run independently; never bridge a gap.
+      let points = [], previous = 0;
+      function flush() {
+        if (!points.length) return;
+        const fill = ctx.createLinearGradient(0, top, 0, bottom);
+        fill.addColorStop(0, colors[index] + '88'); fill.addColorStop(1, colors[index] + '16');
+        ctx.beginPath(); ctx.moveTo(points[0][0], bottom);
+        for (const [x, y] of points) ctx.lineTo(x, y);
+        ctx.lineTo(points.at(-1)[0], bottom); ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+        ctx.beginPath(); ctx.moveTo(...points[0]);
+        for (const point of points.slice(1)) ctx.lineTo(...point);
+        ctx.strokeStyle = colors[index]; ctx.lineWidth = 3.5; ctx.stroke(); points = [];
+      }
       for (const sample of history) {
         const value = sample[field];
-        if (!valid(value)) { connected = false; continue; }
+        if (!valid(value)) { flush(); continue; }
+        if (sample.timestampMs - previous > period * 2.5) flush();
         const x = left + (sample.timestampMs - end + windowMs) / windowMs * (right - left);
         const y = bottom - clamp(value / maximum, 0, 1) * (bottom - top);
-        if (!connected || sample.timestampMs - previous > period * 2.5) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        previous = sample.timestampMs; connected = true;
+        points.push([x, y]); previous = sample.timestampMs;
       }
-      ctx.stroke();
+      flush();
     });
+  }
+  const nonnegative = v => valid(v) && v >= 0;
+  function meter(track, segments, known, label) {
+    $(track).classList.toggle('unavailable', !known);
+    $(track).setAttribute('aria-label', label);
+    for (const [id, width] of segments) $(id).style.width = (known ? width : 0) + '%';
+  }
+  function memory(s) {
+    const hostKnown = nonnegative(s.hostUsedGiB) && valid(s.hostTotalGiB) && s.hostTotalGiB > 0 && s.hostUsedGiB <= s.hostTotalGiB;
+    const totalKnown = hostKnown && nonnegative(s.vramReservedGiB);
+    const capacity = totalKnown ? s.hostTotalGiB + s.vramReservedGiB : null;
+    const allocated = totalKnown ? s.hostUsedGiB + s.vramReservedGiB : null;
+    const pct = totalKnown ? allocated / capacity * 100 : null;
+    $('memory-value').textContent = totalKnown ? format(allocated) + ' / ' + format(capacity, ' GiB', Number.isInteger(capacity) ? 0 : 1) + ' · ' + format(pct, '%', 0) : 'N/A';
+    $('host-detail').textContent = 'Host ' + format(hostKnown ? s.hostUsedGiB : null);
+    $('reserved-detail').textContent = 'Reserved ' + format(nonnegative(s.vramReservedGiB) ? s.vramReservedGiB : null);
+    $('available-detail').textContent = 'Available ' + format(hostKnown ? s.hostTotalGiB - s.hostUsedGiB : null);
+    meter('system-meter', [['host-meter', s.hostUsedGiB / capacity * 100], ['reserved-meter', s.vramReservedGiB / capacity * 100]], totalKnown,
+      'Host including GTT, reserved VRAM, and available memory in GiB: ' + $('memory-value').textContent);
+    const gttKnown = nonnegative(s.gttGiB) && valid(s.hostTotalGiB) && s.hostTotalGiB > 0 && s.gttGiB <= s.hostTotalGiB;
+    $('gtt-value').textContent = format(gttKnown ? s.gttGiB : null, ' GiB');
+    meter('gtt-track', [['gtt-meter', s.gttGiB / s.hostTotalGiB * 100]], gttKnown, 'GTT allocation relative to host capacity: ' + $('gtt-value').textContent);
+    const vramKnown = nonnegative(s.vramGiB) && valid(s.vramReservedGiB) && s.vramReservedGiB > 0 && s.vramGiB <= s.vramReservedGiB;
+    $('vram-value').textContent = vramKnown ? format(s.vramGiB) + ' / ' + format(s.vramReservedGiB, ' GiB', Number.isInteger(s.vramReservedGiB) ? 0 : 1) : 'N/A';
+    meter('vram-track', [['vram-meter', s.vramGiB / s.vramReservedGiB * 100]], vramKnown, 'VRAM usage within reserved capacity: ' + $('vram-value').textContent);
   }
   function render() {
     if (!history.length) return;
@@ -170,26 +210,24 @@ body.video .controls { display: none; }
     $('cpu-value').textContent = format(s.cpuPct);
     $('gpu-value').textContent = format(s.gpuPct);
     $('dram-value').textContent = format(total);
-    $('memory-value').textContent = format(s.hostUsedGiB);
-    $('memory-sub').textContent = 'of ' + format(s.hostTotalGiB) + ' GiB · total − available';
-    $('host-detail').textContent = format(s.hostUsedGiB) + ' / ' + format(s.hostTotalGiB) + ' GiB';
-    $('memory-meter').style.width = valid(s.hostUsedGiB) && valid(s.hostTotalGiB) && s.hostTotalGiB > 0 ? clamp(s.hostUsedGiB / s.hostTotalGiB * 100, 0, 100) + '%' : '0%';
-    for (const [id, key, unit, decimals] of [
-      ['vram-value', 'vramGiB', ' GiB', 2], ['gtt-value', 'gttGiB', ' GiB', 2],
-      ['socket-value', 'socketW', ' W', 1], ['apu-value', 'apuW', ' W', 1], ['gfx-power-value', 'gfxW', ' W', 1],
-      ['gfx-clock-value', 'gfxMHz', ' MHz', 0], ['fabric-clock-value', 'fclkMHz', ' MHz', 0], ['memory-clock-value', 'uclkMHz', ' MHz', 0]
-    ]) $(id).textContent = format(s[key], unit, decimals);
-    $('process-value').textContent = format(s.processCpuPct, '%', 0) + ' · RSS ' + format(s.processRssGiB, ' GiB', 2);
+    memory(s);
+    $('socket-value').textContent = format(s.socketW, '', 0);
+    for (const engine of ['vcn', 'vpe']) {
+      const value = s[engine + 'Pct'];
+      const known = valid(value) && value >= 0 && value <= 100;
+      $(engine + '-value').textContent = format(known ? value : null, '', 0);
+      meter(engine + '-track', [[engine + '-meter', value]], known, engine.toUpperCase() + ' utilization: ' + (known ? format(value, '%', 0) : 'unavailable'));
+    }
     const d = new Date(s.timestampMs);
     $('clock').textContent = d.toLocaleTimeString('en-GB', {hour12: false});
     $('date').textContent = d.toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'});
     $('status').textContent = (paused ? 'PAUSED' : 'SIMULATED') + ' · ' + ({mixed: 'MIXED LOAD', cpu: 'CPU LOAD', gpu: 'GPU LOAD', idle: 'IDLE'})[scenario] + (missing ? ' · GPU METRICS UNAVAILABLE' : '');
     $('status').style.color = paused || missing ? '#f6bd69' : '#70dfb6';
-    chart('cpu-chart', ['cpuPct'], ['#61dcf3'], 100, '%');
-    chart('gpu-chart', ['gpuPct'], ['#ad9aff'], 100, '%');
+    chart('cpu-chart', ['cpuPct'], ['#61dcf3'], 100);
+    chart('gpu-chart', ['gpuPct'], ['#ad9aff'], 100);
     const peak = Math.max(0, ...history.flatMap(x => [x.dramReadGBs, x.dramWriteGBs]).filter(valid));
     const axis = Math.max(20, Math.ceil(peak / 20) * 20);
-    chart('dram-chart', ['dramReadGBs', 'dramWriteGBs'], ['#f6bd69', '#60dcb0'], axis, 'GB/s');
+    chart('dram-chart', ['dramReadGBs', 'dramWriteGBs'], ['#f6bd69', '#60dcb0'], axis);
   }
   function fit() {
     const scale = Math.min(1, document.documentElement.clientWidth / 1920);
@@ -201,7 +239,6 @@ body.video .controls { display: none; }
     paused = !paused; $('pause').textContent = paused ? 'Resume' : 'Pause'; lastTick = performance.now(); render();
   });
   $('missing').addEventListener('change', event => { missing = event.target.checked; });
-  $('process').addEventListener('change', event => { $('process-row').style.display = event.target.checked ? 'flex' : 'none'; });
   if (new URLSearchParams(location.search).get('video') === '1') document.body.classList.add('video');
   window.addEventListener('resize', fit);
   for (let i = -600; i <= 0; ++i) ingest(mockSample(time + i * period, i * period / 1000));
