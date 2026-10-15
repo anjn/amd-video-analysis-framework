@@ -10,8 +10,9 @@ xdg-open examples/resource-dashboard/index.html
 
 The dark 1920 × 1080 composition scales as a whole in narrower windows. Open
 `index.html?video=1` for the video area alone; **DEMO DATA** remains visible.
-This mode does not produce a video stream. The CPU/GPU names, date, readings
-and filled graphs are sized for smaller NVR tiles. Axis labels, explanatory
+This mode does not produce a video stream. Each CPU/GPU/DRAM panel combines its current reading and filled graph.
+Memory occupies half of the lower row; Power, VCN and VPE share the other half.
+The CPU/GPU names, date, readings and graphs are sized for smaller NVR tiles. Axis labels, explanatory
 notes, clock frequencies, per-process readings and separate APU/GFX power are omitted.
 
 Use the controls outside the video area to select **Idle**, **CPU load**,
@@ -36,6 +37,7 @@ The fixture models **32 GiB**, divided into 30 GiB of Host capacity and 2 GiB
 reserved for the iGPU. It distinguishes the reserved capacity from the amount
 actually used within that reservation. All memory values use binary GiB.
 
+Host, Reserved and Available each include the GiB unit in their readings.
 The main bar has a capacity of `hostTotalGiB + vramReservedGiB` and shows:
 
 - **Host:** `hostUsedGiB`, including GTT-backed pages accounted by the OS.
@@ -83,7 +85,7 @@ These sources are documented here; this version does not collect them.
 | VRAM reservation / used | amdgpu `mem_info_vram_total` / `mem_info_vram_used` |
 | GTT allocation / limit | amdgpu `mem_info_gtt_used` / `mem_info_gtt_total`; the limit is not installed RAM |
 | DRAM read / write | `gpu_metrics` v3.0 `dram_reads` / `dram_writes`, MB/s converted to GB/s; SoC-wide, CPU and GPU combined |
-| Socket power | `gpu_metrics` v3.0 socket power, mW converted to W |
+| Power | `gpu_metrics` v3.0 socket power, mW converted to W |
 | VCN | `vcn_busy_percent`; codec-engine utilization where supported |
 | VPE | `drm-engine-vpe` busy-time differences for observable DRM clients, divided by elapsed time and engine capacity |
 
