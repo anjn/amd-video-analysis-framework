@@ -145,7 +145,8 @@ calendar time uses the host's local timezone.
 | Reading | Source and interpretation |
 | --- | --- |
 | CPU | `/proc/stat` deltas, 0–100% for the whole system; first sample is absent |
-| GPU / VCN | `gpu_busy_percent` / `vcn_busy_percent` for the selected AMD device |
+| GPU | `gpu_busy_percent` for the selected AMD device |
+| VCN | Preferred: busiest encode/decode engine class (`enc`, `dec`, `enc_1`) from readable DRM client busy-time deltas; `vcn_busy_percent` fallback when no paired DRM counters are available |
 | Host memory | `/proc/meminfo` total and total minus available |
 | VRAM reservation / used | `mem_info_vram_total` / `mem_info_vram_used` |
 | GTT used / limit | `mem_info_gtt_used` / `mem_info_gtt_total` |
@@ -156,10 +157,24 @@ calendar time uses the host's local timezone.
 The v3.0 parser verifies revision, declared size and available bytes, and treats
 unavailable sentinels as absent. Other revisions do not produce invented values;
 independent sysfs readings continue. No root access or system tuning is needed.
-VPE covers readable DRM clients, not a guarantee of global coverage. First
-observations, missing counters and counter regressions remain unavailable;
-regressions retain the high watermark until the counter catches up, as required
-by the DRM statistics contract. Exited clients are discarded.
+DRM-based VCN and VPE cover readable clients, not a guarantee of global coverage.
+Each class is normalized by its reported engine capacity (default one); aliases
+are deduplicated by PCI device, client ID and engine class, while independent
+clients on the selected device are added. The single VCN value is the maximum
+of these class percentages, not their sum: separate encode/decode engines can
+run concurrently. JPEG is not included. This is a busy-time estimate, not a
+percentage of peak codec throughput. On VCN4 the unified encode/decode queue
+is accounted under `enc`, including NVR decoding.
+
+On the validated Radeon 890M, `vcn_busy_percent` remains zero during active
+hardware encoding and decoding, while DRM counters advance. Therefore paired
+DRM readings take precedence, including measured zero. First observations,
+missing counters and regressions have no DRM delta; VCN then falls back to
+valid sysfs data, and VPE remains unavailable. Regressions retain the high
+watermark until the counter catches up; exited clients are discarded. See the
+[kernel DRM statistics contract](https://docs.kernel.org/gpu/drm-usage-stats.html),
+[amdgpu engine names](https://github.com/torvalds/linux/blob/v6.17/drivers/gpu/drm/amd/amdgpu/amdgpu_fdinfo.c)
+and [VCN4 unified queue implementation](https://github.com/torvalds/linux/blob/v6.17/drivers/gpu/drm/amd/amdgpu/vcn_v4_0_5.c).
 
 Memory is binary GiB. The main total is Host capacity plus dedicated VRAM
 reservation, and its numerator is Host used plus that complete reservation.
@@ -172,6 +187,18 @@ setting is not modified. See [the prototype definitions](../examples/resource-da
 for the shared accounting rationale and original reference repository.
 
 ## Validation
+
+VCN counter regression (2026-10-15): while the existing dashboard encoder and
+NVR decoder were active, sysfs reported 0% but the corrected monitor measured
+8.7–9.1% over five one-second intervals. An isolated 20-second headless server
+on port 8596 with a 12-second RTSP recording reported 13.6–13.8% during its
+additional encode workload, 124 submitted frames, zero skipped frames and zero
+copy-audit errors. The recording contained 121 H.264 1920×1080 BT.709 limited
+frames. All eight dashboard-only CTest contracts passed, including new VCN
+counter, capacity, alias, multi-client, PCI filter, idle, fallback, regression
+and malformed-input cases. Local artifacts: `artifacts/dashboard-vcn-live.log`
+and `artifacts/dashboard-vcn-rtsp/`. These observations demonstrate busy-time
+reporting under this workload; they do not calibrate peak codec throughput.
 
 Run the real RTSP scenarios after building, using an unused output directory:
 

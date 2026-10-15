@@ -97,6 +97,71 @@ int main() {
         fs::remove_all(proc / "10");
         fs::remove_all(proc / "11");
         require(!monitor.sample().vpe_pct, "Exited clients");
+        // VCN4 reports decode and encode in "enc"; a stuck-zero sysfs
+        // reading must not override measured busy time from readable clients.
+        write(device / "vcn_busy_percent", "0");
+        auto video = [](unsigned id, uint64_t enc, uint64_t dec) {
+            return "drm-driver: amdgpu\ndrm-pdev: 0000:65:00.0\ndrm-client-id: " +
+                   std::to_string(id) + "\ndrm-engine-enc: " + std::to_string(enc) +
+                   " ns\ndrm-engine-capacity-enc: 2\ndrm-engine-dec: " + std::to_string(dec) +
+                   " ns\n";
+        };
+        auto update = [&](uint64_t enc, uint64_t dec) {
+            write(proc / "10/fdinfo/1", video(1, enc, dec));
+            write(proc / "11/fdinfo/2", video(1, enc, dec)); // shared FD alias
+            auto independent = video(2, enc, 0);
+            independent.resize(independent.find("drm-engine-dec:"));
+            write(proc / "12/fdinfo/2", independent); // independent encode-only client
+            auto other = video(3, enc * 100, dec * 100);
+            other.replace(other.find("0000:65:00.0"), 12, "0000:66:00.0");
+            write(proc / "13/fdinfo/1", other); // different GPU
+        };
+        update(1000000, 1000000);
+        auto base = monitor.sample();
+        require(base.vcn_pct == 0, "First video observation uses sysfs fallback");
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        update(2000000, 1500000);
+        auto active = monitor.sample();
+        double elapsed = double(active.monotonic_ns - base.monotonic_ns);
+        require(active.vcn_pct && std::abs(*active.vcn_pct - 100. * 1000000 / elapsed) < .001,
+                "VCN unified engine, clients, aliases, capacity, and PCI filter");
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        update(2500000, 3500000);
+        auto decoding = monitor.sample();
+        elapsed = double(decoding.monotonic_ns - active.monotonic_ns);
+        require(decoding.vcn_pct && std::abs(*decoding.vcn_pct - 100. * 2000000 / elapsed) < .001,
+                "VCN busiest class, not sum of concurrent encode/decode");
+        write(device / "vcn_busy_percent", "99");
+        require(monitor.sample().vcn_pct == 0, "Measured idle overrides stale sysfs");
+        update(1, 1);
+        require(monitor.sample().vcn_pct == 99, "Video regression uses sysfs fallback");
+        update(2500000, 3500000);
+        require(monitor.sample().vcn_pct == 0, "Video high watermark recovery");
+        fs::remove_all(proc / "10");
+        fs::remove_all(proc / "11");
+        fs::remove_all(proc / "12");
+        fs::remove_all(proc / "13");
+        fs::remove(device / "vcn_busy_percent");
+        require(!monitor.sample().vcn_pct, "No readable video counters or sysfs means unknown");
+        // Legacy secondary encoding class and malformed counter handling.
+        auto legacy = std::string("drm-driver: amdgpu\ndrm-pdev: 0000:65:00.0\n") +
+                      "drm-client-id: 4\ndrm-engine-enc_1: ";
+        write(proc / "10/fdinfo/1", legacy + "1000000 ns\n");
+        auto legacy_base = monitor.sample();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        write(proc / "10/fdinfo/1", legacy + "2000000 ns\n");
+        auto legacy_active = monitor.sample();
+        require(legacy_active.vcn_pct &&
+                    std::abs(*legacy_active.vcn_pct - 100. * 1000000 /
+                                                          double(legacy_active.monotonic_ns -
+                                                                 legacy_base.monotonic_ns)) < .001,
+                "Legacy encode engine without capacity tag");
+        for (const auto *bad : {"-1 ns", "garbage", "1000000 cycles"}) {
+            write(proc / "10/fdinfo/1", legacy + bad + "\n");
+            require(!monitor.sample().vcn_pct, "Malformed video counter is unavailable");
+        }
+        fs::remove_all(proc / "10");
+        write(device / "vcn_busy_percent", "12");
         write(device / "gpu_busy_percent", "200");
         write(proc / "meminfo", "MemTotal: 20 kB\nMemAvailable: 30 kB\n");
         auto invalid = monitor.sample();

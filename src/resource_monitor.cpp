@@ -125,10 +125,11 @@ struct ResourceMonitor::Impl {
             }
         }
     }
-    std::optional<double> vpe(int64_t now) {
+    std::map<std::string, double> engines(int64_t now) {
+        // Scan once for both video and VPE. Each engine has its own capacity;
+        // distinct video engine classes may execute concurrently.
         std::map<std::string, uint64_t> current;
-        unsigned capacity = 1;
-        bool accessible = false;
+        std::map<std::string, uint64_t> capacities;
         std::error_code error;
         for (fs::directory_iterator
                  it(config.proc_root, fs::directory_options::skip_permission_denied, error),
@@ -151,17 +152,26 @@ struct ResourceMonitor::Impl {
                 }
                 auto data = fields(read(f->path()));
                 if (data["drm-driver"] != "amdgpu" || data["drm-pdev"] != pci ||
-                    !data.count("drm-client-id") || !data.count("drm-engine-vpe"))
+                    !digits(data["drm-client-id"]))
                     continue;
-                accessible = true;
-                const auto key = pci + ":" + data["drm-client-id"];
-                current[key] = std::max(current[key], count(data["drm-engine-vpe"]));
-                if (data.count("drm-engine-capacity-vpe"))
-                    capacity = std::max<uint64_t>(capacity, count(data["drm-engine-capacity-vpe"]));
+                for (const std::string engine : {"enc", "dec", "enc_1", "vpe"}) {
+                    const auto counter = data.find("drm-engine-" + engine);
+                    if (counter == data.end())
+                        continue;
+                    uint64_t ns{};
+                    std::string unit;
+                    std::istringstream value(counter->second);
+                    if (counter->second.empty() || counter->second.front() < '0' ||
+                        counter->second.front() > '9' || !(value >> ns >> unit) || unit != "ns")
+                        continue;
+                    const auto key = engine + ":" + pci + ":" + data["drm-client-id"];
+                    current[key] = std::max(current[key], ns);
+                    capacities[engine] = std::max<uint64_t>(
+                        {capacities[engine], 1, count(data["drm-engine-capacity-" + engine])});
+                }
             }
         }
-        uint64_t delta = 0;
-        bool paired = false;
+        std::map<std::string, double> deltas;
         for (auto &[id, value] : current) {
             auto found = previous.find(id);
             if (found == previous.end())
@@ -171,13 +181,13 @@ struct ResourceMonitor::Impl {
                 value = found->second;
                 continue;
             }
-            paired = true;
-            delta += value - found->second;
+            deltas[id.substr(0, id.find(':'))] += double(value - found->second);
         }
-        auto result = accessible && paired && last_ns && now > last_ns
-                          ? std::optional<double>(std::clamp(
-                                100.0 * double(delta) / double(now - last_ns) / capacity, 0., 100.))
-                          : std::nullopt;
+        std::map<std::string, double> result;
+        if (last_ns && now > last_ns)
+            for (auto [engine, delta] : deltas)
+                result[engine] = std::clamp(
+                    100.0 * delta / double(now - last_ns) / capacities.at(engine), 0., 100.);
         previous = std::move(current);
         last_ns = now;
         return result;
@@ -227,7 +237,19 @@ struct ResourceMonitor::Impl {
         s.gtt_gib = number(device / "mem_info_gtt_used", gib);
         auto raw = read(device / "gpu_metrics");
         decode_gpu_metrics(std::vector<uint8_t>(raw.begin(), raw.end()), s);
-        s.vpe_pct = vpe(s.monotonic_ns);
+        const auto busy = engines(s.monotonic_ns);
+        if (auto it = busy.find("vpe"); it != busy.end())
+            s.vpe_pct = it->second;
+        std::optional<double> video;
+        // VCN4 exposes both encode and decode on the unified "enc" engine.
+        // On older devices show the busiest video class, never their sum:
+        // independent encode/decode engines can overlap. Prefer DRM even when
+        // its measured usage is zero; sysfs VCN is stuck at zero on some APUs.
+        for (const auto *engine : {"enc", "dec", "enc_1"})
+            if (auto it = busy.find(engine); it != busy.end())
+                video = std::max(video.value_or(0.), it->second);
+        if (video)
+            s.vcn_pct = video;
         return s;
     }
 };
