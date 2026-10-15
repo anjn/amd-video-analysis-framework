@@ -254,3 +254,8 @@ No latency/FPS acceptance thresholds or automatic controls are imposed. See
 Recording queries, protected playback handles and the Qt-free recording player
 are part of `amdva_streaming`. See the [VMS interfaces and migration](vms.md#framework-interfaces-and-migration)
 and [SDK playback example](../examples/sdk/playback.cpp).
+
+The Qt-free `amdva_monitor` library provides optional-valued CPU/GPU/memory/power
+readings and observable DRM engine utilization via `amdva/resource_monitor.hpp`.
+The [resource dashboard sample](resource-dashboard.md) uses it independently of
+NVR, analytics plugins and model loading.

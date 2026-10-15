@@ -68,7 +68,9 @@ def main():
         path = DEPS / "packages" / Path(package["Filename"]).name
         download(lock["rocm"]["repository"] + package["Filename"], path, package["SHA256"])
         run("dpkg-deb", "-x", path, DEPS / "rocm72")
-    for name in ("libva", "libva-drm", "json-glib-1.0", "sqlite3"):
+    for name in ("libva", "libva-drm", "json-glib-1.0", "sqlite3", "libdrm", "libdrm_amdgpu",
+                 "fontconfig", "freetype2", "libpng", "libpng16", "zlib",
+                 "libbrotlicommon", "libbrotlidec", "libbrotlienc", "expat"):
         path = DEPS / "sysroot/usr/lib/x86_64-linux-gnu/pkgconfig" / f"{name}.pc"
         (DEPS / "pkgconfig" / path.name).write_text(path.read_text().replace("prefix=/usr", f"prefix={DEPS}/sysroot/usr"))
     source = DEPS / "src/dlstreamer"

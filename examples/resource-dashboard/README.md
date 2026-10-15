@@ -141,12 +141,12 @@ Clock, individual APU/GFX power and process fields from the initial prototype
 are removed. Machine names remain HTML fixtures to replace with discovered
 metadata in a real collector. Sources must supply `null` for missing values.
 
-After visual review, implement real collection and a separate hardware video
-sample. This HTML defines the composition; it does not mandate browser capture
-as the video source. The next stage must validate GPU-rendered shared surfaces,
-GPU color conversion and hardware encoding without CPU pixel readback, then
-serve the encoded output over RTSP. This prototype adds no encoder, RTSP server
-or changes to the existing NVR application.
+The [native RTSP sample](../../docs/resource-dashboard.md) implements real
+collection, headless GPU drawing and hardware H.264 encoding. This HTML defines
+the composition; it does not mandate browser capture as the video source. The
+native path uses GPU-rendered shared surfaces and GPU color conversion without
+CPU pixel readback, serving encoded output over RTSP. The HTML itself adds no
+encoder, RTSP server or changes to the existing NVR application.
 
 ## Prototype validation
 

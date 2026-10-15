@@ -18,6 +18,9 @@ Retain their license files when packaging a binary distribution.
 | librdkafka | Ubuntu 2.3.0 | BSD-2-Clause and bundled dependency notices |
 | CPython / PyGObject | host Python 3.12 / Ubuntu 3.48.2 headers | PSF / LGPL-2.1-or-later notices |
 | Transformers / representative model weights | isolated exporter and ignored validation artifacts | Apache-2.0 library; weights retain their model-specific license, see docs/framework.md |
+| FreeType / Fontconfig / libdrm | locked Ubuntu packages | FTL or GPL-2.0 / MIT-style / MIT; retain package copyright files |
+| libpng / zlib / Brotli / Expat | locked Ubuntu packages | libpng / zlib / MIT-style notices in package copyright files |
+| DejaVu fonts | locked Ubuntu package | Bitstream Vera and DejaVu font notices; retain `fonts-dejavu-core` copyright |
 | nlohmann JSON | 3.11.3 | MIT |
 | GLib, json-glib, TBB, build tools | locked packages and host prerequisites | Upstream/Ubuntu license files |
 

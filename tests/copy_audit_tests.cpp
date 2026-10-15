@@ -41,6 +41,13 @@ int main() {
         if(errors()!=2)throw std::runtime_error("Marked metadata or GPU assembly incorrectly rejected");
         amdva::hip_check(hipMemcpy(compact.data(),bytes,128,hipMemcpyHostToDevice),"Prohibited upload");
         if(errors()!=3)throw std::runtime_error("Unmarked CPU upload not rejected");
+        auto gl_mode=reinterpret_cast<void(*)(bool)>(dlsym(RTLD_DEFAULT,"amdva_audit_gl_images"));
+        auto read_pixels=reinterpret_cast<void(*)(int,int,int,int,unsigned,unsigned,void*)>(dlsym(RTLD_DEFAULT,"glReadPixels"));
+        if(!gl_mode||!read_pixels)throw std::runtime_error("GL audit hooks missing");
+        gl_mode(true);read_pixels(0,0,0,0,0,0,nullptr);
+        if(errors()!=4)throw std::runtime_error("GL readback not audited");
+        gl_mode(false);read_pixels(0,0,0,0,0,0,nullptr);
+        if(errors()!=4)throw std::runtime_error("Diagnostic GL mode was not restored");
         stop();
         va.destroy_surface(source);
         va.destroy_surface(target);

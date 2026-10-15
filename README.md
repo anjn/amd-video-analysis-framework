@@ -92,7 +92,8 @@ requires DL Streamer integration plus copy-audit success. See
 [validation](docs/validation.md) for acceptance thresholds and reproduction.
 
 Video recording preserves compressed RTSP packets; the framework does not
-currently provide an encoding or NPU inference backend.
+provide an NPU inference backend. The [resource dashboard sample](docs/resource-dashboard.md)
+uses hardware H.264 encoding for GPU-rendered monitoring graphics.
 
 ## Licenses
 
@@ -114,4 +115,6 @@ The desktop sample includes fixed live layouts, camera management, recording sea
 
 The [resource dashboard prototype](examples/resource-dashboard/README.md) is a
 standalone HTML preview of CPU, GPU and DRAM monitoring, with simulated readings
-and a 1080p video composition. It does not yet collect live metrics or stream RTSP.
+and a 1080p video composition. The [native RTSP sample](docs/resource-dashboard.md)
+collects real metrics and serves the composition through GPU rendering and
+hardware H.264 encoding.

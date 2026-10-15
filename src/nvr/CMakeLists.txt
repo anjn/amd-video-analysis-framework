@@ -48,3 +48,8 @@ endif()
 
 add_executable(amdva-vms-validate ../../tools/vms_validate.cpp)
 target_link_libraries(amdva-vms-validate PRIVATE amdva_nvr_ui ${CMAKE_DL_LIBS})
+
+if(BUILD_TESTING AND AMDVA_BUILD_DASHBOARD)
+  add_executable(amdva-dashboard-nvr-validate ../../tools/dashboard_nvr_validate.cpp)
+  target_link_libraries(amdva-dashboard-nvr-validate PRIVATE amdva_nvr_ui)
+endif()

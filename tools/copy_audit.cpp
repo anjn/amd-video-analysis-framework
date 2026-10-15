@@ -89,3 +89,39 @@ extern "C" VAStatus vaDestroySurfaces(VADisplay d,VASurfaceID* ids,int count) {
     {auto& registry=surfaces();std::lock_guard<std::mutex> lock(registry.mutex);for(int i=0;i<count;++i)registry.unused.erase({d,ids[i]});}
     auto f=original<decltype(&vaDestroySurfaces)>("vaDestroySurfaces");return f?f(d,ids,count):VA_STATUS_ERROR_OPERATION_FAILED;
 }
+
+// Opt-in GL image auditing, so existing diagnostic framebuffer captures remain
+// explicit test operations. Enable for production dashboard streaming only.
+namespace { std::atomic<bool> audit_gl_images{false}; }
+extern "C" void amdva_audit_gl_images(bool enabled) {audit_gl_images=enabled;}
+extern "C" void glReadPixels(int x,int y,int width,int height,unsigned format,unsigned type,void* pixels) {
+    if(audit_gl_images)image_operation("glReadPixels");
+    using F=void(*)(int,int,int,int,unsigned,unsigned,void*);
+    auto f=original<F>("glReadPixels");if(f)f(x,y,width,height,format,type,pixels);
+}
+extern "C" void* glMapBufferRange(unsigned target,intptr_t offset,intptr_t length,unsigned access) {
+    if(audit_gl_images&&target==0x88eb&&(access&1))image_operation("glMapBufferRange(pixel pack)");
+    using F=void*(*)(unsigned,intptr_t,intptr_t,unsigned);
+    auto f=original<F>("glMapBufferRange");return f?f(target,offset,length,access):nullptr;
+}
+extern "C" void glTexSubImage2D(unsigned target,int level,int x,int y,int width,int height,unsigned format,unsigned type,const void* pixels) {
+    if(audit_gl_images&&pixels)image_operation("glTexSubImage2D(CPU upload)");
+    using F=void(*)(unsigned,int,int,int,int,int,unsigned,unsigned,const void*);
+    auto f=original<F>("glTexSubImage2D");if(f)f(target,level,x,y,width,height,format,type,pixels);
+}
+extern "C" void glTexImage2D(unsigned target,int level,int internal,int width,int height,int border,unsigned format,unsigned type,const void* pixels) {
+    if(audit_gl_images&&pixels)image_operation("glTexImage2D(CPU upload)");
+    using F=void(*)(unsigned,int,int,int,int,int,unsigned,unsigned,const void*);
+    auto f=original<F>("glTexImage2D");if(f)f(target,level,internal,width,height,border,format,type,pixels);
+}
+using AuditGLProc=void(*)();
+extern "C" AuditGLProc eglGetProcAddress(const char* name) {
+    if(audit_gl_images&&name){
+        const std::string s(name);
+        if(s=="glReadPixels")return reinterpret_cast<AuditGLProc>(&glReadPixels);
+        if(s=="glMapBufferRange")return reinterpret_cast<AuditGLProc>(&glMapBufferRange);
+        if(s=="glTexImage2D")return reinterpret_cast<AuditGLProc>(&glTexImage2D);
+        if(s=="glTexSubImage2D")return reinterpret_cast<AuditGLProc>(&glTexSubImage2D);
+    }
+    using F=AuditGLProc(*)(const char*);auto f=original<F>("eglGetProcAddress");return f?f(name):nullptr;
+}
