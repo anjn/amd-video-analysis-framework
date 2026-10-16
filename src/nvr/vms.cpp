@@ -69,7 +69,7 @@ struct Window::Vms {
     unsigned count{4}, selected{};
     int focus{-1};
     bool ui_ready{}, dirty{}, query_pending{true};
-    bool show_playback_time{true};
+    bool show_playback_time{true}, show_stream_info{true};
     uint64_t revision{};
     int64_t cursor_ms{};
     bool camera_changed{true}, camera_playing{};
@@ -114,6 +114,7 @@ struct Window::Vms {
             auto document = QJsonDocument::fromJson(f.readAll());
             auto obj = document.object();
             show_playback_time = obj["show_playback_time"].toBool(true);
+            show_stream_info = obj["show_stream_info"].toBool(true);
             unsigned n = obj["layout"].toInt(4);
             if (n == 1 || n == 4 || n == 9 || n == 16)
                 count = n;
@@ -148,7 +149,8 @@ struct Window::Vms {
         auto data = QJsonDocument(QJsonObject{{"version", 1},
                                               {"layout", int(count)},
                                               {"cells", array},
-                                              {"show_playback_time", show_playback_time}})
+                                              {"show_playback_time", show_playback_time},
+                                              {"show_stream_info", show_stream_info}})
                         .toJson();
         if (f.write(data) != data.size() || !f.commit())
             throw std::runtime_error("Cannot save view configuration");
@@ -253,6 +255,10 @@ struct Window::Vms {
         bar->addWidget(assignment);
         bar->addWidget(clear);
         bar->addWidget(single);
+        auto *info_toggle = new QCheckBox("Show stream info");
+        info_toggle->setObjectName("live-show-stream-info");
+        info_toggle->setChecked(show_stream_info);
+        bar->addWidget(info_toggle);
         bar->addStretch();
         bar->addWidget(settings);
         live_layout->addLayout(bar);
@@ -262,6 +268,12 @@ struct Window::Vms {
         cameras->setMaximumWidth(310);
         split->addWidget(cameras);
         w.tiles_ = new Tiles(w.controller_);
+        w.tiles_->stream_info_visible(show_stream_info);
+        QObject::connect(info_toggle, &QCheckBox::toggled, &w, [this](bool checked) {
+            show_stream_info = checked;
+            dirty = true;
+            w.tiles_->stream_info_visible(checked);
+        });
         split->addWidget(QWidget::createWindowContainer(w.tiles_));
         split->setStretchFactor(1, 1);
         live_layout->addWidget(split, 1);

@@ -6,18 +6,21 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSpinBox>
 #include <QSurfaceFormat>
 #include <QTabWidget>
 #include <QTimer>
 #include <QWindow>
 #include <algorithm>
+#include <cmath>
 #include <dlfcn.h>
 #include <fstream>
 #include <iostream>
@@ -66,6 +69,10 @@ int main(int argc, char **argv) {
         auto *clock_toggle = window.findChild<QCheckBox *>("playback-show-time");
         check(clock_toggle && clock_toggle->isChecked(),
               "Playback clock is not enabled by default");
+        auto *stream_toggle = window.findChild<QCheckBox *>("live-show-stream-info");
+        check(stream_toggle && stream_toggle->isChecked(), "Stream info not enabled by default");
+        bool stream_checked = false, stream_disabled = false, stream_restored = false;
+        QJsonArray stream_measurements;
         auto button = [&](const char *name) {
             auto *b = window.findChild<QPushButton *>(name);
             check(b, "Missing button");
@@ -83,7 +90,7 @@ int main(int argc, char **argv) {
         auto audit_gl =
             reinterpret_cast<void (*)(bool)>(dlsym(RTLD_DEFAULT, "amdva_audit_gl_images"));
         auto cancelled_gate = std::make_shared<std::promise<void>>();
-        bool gated = false, cancelled = false, cancel_verified = false;
+        bool gated = false, cancelled = false, cancel_verified = false, captured = false;
         bool applied = false, released = false, expired = false, record = false, played = false,
              paused = false, resumed = false, benchmark = false, waiting = false, purged = false,
              finish = false;
@@ -173,6 +180,9 @@ int main(int argc, char **argv) {
                               << " error=" << popup->error() << std::endl;
                 }
                 check(popup->error().empty(), popup->error().c_str());
+                check(window.live_view()->error().empty(), window.live_view()->error().c_str());
+                check(window.recording_view()->error().empty(),
+                      window.recording_view()->error().c_str());
                 check(seconds < 90, "GUI validation timed out");
                 check(controller.fatal().empty(), controller.fatal().c_str());
                 if (seconds > 2 && !applied) {
@@ -187,6 +197,15 @@ int main(int argc, char **argv) {
                     pin.reset();
                     released = true;
                 }
+                if (seconds > 5 && !captured) {
+                    check(window.live_view()->format().samples() >= 4,
+                          "Overlay antialiasing unavailable");
+                    // Validation-only framebuffer capture before the copy audit starts.
+                    check(window.live_view()->grabFramebuffer().save(
+                              QString::fromStdString(std::string(argv[1]) + "-live-overlay.png")),
+                          "Cannot capture overlay");
+                    captured = true;
+                }
                 if (seconds > 6 && !expired) {
                     check(!std::filesystem::exists(std::filesystem::path(options.recording_root) /
                                                    "expired.mkv"),
@@ -200,6 +219,56 @@ int main(int argc, char **argv) {
                         audit_gl(true);
                     if (audit_start)
                         audit_start();
+                }
+                if (seconds > 7 && !stream_checked) {
+                    unsigned labels = 0;
+                    for (const auto &label : window.live_view()->displayed_stream_info())
+                        if (!label.isEmpty()) {
+                            check(!label.contains('\n'), "Stream information is not a single line");
+                            check(label.contains("1920x1080") &&
+                                      (label.contains("H.264") || label.contains("H.265")),
+                                  "Missing codec/resolution overlay");
+                            check(label.contains(
+                                      QRegularExpression(R"(\d+\.\d fps\s+\d+\.\d Mbps$)")),
+                                  "Stream rates/unit formatting");
+                            labels++;
+                        }
+                    check(labels == 2, "Stream info missing on a live tile");
+                    for (const auto &status : controller.status()) {
+                        check(status.input_width == 1920 && status.input_height == 1080,
+                              "Encoded caps dimensions missing");
+                        check(status.input_fps > 20 && status.input_fps < 40 &&
+                                  std::isfinite(status.input_mbps) && status.input_mbps > 0,
+                              "Input rates unavailable");
+                        stream_measurements.append(
+                            QJsonObject{{"camera", QString::fromStdString(status.source.id)},
+                                        {"codec", QString::fromStdString(status.input_codec)},
+                                        {"width", int(status.input_width)},
+                                        {"height", int(status.input_height)},
+                                        {"fps", status.input_fps},
+                                        {"mbps", status.input_mbps}});
+                    }
+                    stream_toggle->setChecked(false);
+                    stream_checked = true;
+                }
+                if (seconds > 8 && !stream_disabled) {
+                    for (const auto &label : window.live_view()->displayed_stream_info())
+                        check(label.isEmpty(), "Stream info did not turn off");
+                    QFile preferences(QString::fromStdString(std::string(argv[1]) + ".ui.json"));
+                    check(preferences.open(QIODevice::ReadOnly), "Missing stream-info preferences");
+                    check(!QJsonDocument::fromJson(preferences.readAll())
+                               .object()["show_stream_info"]
+                               .toBool(true),
+                          "Stream info preference not saved");
+                    stream_toggle->setChecked(true);
+                    stream_disabled = true;
+                }
+                if (seconds > 9 && !stream_restored) {
+                    unsigned labels = 0;
+                    for (const auto &label : window.live_view()->displayed_stream_info())
+                        labels += !label.isEmpty();
+                    check(labels == 2, "Stream info did not turn on");
+                    stream_restored = true;
                 }
                 if (seconds > 8 && !gated) {
                     controller.delete_closed_recordings(cancelled_gate->get_future().share());
@@ -320,6 +389,8 @@ int main(int argc, char **argv) {
                                        {"cancel_release_gate", cancel_verified},
                                        {"click_toggle", resumed},
                                        {"playback_clock_toggle", resumed},
+                                       {"stream_info_toggle", stream_restored},
+                                       {"input_streams", stream_measurements},
                                        {"active_files_preserved", true}};
                     QFile file(
                         QString::fromStdString(std::string(argv[1]) + "-management-results.json"));

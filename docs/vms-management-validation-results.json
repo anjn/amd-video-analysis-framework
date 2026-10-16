@@ -244,5 +244,154 @@
       "build/src/nvr/amdva-nvr": "89f584d87345eb37b594ecc4ff1ae9ec6daa7e3ff5b6b19a259102d0dcf20aea",
       "build/src/streaming/libamdva_streaming.so": "499ad67d1417b5fd3272c1c24d633dcb1fe5668963987cb849e3ed6ac8e5cfa5"
     }
+  },
+  "live_stream_info_followup": {
+    "validated_at": "2026-10-16T12:26:06.120899+09:00",
+    "base_commit": "334dd5a",
+    "changes": [
+      "Expose codec and received dimensions from encoded parser caps in Controller::status().",
+      "Measure received access units/s and parser-output encoded payload Mbit/s over approximately one second, before queue drops or decode selection.",
+      "Render two-line GPU-only codec/resolution/FPS/Mbps overlays per live image; Mbps fixed to one decimal.",
+      "Show stream info checkbox defaults on, toggles live labels and persists in UI preferences.",
+      "Reset input metrics on receive teardown/reconnect."
+    ],
+    "gui": {
+      "active_files_preserved": true,
+      "audit_errors": 0,
+      "cancel_release_gate": true,
+      "click_toggle": true,
+      "deleted": 5,
+      "expiry": true,
+      "input_streams": [
+        {
+          "camera": "timeline-a",
+          "codec": "H.264",
+          "fps": 29.710995325117498,
+          "height": 1080,
+          "mbps": 5.504306531523787,
+          "width": 1920
+        },
+        {
+          "camera": "timeline-b",
+          "codec": "H.265",
+          "fps": 29.711093309940637,
+          "height": 1080,
+          "mbps": 0.050326630587931444,
+          "width": 1920
+        }
+      ],
+      "max_ms": 288.183959,
+      "p50_ms": 95.891962,
+      "p95_ms": 255.777604,
+      "playback_clock_toggle": true,
+      "popup_movement_checks": 90,
+      "retained_loading_checks": 99,
+      "samples": 100,
+      "stream_info_toggle": true,
+      "passed": true
+    },
+    "scenarios": [
+      "H264/H265, 1920x1080 on both tiles",
+      "positive input rates for both sources",
+      "exact one-decimal fps and Mbps label format",
+      "default on, off, persistence and on again",
+      "playback clock and management GUI regression",
+      "zero GPU copy and GL pixel-upload/readback audit violations"
+    ],
+    "gui_log": "artifacts/vms-stream-info-gui",
+    "ctest": {
+      "tests": 23,
+      "failures": 0,
+      "duration_s": 34.11,
+      "log": "artifacts/vms-stream-info-ctest.log"
+    },
+    "standard_build_log": "artifacts/vms-stream-info-standard-build.log",
+    "sources_sha256": {
+      "include/amdva/streaming/controller.hpp": "7ba4a8e88028ea4fec1950d885f954aec5dcf0175a2ed8762766b059cd7cef7c",
+      "src/streaming/controller.cpp": "611f1584d1888c022d39bc9cf3f75fb2b091e71b265d3f186756543c9c5634b1",
+      "src/nvr/window.cpp": "812bb4b127b03789e500fadae3a9cf4abd988f2031f604f852f513b1419b524f",
+      "src/nvr/window.hpp": "e16719676741e67f464048775fd13b6ea196692e6eec094909d20b1f9673608a",
+      "src/nvr/vms.cpp": "a7f1608ebaf5b60b72bf6119025251758b99ce3096538879377d3a9175804d83",
+      "tools/vms_management_validate.cpp": "453259c6d8bc33be9c1a495989d2fc6d29348154d212801a792017a0dab568a9"
+    },
+    "runtime_sha256": {
+      "artifacts/vms-management-build/src/nvr/amdva-vms-management-validate": "79356a1341af5cea2d4a77fb5f31b65e2814db6d45d68c4721896f314eee5b21",
+      "artifacts/vms-management-build/src/streaming/libamdva_streaming.so": "c40ef4b444b0421069b6c3e335485e9436fcb52723a84a48cbc9b1420b29dbe9",
+      "build/src/nvr/amdva-nvr": "6f3ed117587829d564f0f457dbe0e98630eabfbb5255cefff466449e6ef3aba1",
+      "build/src/streaming/libamdva_streaming.so": "b538271608c8889176899e45b2fba669984d1b277299d78b09dc7310406820a5"
+    }
+  },
+  "readable_font_followup": {
+    "validated_at": "2026-10-16T13:54:39.946725+09:00",
+    "changes": [
+      "Single-line live stream information with DejaVu Sans demibold outline geometry.",
+      "Glyph contours tessellated with holes/overlaps preserved; no bitmap text uploads.",
+      "4x MSAA requested and verified on the live renderer; text scales to fit tile width.",
+      "Black overlay backing blends at alpha=0.45 (55% underlying video); playback datetime uses the same font/backing."
+    ],
+    "gui": {
+      "active_files_preserved": true,
+      "audit_errors": 0,
+      "cancel_release_gate": true,
+      "click_toggle": true,
+      "deleted": 5,
+      "expiry": true,
+      "input_streams": [
+        {
+          "camera": "timeline-a",
+          "codec": "H.264",
+          "fps": 29.907896807399904,
+          "height": 1080,
+          "mbps": 6.070633115013695,
+          "width": 1920
+        },
+        {
+          "camera": "timeline-b",
+          "codec": "H.265",
+          "fps": 29.90799579710113,
+          "height": 1080,
+          "mbps": 0.050660157147516365,
+          "width": 1920
+        }
+      ],
+      "max_ms": 319.610171,
+      "p50_ms": 95.949748,
+      "p95_ms": 287.360474,
+      "playback_clock_toggle": true,
+      "popup_movement_checks": 90,
+      "retained_loading_checks": 99,
+      "samples": 100,
+      "stream_info_toggle": true,
+      "passed": true
+    },
+    "visual_capture": "artifacts/vms-readable-font-gui-2/config.json-live-overlay.png",
+    "capture_note": "Validation-only framebuffer readback at 5 seconds before the copy audit starts at 6 seconds. Capture visually reviewed for font quality, single-line layout and translucent backing. Production renderer performs no pixel readback or glyph bitmap upload.",
+    "ctest": {
+      "tests": 24,
+      "failures": 0,
+      "duration_s": 34.31,
+      "log": "artifacts/vms-readable-font-ctest.log"
+    },
+    "geometry_contract": [
+      "odd-even rectangular hole area",
+      "winding overlapping contours union area",
+      "font layout and cached geometry",
+      "space advances with no glyph triangles",
+      "finite triangle coordinates"
+    ],
+    "standard_build_log": "artifacts/vms-readable-font-standard-build.log",
+    "sources_sha256": {
+      "src/nvr/window.cpp": "ccfbd3a2fad272c4c81995681fdd24e3528fc5b1d8903d382f0f2306b607cc40",
+      "src/nvr/window.hpp": "d0cc67c6728dca526a92f5af771bf373c9ee289ad5c10c4be2d3684b34b80b07",
+      "src/nvr/vector_text.cpp": "05bf8124f4c2801bd00e222ac83e434fd18f2b38047a03d379c55e99175325c2",
+      "src/nvr/vector_text.hpp": "335adf3d3db3d31d4d4d5187df84d49b7dfe8c618dacf00f156e55b450928a5e",
+      "src/nvr/CMakeLists.txt": "675fc5c280b74d12960afa7744c4fdc997ef29246870e277f8576a470e472a1f",
+      "tests/nvr_vector_text_tests.cpp": "62e4d43b8e1f95c4b29ceb535d3f1932d5a4e6146d5dea62dc7919b4bea45b06",
+      "tools/vms_management_validate.cpp": "c44540be7a6f63a5efe82bb44375f507ee8de717a7d314c90a5284763b0f55e5"
+    },
+    "runtime_sha256": {
+      "artifacts/vms-management-build/src/nvr/amdva-vms-management-validate": "73cdfd9e13f73959d1898928f7aab5727f47514401f0b72818b05edb4b71f5dd",
+      "build/src/nvr/amdva-nvr": "1af63cc3d54b71596342dc28a6437e3e19295c6fba56ddc9eecb8def38b1cb9b"
+    }
   }
 }

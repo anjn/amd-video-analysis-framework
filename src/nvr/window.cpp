@@ -95,6 +95,9 @@ Tiles::Tiles(Controller &c, Slot *playback)
         (void)value;
         observe_visibility();
     });
+    auto surface_format = format();
+    surface_format.setSamples(4);
+    setFormat(surface_format);
     current_.fill(-1);
 }
 void Tiles::observe_visibility() {
@@ -236,48 +239,53 @@ void Tiles::release_current(unsigned slot) {
     s.preview[old].state = 3;
     current_[slot] = -1;
 }
-void Tiles::draw_playback_time(int64_t ms, float x, float y, float w, float h) {
-    // Draw glyph geometry directly on the GPU: no CPU pixel maps or glyph textures.
-    const auto text = QDateTime::fromMSecsSinceEpoch(ms).toString("yyyy-MM-dd HH:mm:ss");
-    static const char *digits[] = {"111101101101111", "010110010010111", "111001111100111",
-                                   "111001111001111", "101101111001001", "111100111001111",
-                                   "111100111101111", "111001010010010", "111101111101111",
-                                   "111101111001111"};
-    const float pixel =
-        std::min({4.f, float(width()) * w / (2 * (text.size() * 4 + 4)), float(height()) * h / 18});
-    const float dx = 2 * pixel / width(), dy = 2 * pixel / height();
-    const float left = x + 2 * dx, top = y - 2 * dy;
+void Tiles::draw_text_overlay(const QString &text, float x, float y, float w, float h,
+                              bool bottom) {
+    VectorText::Run run;
+    try {
+        run = overlay_font_.layout(text);
+    } catch (const std::exception &e) {
+        error_ = e.what();
+        return;
+    }
+    if (run.triangles.empty() || run.width <= 0 || run.height <= 0)
+        return;
+    const float available_width = width() * w / 2, available_height = height() * h / 2;
+    const double scale = std::max(0., std::min({22. / 64., (available_width - 16) / run.width,
+                                                (available_height - 16) / run.height}));
+    if (scale <= 0)
+        return;
+    const float dx = 2.f / width(), dy = 2.f / height(), pad = 6;
+    const float left = x + 8 * dx;
+    const float top = bottom ? y - h + (run.height * scale + 8) * dy : y - 8 * dy;
+    const float baseline = top - run.ascent * scale * dy;
     std::vector<float> points;
-    for (int c = 0; c < text.size(); ++c) {
-        const auto ch = text[c];
-        const char *glyph = ch >= '0' && ch <= '9' ? digits[ch.unicode() - '0']
-                            : ch == ':'            ? "000010000010000"
-                            : ch == '-'            ? "000000111000000"
-                                                   : nullptr;
-        if (!glyph)
-            continue;
-        for (int i = 0; i < 15; ++i)
-            if (glyph[i] == '1') {
-                const float a = left + (c * 4 + i % 3) * dx, b = top - (i / 3) * dy;
-                const float quad[] = {a, b,      a + dx, b, a,      b - dy,
-                                      a, b - dy, a + dx, b, a + dx, b - dy};
-                points.insert(points.end(), std::begin(quad), std::end(quad));
-            }
+    points.reserve(run.triangles.size() * 2);
+    for (const auto &point : run.triangles) {
+        points.push_back(left + point.x() * scale * dx);
+        points.push_back(baseline - point.y() * scale * dy);
     }
     gl_->glUseProgram(box_program_);
     const auto pen = gl_->glGetUniformLocation(box_program_, "pen");
-    gl_->glUniform4f(pen, .02f, .025f, .035f, 1);
-    const float right = left + (text.size() * 4) * dx, bottom = top - 6 * dy;
-    const float background[] = {left - dx, top + dy, right, top + dy,
-                                left - dx, bottom,   right, bottom};
+    // Straight alpha blending leaves the video visible behind the dark panel.
+    gl_->glEnable(GL_BLEND);
+    gl_->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    gl_->glUniform4f(pen, 0, 0, 0, .45f);
+    const float right = left + (run.width * scale + pad) * dx,
+                bottom_edge = top - (run.height * scale + pad) * dy;
+    const float background[] = {left - pad * dx, top + pad * dy, right, top + pad * dy,
+                                left - pad * dx, bottom_edge,    right, bottom_edge};
     vertices(background, 4, 2);
     gl_->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     gl_->glUniform4f(pen, 1, 1, 1, 1);
     vertices(points.data(), points.size() / 2, 2);
     gl_->glDrawArrays(GL_TRIANGLES, 0, points.size() / 2);
+    gl_->glDisable(GL_BLEND);
 }
+
 void Tiles::paintGL() {
     displayed_playback_time_ = 0;
+    displayed_stream_info_.fill({});
     if (!playback_)
         controller_.presentation_active(isExposed() && visibility() != QWindow::Minimized);
     for (const auto &pending : pending_swap_)
@@ -420,8 +428,29 @@ void Tiles::paintGL() {
             }
         }
         if (playback_ && playback_time_visible_ && p.wall_time_ms) {
-            draw_playback_time(p.wall_time_ms, x, y, w, h);
+            draw_text_overlay(
+                QDateTime::fromMSecsSinceEpoch(p.wall_time_ms).toString("yyyy-MM-dd HH:mm:ss"), x,
+                y, w, h);
             displayed_playback_time_ = p.wall_time_ms;
+        }
+        if (!playback_ && stream_info_visible_) {
+            const auto source =
+                std::find_if(statuses.begin(), statuses.end(),
+                             [&](const auto &status) { return status.source.id == s.channel; });
+            if (source != statuses.end() && source->connection == "live") {
+                const auto codec =
+                    source->input_codec.empty() ? QString("--") : qs(source->input_codec);
+                const auto resolution =
+                    source->input_width && source->input_height
+                        ? QString("%1x%2").arg(source->input_width).arg(source->input_height)
+                        : QString("--x--");
+                auto text = QString("%1  %2  %3 fps  %4 Mbps")
+                                .arg(codec, resolution)
+                                .arg(source->input_fps, 0, 'f', 1)
+                                .arg(source->input_mbps, 0, 'f', 1);
+                draw_text_overlay(text, x, y, w, h, true);
+                displayed_stream_info_[focus_ >= 0 ? unsigned(focus_) : tile] = text;
+            }
         }
     }
     gl_->glFlush();

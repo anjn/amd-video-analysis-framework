@@ -13,6 +13,25 @@ Assigning a camera already used elsewhere exchanges the two tiles. Empty and
 disconnected tiles keep their position. Camera titles, connection states and the
 selected border remain visible over the grid.
 
+**Show stream info** toggles codec, received resolution, input frame rate and
+bitrate on every live image. It defaults to on and persists in `<config>.ui.json`.
+The lower-left overlay uses one line, for example
+`H.264 1920x1080 30.0 fps 4.2 Mbps`. Rates update approximately once per second from received
+parser-output compressed access units before queue drops, decoding and recording
+selection.
+Bitrate is encoded video payload in decimal Mbit/s, displayed to one decimal;
+it excludes RTP/RTSP/TCP/IP overhead and audio. Frame rate is measured input
+rate rather than decoder/display FPS or a nominal SDP value. Codec/resolution
+come from parser caps and reset on reconnection. GPU geometry renders these
+labels without reading video pixels or uploading text images. DejaVu Sans
+semibold outlines are tessellated and antialiased with 4× MSAA. Text scales to
+fit the tile width; the black backing has 45% opacity so the video remains
+visible through it. Playback timestamps use the same readable font and backing.
+
+`Controller::status()` exposes `input_codec`, `input_width`, `input_height`,
+`input_fps` and `input_mbps` for headless consumers as well. Rebuild SDK clients
+after the public `Status` structure change.
+
 Double-click a tile, or use **Single / grid**, to focus it. Double-click again or
 press Esc to return. Focusing does not change the original grid's decode/AI
 selection. Reducing the grid does deselect cameras outside the visible cells,

@@ -193,6 +193,45 @@ struct Controller::Channel {
     std::deque<Sample> encoded;
     uint64_t queued{};
     std::atomic<int> codec{0};
+    std::atomic<uint64_t> input_frames{0}, input_bytes{0};
+    uint64_t input_frames_base{}, input_bytes_base{};
+    Clock::time_point input_rates_at{Clock::now()};
+    void reset_input_metrics() {
+        input_frames = 0;
+        input_bytes = 0;
+        input_frames_base = 0;
+        input_bytes_base = 0;
+        input_rates_at = Clock::now();
+        state.input_codec.clear();
+        state.input_width = state.input_height = 0;
+        state.input_fps = state.input_mbps = 0;
+    }
+    void update_input_rates() {
+        const auto now = Clock::now();
+        const double seconds = std::chrono::duration<double>(now - input_rates_at).count();
+        if (seconds < 1)
+            return;
+        const auto frames = input_frames.load(), bytes = input_bytes.load();
+        state.input_fps = (frames - input_frames_base) / seconds;
+        state.input_mbps = (bytes - input_bytes_base) * 8.0 / seconds / 1000000.0;
+        input_frames_base = frames;
+        input_bytes_base = bytes;
+        input_rates_at = now;
+    }
+    void input_format(GstCaps *caps) {
+        if (!caps || gst_caps_is_empty(caps))
+            return;
+        const auto *format = gst_caps_get_structure(caps, 0);
+        const char *name = gst_structure_get_name(format);
+        state.input_codec = g_str_equal(name, "video/x-h264")   ? "H.264"
+                            : g_str_equal(name, "video/x-h265") ? "H.265"
+                                                                : "Unknown";
+        int width = 0, height = 0;
+        gst_structure_get_int(format, "width", &width);
+        gst_structure_get_int(format, "height", &height);
+        state.input_width = unsigned(std::max(0, width));
+        state.input_height = unsigned(std::max(0, height));
+    }
     std::atomic<bool> overflow{false}, record_failed{false};
     std::atomic<int64_t> last_packet_us{0};
     bool removed{}, decode_wait{true};
@@ -225,6 +264,9 @@ struct Controller::Channel {
             return GST_FLOW_EOS;
         auto *b = gst_sample_get_buffer(sample.get());
         const auto size = gst_buffer_get_size(b);
+        // Count before queue drops and before decode/recording selection.
+        c.input_frames.fetch_add(1, std::memory_order_relaxed);
+        c.input_bytes.fetch_add(size, std::memory_order_relaxed);
         c.last_packet_us = g_get_monotonic_time();
         std::lock_guard<std::mutex> l(c.encoded_mutex);
         if (c.queued + size > compressed_limit ||
@@ -340,6 +382,7 @@ struct Controller::Channel {
     void start_receive() {
         try {
             codec = 0;
+            reset_input_metrics();
             keyframes.reset();
             state.connection = "connecting";
             state.error.clear();
@@ -376,6 +419,7 @@ struct Controller::Channel {
             controller.request_reclaim();
         destroy(receive);
         receive_timing.reset();
+        reset_input_metrics();
         timing->availability(TimingStage::Input, true, false);
         timing->availability(TimingStage::AccessUnit, true, false);
         std::lock_guard<std::mutex> l(encoded_mutex);
@@ -711,6 +755,7 @@ struct Controller::Channel {
             queued = 0;
         }
         for (auto &sample : packets) {
+            input_format(gst_sample_get_caps(sample.get()));
             state.received++;
             if (state.connection != "live")
                 controller.request_reclaim();
@@ -1134,6 +1179,7 @@ void Controller::loop() {
             std::vector<Status> snapshot;
             for (auto &c : channels_)
                 if (!c->removed) {
+                    c->update_input_rates();
                     if (elapsed >= 1) {
                         auto &old = counts[c->state.source.id];
                         c->state.display_fps =

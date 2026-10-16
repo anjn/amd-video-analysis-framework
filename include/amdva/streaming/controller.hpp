@@ -45,6 +45,9 @@ struct Status {
     int slot{-1};
     uint64_t received{}, decoded{}, ai{}, gaps{}, generation{};
     double display_fps{}, ai_fps{};
+    std::string input_codec;
+    unsigned input_width{}, input_height{};
+    double input_fps{}, input_mbps{}; // Received AUs/s and encoded payload Mbit/s over ~1s.
     unsigned ai_age_ms{};
     std::string background_state{"disabled"};
     uint64_t background_decoded{}, background_ai{}, background_attempts{};

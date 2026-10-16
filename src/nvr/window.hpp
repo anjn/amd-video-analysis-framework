@@ -1,6 +1,7 @@
 #pragma once
 #include "amdva/streaming/playback.hpp"
 #include "controller.hpp"
+#include "vector_text.hpp"
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <QCoreApplication>
@@ -28,6 +29,11 @@ class Tiles final : public QOpenGLWindow {
         update();
     }
     int64_t displayed_playback_time() const { return displayed_playback_time_; }
+    void stream_info_visible(bool enabled) {
+        stream_info_visible_ = enabled;
+        update();
+    }
+    const std::array<QString, 16> &displayed_stream_info() const { return displayed_stream_info_; }
 
   protected:
     void initializeGL() override;
@@ -51,7 +57,9 @@ class Tiles final : public QOpenGLWindow {
     unsigned cell_count_{};
     int focus_{-1};
     unsigned selected_{};
-    bool playback_time_visible_{true};
+    bool playback_time_visible_{true}, stream_info_visible_{true};
+    VectorText overlay_font_;
+    std::array<QString, 16> displayed_stream_info_{};
     int64_t displayed_playback_time_{};
     unsigned picked(const QPointF &) const;
     std::array<std::array<Texture, 3>, 16> textures_{};
@@ -73,7 +81,8 @@ class Tiles final : public QOpenGLWindow {
     void observe_visibility();
     void vertices(const float *data, unsigned count, unsigned stride);
     void release_current(unsigned slot);
-    void draw_playback_time(int64_t ms, float x, float y, float w, float h);
+    void draw_text_overlay(const QString &, float x, float y, float w, float h,
+                           bool bottom = false);
 };
 class Window final : public QMainWindow {
   public:
