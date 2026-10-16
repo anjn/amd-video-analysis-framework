@@ -1,0 +1,4 @@
+# One input file per line. Paths are relative to this list file.
+# These are the generated NVR test fixtures; replace them with your own MP4/MKV.
+../artifacts/nvr-model/bus1080.h264
+../artifacts/nvr-model/blank1080.h265

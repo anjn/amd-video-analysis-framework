@@ -219,6 +219,10 @@ video processing path.
 paths, alternating H.264/H.265. Use pre-encoded 1080p30 files with a starting
 keyframe and no B frames; the test server does not encode or decode video.
 
+For arbitrary MP4/MKV files and per-file camera URLs, use
+[`amdva-rtsp-files`](rtsp-files.md). It preserves file timing instead of assuming
+1080p30 and accepts a text file list or positional paths.
+
 For a 20-source configuration with the first 16 selected:
 
 ```bash

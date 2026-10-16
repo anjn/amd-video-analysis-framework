@@ -1,0 +1,172 @@
+{
+  "schema": 1,
+  "validated_at": "2026-10-16T14:20:23.027509+09:00",
+  "base_commit": "f08674ec84755f8d108c3b1682beeb0abcf0a0ee",
+  "working_tree_changes": true,
+  "scope": "Bounded encoded file-to-RTSP passthrough correctness. H264/H265 MP4/MKV/raw inputs, fixed and variable FPS, repeated file paths, multiple clients, transport, reconnect, CLI and shutdown. Short functional runs do not establish long-term memory/FD stability or channel capacity.",
+  "standard_hardware_clients": {
+    "vfr_intervals_30fps_ticks": [
+      1,
+      2
+    ],
+    "passed": true,
+    "hardware_decode": true,
+    "clients": [
+      {
+        "route": 0,
+        "transport": "tcp",
+        "frames": 299,
+        "fps_expected": 25,
+        "fps_measured": 25.0,
+        "media_span_s": 11.92
+      },
+      {
+        "route": 1,
+        "transport": "tcp",
+        "frames": 358,
+        "fps_expected": 29.97002997002997,
+        "fps_measured": 29.965194489872925,
+        "media_span_s": 11.913822222
+      },
+      {
+        "route": 2,
+        "transport": "udp",
+        "frames": 288,
+        "fps_expected": 24,
+        "fps_measured": 24.01874987639131,
+        "media_span_s": 11.94899824
+      },
+      {
+        "route": 3,
+        "transport": "tcp",
+        "frames": 148,
+        "fps_expected": 25,
+        "fps_measured": 25.0,
+        "media_span_s": 5.88
+      },
+      {
+        "route": 0,
+        "transport": "tcp",
+        "frames": 299,
+        "fps_expected": 25,
+        "fps_measured": 25.0,
+        "media_span_s": 11.92
+      },
+      {
+        "route": 4,
+        "transport": "tcp",
+        "frames": 256,
+        "fps_expected": 21.774193548387096,
+        "fps_measured": 21.54929577343384,
+        "media_span_s": 11.833333334
+      }
+    ],
+    "reconnected": true,
+    "port_conflict_rejected": true,
+    "invalid_inputs_rejected": true,
+    "peak_server_rss_kib": 35208,
+    "peak_server_fds": 54
+  },
+  "standard_hardware_log": "artifacts/rtsp-files-standard-validation",
+  "standalone_encoded_clients": {
+    "passed": true,
+    "hardware_decode": false,
+    "clients": [
+      {
+        "route": 0,
+        "transport": "tcp",
+        "frames": 299,
+        "fps_expected": 25,
+        "fps_measured": 24.916676539147225,
+        "media_span_s": 11.959861482
+      },
+      {
+        "route": 1,
+        "transport": "tcp",
+        "frames": 360,
+        "fps_expected": 29.97002997002997,
+        "fps_measured": 29.96455446444901,
+        "media_span_s": 11.980822222
+      },
+      {
+        "route": 2,
+        "transport": "udp",
+        "frames": 288,
+        "fps_expected": 24,
+        "fps_measured": 24.01666078436301,
+        "media_span_s": 11.950037625
+      },
+      {
+        "route": 3,
+        "transport": "tcp",
+        "frames": 150,
+        "fps_expected": 25,
+        "fps_measured": 25.0,
+        "media_span_s": 5.96
+      },
+      {
+        "route": 0,
+        "transport": "tcp",
+        "frames": 300,
+        "fps_expected": 25,
+        "fps_measured": 24.999999999999996,
+        "media_span_s": 11.96
+      }
+    ],
+    "reconnected": true,
+    "port_conflict_rejected": true,
+    "invalid_inputs_rejected": true,
+    "peak_server_rss_kib": 32300,
+    "peak_server_fds": 46
+  },
+  "standalone_encoded_log": "artifacts/rtsp-files-validation-encoded",
+  "standalone_ctest": {
+    "tests": 3,
+    "failures": 0,
+    "duration_s": 0.01,
+    "log": "artifacts/rtsp-files-only-ctest.log"
+  },
+  "standard_ctest": {
+    "tests": 3,
+    "failures": 0,
+    "duration_s": 0.01,
+    "log": "artifacts/rtsp-files-standard-ctest.log"
+  },
+  "supplied_example": {
+    "passed": true,
+    "routes": 2,
+    "hardware_decoded_frames_per_route": 90,
+    "raw_codecs": [
+      "H264",
+      "H265"
+    ],
+    "prefix": "/files"
+  },
+  "supplied_example_log": "artifacts/rtsp-files-example-validation.log",
+  "runtime_dependencies": {
+    "qt": false,
+    "amd_gpu_runtime": false,
+    "linkage_log": "artifacts/rtsp-files-linkage.log"
+  },
+  "notes": [
+    "Hardware clients use VA decoders with VAMemory; the RTSP server itself never decodes or encodes.",
+    "Encoded-only clients verify the Qt/GPU-free standalone executable.",
+    "MP4 fixture includes AAC audio, which is discarded. UTF8 BOM, CRLF, blank/comment lines and paths with spaces are exercised.",
+    "A 12-second run with six hardware clients crossed multiple two-second file loops; one URL shared two clients and another client disconnected/reconnected.",
+    "Variable frame intervals of 1/30 and 2/30 seconds remained distinct. Loop spans cover DTS as well as PTS; source edit/reorder padding may hold the last image briefly.",
+    "The isomp4 plugin was enabled and built locally; only the new plugin was installed, without overwriting libraries used by existing applications."
+  ],
+  "sources_sha256": {
+    "CMakeLists.txt": "b3b20049e87ec202502bfce35fdbd30d01edf1583322d383a0b4e27405994ffe",
+    "src/rtsp_files/CMakeLists.txt": "b0fcef5e175b0198480e244d48aa8f38e55d2aac54f8fe460f89b205baf8a583",
+    "src/rtsp_files/main.cpp": "ca62f12493ef2fbecd69f7b36399c289fe1aa0dea458a1941ca0025d107895b1",
+    "scripts/bootstrap.py": "934444e6e4c90b85d79a7f45819a12d9fbbd9e1a0af3c20820bf9320774cfd72",
+    "tools/rtsp_files_validate.py": "7eac46c052d519b22bbaf9ca13c88523cfadd98b9133ac8f4ebfdd24169ff830",
+    "examples/rtsp-files.txt": "155ef0b9472fd1362fc5ffa15a836d9f275dd46609bff141551080daf1c17911"
+  },
+  "runtime_sha256": {
+    "build/src/rtsp_files/amdva-rtsp-files": "76a1a73ad02a4637c0b250b540b2cc7d917c3e8f880fc6ece67e344bfcf713de",
+    "artifacts/rtsp-files-only/amdva-rtsp-files": "49c58ddc24435e442f685b701c08ce273ef1caa162c84e4299e10011517649de",
+    ".deps/prefix/lib/gstreamer-1.0/libgstisomp4.so": "da6a15befd9d3a50ad471421753d067b31536707761345d64155fc6629ce615c"
+  }
+}

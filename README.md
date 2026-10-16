@@ -118,3 +118,6 @@ standalone HTML preview of CPU, GPU and DRAM monitoring, with simulated readings
 and a 1080p video composition. The [native RTSP sample](docs/resource-dashboard.md)
 collects real metrics and serves the composition through GPU rendering and
 hardware H.264 encoding.
+
+For video files as repeatable RTSP camera inputs, see the
+[file-to-RTSP tool](docs/rtsp-files.md).

@@ -103,7 +103,7 @@ def main():
         "gstreamer": ["-Dtests=disabled", "-Dexamples=disabled", "-Dintrospection=disabled", "-Ddoc=disabled", "-Dbenchmarks=disabled", "-Dcheck=disabled", "-Dlibdw=disabled", "-Dlibunwind=disabled", "-Dptp-helper=disabled"],
         "gst-plugins-base": ["-Dauto_features=disabled", "-Dapp=enabled", "-Dvideoconvertscale=enabled", "-Dvideotestsrc=enabled", "-Dtypefind=enabled", "-Dplayback=enabled", "-Dgio=enabled", "-Dtcp=enabled"],
         "gst-plugins-bad": ["-Dauto_features=disabled", "-Dva=enabled", "-Dvideoparsers=enabled"],
-        "gst-plugins-good": ["-Dauto_features=disabled", "-Dmultifile=enabled", "-Drtp=enabled", "-Drtpmanager=enabled", "-Drtsp=enabled", "-Dudp=enabled", "-Dmatroska=enabled"],
+        "gst-plugins-good": ["-Dauto_features=disabled", "-Dmultifile=enabled", "-Drtp=enabled", "-Drtpmanager=enabled", "-Drtsp=enabled", "-Dudp=enabled", "-Dmatroska=enabled", "-Disomp4=enabled"],
     }
     variants["gst-rtsp-server"] = ["-Dauto_features=disabled", "-Dtests=disabled", "-Dexamples=disabled", "-Dintrospection=disabled"]
     for name, options in variants.items():
