@@ -2,6 +2,7 @@
 #include "timeline.hpp"
 #include "window.hpp"
 #include <QApplication>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
 #include <QFile>
@@ -62,6 +63,9 @@ int main(int argc, char **argv) {
         auto *popup = window.thumbnail_popup();
         auto *retention = window.findChild<QSpinBox *>("recording-retention");
         check(tabs && timeline && popup && retention, "Missing management UI");
+        auto *clock_toggle = window.findChild<QCheckBox *>("playback-show-time");
+        check(clock_toggle && clock_toggle->isChecked(),
+              "Playback clock is not enabled by default");
         auto button = [&](const char *name) {
             auto *b = window.findChild<QPushButton *>(name);
             check(b, "Missing button");
@@ -226,20 +230,35 @@ int main(int argc, char **argv) {
                 }
                 if (seconds > 14 && !played) {
                     check(window.timeline_status().frames > 0, "Initial paused preview absent");
+                    check(window.recording_view()->displayed_playback_time() ==
+                              window.timeline_status().position_ms,
+                          "Playback clock does not match paused frame");
                     click_view();
                     played = true;
                 }
                 if (seconds > 15 && !paused) {
                     check(window.timeline_status().state == "playing", "Image click did not play");
+                    clock_toggle->setChecked(false);
                     click_view();
                     paused = true;
                 }
                 if (seconds > 16 && !resumed) {
                     check(window.timeline_status().state == "paused", "Image click did not pause");
+                    check(window.recording_view()->displayed_playback_time() == 0,
+                          "Playback clock did not turn off");
+                    QFile preferences(QString::fromStdString(std::string(argv[1]) + ".ui.json"));
+                    check(preferences.open(QIODevice::ReadOnly), "Missing UI preferences");
+                    check(!QJsonDocument::fromJson(preferences.readAll())
+                               .object()["show_playback_time"]
+                               .toBool(true),
+                          "Playback clock toggle not persisted");
+                    clock_toggle->setChecked(true);
                     click_view();
                     resumed = true;
                 }
                 if (seconds > 17 && !benchmark) {
+                    check(window.recording_view()->displayed_playback_time() > 0,
+                          "Playback clock did not turn on");
                     benchmark = true;
                     waiting = true;
                     next();
@@ -300,6 +319,7 @@ int main(int argc, char **argv) {
                                        {"expiry", expired},
                                        {"cancel_release_gate", cancel_verified},
                                        {"click_toggle", resumed},
+                                       {"playback_clock_toggle", resumed},
                                        {"active_files_preserved", true}};
                     QFile file(
                         QString::fromStdString(std::string(argv[1]) + "-management-results.json"));

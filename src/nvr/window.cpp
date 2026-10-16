@@ -1,6 +1,7 @@
 #include "window.hpp"
 #include "amdva/overlay.hpp"
 #include <QApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -204,8 +205,8 @@ void Tiles::initializeGL() {
         box_program_ = program(
             gl_,
             "#version 300 es\nlayout(location=0) in vec2 p;void main(){gl_Position=vec4(p,0,1);}",
-            "#version 300 es\nprecision mediump float;out vec4 color;void "
-            "main(){color=vec4(0.1,1.0,0.2,1.0);}");
+            "#version 300 es\nprecision mediump float;uniform vec4 pen;out vec4 color;void "
+            "main(){color=pen;}");
         gl_->glGenBuffers(1, &buffer_);
     } catch (const std::exception &e) {
         error_ = e.what();
@@ -235,7 +236,48 @@ void Tiles::release_current(unsigned slot) {
     s.preview[old].state = 3;
     current_[slot] = -1;
 }
+void Tiles::draw_playback_time(int64_t ms, float x, float y, float w, float h) {
+    // Draw glyph geometry directly on the GPU: no CPU pixel maps or glyph textures.
+    const auto text = QDateTime::fromMSecsSinceEpoch(ms).toString("yyyy-MM-dd HH:mm:ss");
+    static const char *digits[] = {"111101101101111", "010110010010111", "111001111100111",
+                                   "111001111001111", "101101111001001", "111100111001111",
+                                   "111100111101111", "111001010010010", "111101111101111",
+                                   "111101111001111"};
+    const float pixel =
+        std::min({4.f, float(width()) * w / (2 * (text.size() * 4 + 4)), float(height()) * h / 18});
+    const float dx = 2 * pixel / width(), dy = 2 * pixel / height();
+    const float left = x + 2 * dx, top = y - 2 * dy;
+    std::vector<float> points;
+    for (int c = 0; c < text.size(); ++c) {
+        const auto ch = text[c];
+        const char *glyph = ch >= '0' && ch <= '9' ? digits[ch.unicode() - '0']
+                            : ch == ':'            ? "000010000010000"
+                            : ch == '-'            ? "000000111000000"
+                                                   : nullptr;
+        if (!glyph)
+            continue;
+        for (int i = 0; i < 15; ++i)
+            if (glyph[i] == '1') {
+                const float a = left + (c * 4 + i % 3) * dx, b = top - (i / 3) * dy;
+                const float quad[] = {a, b,      a + dx, b, a,      b - dy,
+                                      a, b - dy, a + dx, b, a + dx, b - dy};
+                points.insert(points.end(), std::begin(quad), std::end(quad));
+            }
+    }
+    gl_->glUseProgram(box_program_);
+    const auto pen = gl_->glGetUniformLocation(box_program_, "pen");
+    gl_->glUniform4f(pen, .02f, .025f, .035f, 1);
+    const float right = left + (text.size() * 4) * dx, bottom = top - 6 * dy;
+    const float background[] = {left - dx, top + dy, right, top + dy,
+                                left - dx, bottom,   right, bottom};
+    vertices(background, 4, 2);
+    gl_->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    gl_->glUniform4f(pen, 1, 1, 1, 1);
+    vertices(points.data(), points.size() / 2, 2);
+    gl_->glDrawArrays(GL_TRIANGLES, 0, points.size() / 2);
+}
 void Tiles::paintGL() {
+    displayed_playback_time_ = 0;
     if (!playback_)
         controller_.presentation_active(isExposed() && visibility() != QWindow::Minimized);
     for (const auto &pending : pending_swap_)
@@ -355,6 +397,7 @@ void Tiles::paintGL() {
         if (Clock::now() - s.detected_at <= std::chrono::milliseconds(500) &&
             p.original_width == s.detection_width && p.original_height == s.detection_height) {
             gl_->glUseProgram(box_program_);
+            gl_->glUniform4f(gl_->glGetUniformLocation(box_program_, "pen"), .1f, 1.f, .2f, 1.f);
             OverlayFrame overlay{s.detection_width, s.detection_height, {}, {}};
             if (!s.tracked.empty())
                 for (const auto &tracked : s.tracked)
@@ -375,6 +418,10 @@ void Tiles::paintGL() {
                 vertices(points.data(), points.size() / 2, 2);
                 gl_->glDrawArrays(GL_LINES, 0, points.size() / 2);
             }
+        }
+        if (playback_ && playback_time_visible_ && p.wall_time_ms) {
+            draw_playback_time(p.wall_time_ms, x, y, w, h);
+            displayed_playback_time_ = p.wall_time_ms;
         }
     }
     gl_->glFlush();

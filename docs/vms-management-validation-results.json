@@ -187,5 +187,62 @@
       "build/src/nvr/amdva-nvr": "81b0fa9485a6e890e43638cd8aa8643432ec0d75fb00b8589991d20660205f3a",
       "build/src/nvr/amdva-vms-management-validate": "4240c1a37cedc385c019e81dd95193ecc534287e8587a8cd90e393f17352c884"
     }
+  },
+  "playback_clock_followup": {
+    "validated_at": "2026-10-16T12:04:20.606109+09:00",
+    "base_commit": "1d542aa",
+    "changes": [
+      "Per-frame receiver-based playback datetime carried by Plane.wall_time_ms.",
+      "GPU geometry draws local yyyy-MM-dd HH:mm:ss at upper left of the recording image.",
+      "Show playback time checkbox defaults on and persists in the UI sidecar."
+    ],
+    "gui": {
+      "active_files_preserved": true,
+      "audit_errors": 0,
+      "cancel_release_gate": true,
+      "click_toggle": true,
+      "deleted": 5,
+      "expiry": true,
+      "max_ms": 287.850268,
+      "p50_ms": 95.881147,
+      "p95_ms": 224.108213,
+      "playback_clock_toggle": true,
+      "popup_movement_checks": 90,
+      "retained_loading_checks": 99,
+      "samples": 100,
+      "passed": true
+    },
+    "scenarios": [
+      "default on",
+      "paused displayed timestamp equals actual frame position",
+      "toggle off clears rendered timestamp",
+      "off preference saved",
+      "toggle on restores timestamp",
+      "existing playback, seek preview, retention and delete-all regression",
+      "zero CPU image/readback/upload audit violations"
+    ],
+    "gui_log": "artifacts/vms-playback-clock-gui",
+    "ctest": {
+      "tests": 23,
+      "failures": 0,
+      "duration_s": 33.85,
+      "log": "artifacts/vms-playback-clock-ctest.log"
+    },
+    "standard_build_log": "artifacts/vms-playback-clock-standard-build.log",
+    "sources_sha256": {
+      "include/amdva/streaming/controller.hpp": "d38de4fc73f972324136aba203145933927532251889ab6ed171454a878034b7",
+      "src/streaming/playback.cpp": "2b648ce6b7510240b92d11dd510ef016714c67cf164d193ca2add0741b637648",
+      "src/streaming/preview.cpp": "2744ac884339abe066e9a5352e738569e54757d5cfd1130fc9f26843262fb9b6",
+      "src/nvr/window.cpp": "03d4ded05d81d12069c1fb35698417aa265d0d2bf7b7496ad3b43b6b31adcae4",
+      "src/nvr/window.hpp": "3fcc782dcb449f83d65bb596aba84c84c40cd4dbd4da53cae8f7b601822d9a87",
+      "src/nvr/vms.cpp": "b15f39ce5ae71c8fcbb2777dec2e73e366e3d4e937d74c6a8433bd2d69f6a9ed",
+      "tools/vms_management_validate.cpp": "db1c1f8c80ff61ba488c63ae05c0abcfaa4eefa004f3f8e61ce3aacaddb74c4d"
+    },
+    "runtime_sha256": {
+      "artifacts/vms-management-build/src/nvr/amdva-vms-management-validate": "1d7fdba9d5173c3c1b09761a5c0f5433b974a853ca54928078f017580283cd59",
+      "artifacts/vms-management-build/src/streaming/libamdva_streaming.so": "df876ea079482becd03b9c994a80f041afadfdd21d98b715b5979a04fef439c8",
+      "build/src/nvr/amdva-nvr": "89f584d87345eb37b594ecc4ff1ae9ec6daa7e3ff5b6b19a259102d0dcf20aea",
+      "build/src/streaming/libamdva_streaming.so": "499ad67d1417b5fd3272c1c24d633dcb1fe5668963987cb849e3ed6ac8e5cfa5"
+    }
   }
 }

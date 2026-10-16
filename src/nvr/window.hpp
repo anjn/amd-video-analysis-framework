@@ -23,6 +23,11 @@ class Tiles final : public QOpenGLWindow {
     ~Tiles() override;
     std::string error() const { return error_; }
     uint64_t presented() const { return presented_; }
+    void playback_time_visible(bool enabled) {
+        playback_time_visible_ = enabled;
+        update();
+    }
+    int64_t displayed_playback_time() const { return displayed_playback_time_; }
 
   protected:
     void initializeGL() override;
@@ -46,6 +51,8 @@ class Tiles final : public QOpenGLWindow {
     unsigned cell_count_{};
     int focus_{-1};
     unsigned selected_{};
+    bool playback_time_visible_{true};
+    int64_t displayed_playback_time_{};
     unsigned picked(const QPointF &) const;
     std::array<std::array<Texture, 3>, 16> textures_{};
     std::array<int, 16> current_{};
@@ -66,6 +73,7 @@ class Tiles final : public QOpenGLWindow {
     void observe_visibility();
     void vertices(const float *data, unsigned count, unsigned stride);
     void release_current(unsigned slot);
+    void draw_playback_time(int64_t ms, float x, float y, float w, float h);
 };
 class Window final : public QMainWindow {
   public:

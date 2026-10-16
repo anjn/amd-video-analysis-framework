@@ -240,6 +240,12 @@ struct PlaybackSession::Impl {
                 if (sample) {
                     if (!held)
                         held = Sample(sample, [](auto *p) { gst_sample_unref(p); });
+                    const auto pts = GST_BUFFER_PTS(gst_sample_get_buffer(sample));
+                    const auto *segment = gst_sample_get_segment(sample);
+                    const auto frame_position =
+                        segment && GST_CLOCK_TIME_IS_VALID(pts)
+                            ? gst_segment_to_stream_time(segment, GST_FORMAT_TIME, pts)
+                            : GST_CLOCK_TIME_NONE;
                     bool rendered = false;
                     if (capture) {
                         capture(sample);
@@ -253,17 +259,15 @@ struct PlaybackSession::Impl {
                             (!external || out.generation == output_generation)) {
                             prepare_preview(display.get(), out, *it, sample, out.generation,
                                             ++out.sequence);
+                            it->wall_time_ms =
+                                GST_CLOCK_TIME_IS_VALID(frame_position)
+                                    ? file->recording().started_ms + frame_position / GST_MSECOND
+                                    : 0;
                             it->time = Clock::now();
                             it->state = 1;
                             rendered = true;
                         }
                     }
-                    const auto pts = GST_BUFFER_PTS(gst_sample_get_buffer(sample));
-                    const auto *segment = gst_sample_get_segment(sample);
-                    const auto frame_position =
-                        segment && GST_CLOCK_TIME_IS_VALID(pts)
-                            ? gst_segment_to_stream_time(segment, GST_FORMAT_TIME, pts)
-                            : GST_CLOCK_TIME_NONE;
                     if (rendered) {
                         held.reset();
                         preroll = false;

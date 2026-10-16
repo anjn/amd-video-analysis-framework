@@ -43,6 +43,7 @@ void prepare_preview(GstVaDisplay *display, Slot &s, Plane &out, GstSample *samp
     s.preview_va->scale(surface, out.surface, info.width, info.height, out.width, out.height);
     out.original_width = info.width;
     out.original_height = info.height;
+    out.wall_time_ms = 0;
     out.generation = generation;
     out.sequence = sequence;
 }

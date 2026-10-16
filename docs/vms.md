@@ -83,6 +83,15 @@ applies. Stop clears the image and preserves the selected time. Clicking the
 recording image toggles play/pause; clicking a waiting image pauses tail
 following, and clicking after Stop plays from the selected time.
 
+The recording image shows its local playback datetime (`yyyy-MM-dd HH:mm:ss`)
+in the upper left. **Show playback time** toggles this overlay and defaults to
+on; its value is saved in `<config>.ui.json`. The timestamp travels with the
+displayed decoded frame, so pausing and seeking show that image's time rather
+than the current system time or a timer estimate. Text is drawn as GPU geometry
+without mapping video pixels or uploading glyph images. The seek-preview popup
+remains image-only. The frame timestamp is available as `Plane::wall_time_ms`;
+SDK consumers must rebuild after this public structure change.
+
 Hovering or dragging the timeline also opens a small GPU preview above it,
 without changing main playback until the seek is committed. A single worker
 coalesces requests for 75ms and seeks to a key unit at or before the requested

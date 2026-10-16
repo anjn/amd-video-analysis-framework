@@ -4,6 +4,7 @@
 #include "window.hpp"
 #include <QAbstractItemView>
 #include <QApplication>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDateTime>
 #include <QDialog>
@@ -68,6 +69,7 @@ struct Window::Vms {
     unsigned count{4}, selected{};
     int focus{-1};
     bool ui_ready{}, dirty{}, query_pending{true};
+    bool show_playback_time{true};
     uint64_t revision{};
     int64_t cursor_ms{};
     bool camera_changed{true}, camera_playing{};
@@ -111,6 +113,7 @@ struct Window::Vms {
         if (f.open(QIODevice::ReadOnly)) {
             auto document = QJsonDocument::fromJson(f.readAll());
             auto obj = document.object();
+            show_playback_time = obj["show_playback_time"].toBool(true);
             unsigned n = obj["layout"].toInt(4);
             if (n == 1 || n == 4 || n == 9 || n == 16)
                 count = n;
@@ -142,9 +145,11 @@ struct Window::Vms {
         if (!f.open(QIODevice::WriteOnly) ||
             !f.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner))
             throw std::runtime_error("Cannot save view configuration");
-        auto data =
-            QJsonDocument(QJsonObject{{"version", 1}, {"layout", int(count)}, {"cells", array}})
-                .toJson();
+        auto data = QJsonDocument(QJsonObject{{"version", 1},
+                                              {"layout", int(count)},
+                                              {"cells", array},
+                                              {"show_playback_time", show_playback_time}})
+                        .toJson();
         if (f.write(data) != data.size() || !f.commit())
             throw std::runtime_error("Cannot save view configuration");
         dirty = false;
@@ -361,6 +366,16 @@ struct Window::Vms {
         play_status->setObjectName("playback-status");
         for (auto *button : {play, pause, stop})
             controls->addWidget(button);
+        auto *time_toggle = new QCheckBox("Show playback time");
+        time_toggle->setObjectName("playback-show-time");
+        time_toggle->setChecked(show_playback_time);
+        play_tiles->playback_time_visible(show_playback_time);
+        QObject::connect(time_toggle, &QCheckBox::toggled, &w, [this](bool checked) {
+            show_playback_time = checked;
+            dirty = true;
+            play_tiles->playback_time_visible(checked);
+        });
+        controls->addWidget(time_toggle);
         controls->addWidget(play_position, 1);
         rl->addLayout(controls);
         rl->addWidget(play_status);

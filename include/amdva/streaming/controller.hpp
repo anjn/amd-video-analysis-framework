@@ -69,6 +69,7 @@ struct Plane {
     int state{};
     unsigned width{}, height{}, original_width{}, original_height{};
     uint64_t generation{}, sequence{};
+    int64_t wall_time_ms{}; // Receiver-based recording datetime for this playback frame.
     Clock::time_point time;
 };
 struct Slot {
