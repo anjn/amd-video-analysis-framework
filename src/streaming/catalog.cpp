@@ -1,5 +1,6 @@
 #include "amdva/streaming/catalog.hpp"
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <fcntl.h>
 #include <gst/gst.h>
@@ -183,12 +184,85 @@ bool Catalog::enforce(uint64_t quota, uint64_t reserve) {
         Statement s(db_, "DELETE FROM recordings WHERE name=?1 AND active=0");
         s.text(1, item.first);
         s.done();
+        ++deletion_generation_;
         total = total > item.second ? total - item.second : 0;
         free = std::filesystem::space(root_).available;
         if (total <= quota && free >= reserve)
             return true;
     }
     return false;
+}
+
+DeletionJob Catalog::begin_delete(std::optional<int64_t> cutoff) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    Statement q(db_, "SELECT name FROM recordings WHERE active=0 AND "
+                     "(?1=0 OR (duration_ns>=0 AND COALESCE(media_started_ms,created)+"
+                     "(duration_ns+999999)/1000000<=?2)) ORDER BY created,name");
+    sqlite3_bind_int(q.p, 1, cutoff.has_value());
+    sqlite3_bind_int64(q.p, 2, cutoff.value_or(0));
+    DeletionJob job;
+    int result;
+    while ((result = sqlite3_step(q.p)) == SQLITE_ROW)
+        job.pending.emplace_back(reinterpret_cast<const char *>(sqlite3_column_text(q.p, 0)));
+    if (result != SQLITE_DONE)
+        throw std::runtime_error(sqlite3_errmsg(db_));
+    job.total = job.pending.size();
+    return job;
+}
+void Catalog::delete_batch(DeletionJob &job) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(10);
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    playing_.erase(
+        std::remove_if(playing_.begin(), playing_.end(), [](auto &p) { return p.expired(); }),
+        playing_.end());
+    unsigned count = 0;
+    while (!job.pending.empty() && count++ < 32 && std::chrono::steady_clock::now() < deadline) {
+        auto name = std::move(job.pending.front());
+        job.pending.pop_front();
+        job.processed++;
+        bool pinned = false;
+        for (auto &weak : playing_)
+            if (auto file = weak.lock())
+                pinned |= file->recording().name == name;
+        if (pinned) {
+            job.protected_files++;
+            continue;
+        }
+        try {
+            Statement q(db_, "SELECT active FROM recordings WHERE name=?1");
+            q.text(1, name);
+            const auto result = sqlite3_step(q.p);
+            if (result == SQLITE_DONE)
+                continue;
+            if (result != SQLITE_ROW)
+                throw std::runtime_error(sqlite3_errmsg(db_));
+            if (sqlite3_column_int(q.p, 0)) {
+                job.protected_files++;
+                continue;
+            }
+            struct stat st {};
+            bool exists = fstatat(directory_, name.c_str(), &st, AT_SYMLINK_NOFOLLOW) == 0;
+            if (!safe(name) || (exists && !S_ISREG(st.st_mode)) || (!exists && errno != ENOENT)) {
+                job.failed++;
+                continue;
+            }
+            if (exists && unlinkat(directory_, name.c_str(), 0) != 0 && errno != ENOENT) {
+                job.failed++;
+                continue;
+            }
+            ++deletion_generation_;
+            Statement remove(db_, "DELETE FROM recordings WHERE name=?1 AND active=0");
+            remove.text(1, name);
+            remove.done();
+            duration_attempted_.erase(name);
+            if (exists) {
+                job.deleted++;
+                job.bytes += uint64_t(st.st_size);
+            }
+        } catch (...) {
+            job.failed++;
+        }
+    }
 }
 
 RecordingFile::~RecordingFile() {

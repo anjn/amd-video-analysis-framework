@@ -10,6 +10,7 @@
 #include <QOpenGLWindow>
 #include <QTableWidget>
 namespace amdva::nvr {
+class ThumbnailPopup;
 class Tiles final : public QOpenGLWindow {
   public:
     explicit Tiles(Controller &controller, Slot *playback = nullptr);
@@ -71,6 +72,8 @@ class Window final : public QMainWindow {
     Window(Controller &controller, Options options, std::string config);
     ~Window() override;
     TimelinePlaybackStatus timeline_status() const;
+    KeyframePreviewStatus keyframe_preview_status() const;
+    ThumbnailPopup *thumbnail_popup() const;
     Tiles *live_view() const { return tiles_; }
     Tiles *recording_view() const;
 
@@ -85,7 +88,7 @@ class Window final : public QMainWindow {
     struct Vms;
     std::unique_ptr<Vms> vms_;
     void refresh();
-    void persist();
+    void persist(bool force = false);
 };
 void install_shutdown_signals(QCoreApplication &app);
 } // namespace amdva::nvr

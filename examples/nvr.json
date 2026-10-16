@@ -7,6 +7,7 @@
   "background_ai_enabled": true,
   "background_ai_interval_seconds": 5,
   "segment_seconds": 60,
+  "retention_minutes": 60,
   "quota_gib": 100,
   "reserve_gib": 1,
   "sources": [

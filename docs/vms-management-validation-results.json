@@ -1,0 +1,191 @@
+{
+  "schema": 1,
+  "validated_at": "2026-10-16T11:32:52.857956+09:00",
+  "base_commit": "a59da94b1816ade56db524722ffe0ca4fa84c666",
+  "working_tree_changes": true,
+  "hardware": {
+    "cpu": "AMD Ryzen AI 9 HX 370",
+    "gpu": "AMD Radeon 890M",
+    "gpu_arch": "gfx1150",
+    "kernel": "6.17.0-1032-oem"
+  },
+  "scope": "Recording management and GPU seek-preview correctness. Two live 1080p RTSP sources with AI and ten-second recording fragments; existing resource-dashboard process remained running. Does not establish 16-live-plus-three-extra decoder capacity or long-term stability.",
+  "standard_ctest": {
+    "tests": 26,
+    "failures": 0,
+    "duration_s": 45.9,
+    "passed": true,
+    "log": "artifacts/vms-management-standard-ctest.log"
+  },
+  "isolated_ctest": {
+    "tests": 23,
+    "failures": 0,
+    "duration_s": 34.19,
+    "passed": true,
+    "log": "artifacts/vms-management-ctest-final.log"
+  },
+  "hardware_keyframes": {
+    "samples": 100,
+    "p50_ms": 87.5283,
+    "p95_ms": 88.7968,
+    "max_ms": 103.525,
+    "cached_ms": 0.074879,
+    "audit_errors": 0,
+    "passed": true,
+    "fixture": "100 distinct two-second 640x360 30fps Matroska files alternating H264/H265, two-second GOP, B-frames=2",
+    "scenarios": [
+      "100 cold requests",
+      "key unit at/before target",
+      "maximum 320x180 GPU image",
+      "LRU bounded at 32",
+      "cache hit",
+      "gap",
+      "corrupt container fails with diagnostic",
+      "latest request/cancel/reuse",
+      "deletion generation invalidation",
+      "input handles released before delete-all"
+    ],
+    "log": "artifacts/vms-management-preview-long-corrupt.log"
+  },
+  "standard_gui": {
+    "active_files_preserved": true,
+    "audit_errors": 0,
+    "cancel_release_gate": true,
+    "click_toggle": true,
+    "deleted": 5,
+    "expiry": true,
+    "max_ms": 288.061615,
+    "p50_ms": 95.883263,
+    "p95_ms": 191.908862,
+    "samples": 100,
+    "passed": true,
+    "log": "artifacts/vms-management-standard-gui",
+    "measurement": "100 synthetic timeline mouse moves to native GPU popup frameSwapped; includes cache hits and misses, compositor scheduling and 75ms request coalescing. This is not a photon/panel latency measurement.",
+    "scenarios": [
+      "retention apply and persistence",
+      "expired file pinned then removed after release",
+      "recent file preserved",
+      "manual deletion release gate and cancellation",
+      "image click play/pause/resume",
+      "100 on-screen hover previews",
+      "confirmed delete-all stops and releases playback/preview",
+      "five closed files deleted; active fragments retained",
+      "live receive/decode/AI continue",
+      "GPU copy audit including GL CPU uploads/readback"
+    ]
+  },
+  "sdk": {
+    "passed": true,
+    "qt_dependency_in_streaming_library": false,
+    "result": "320x180, frame 1792117762822 ms, 101.282 ms",
+    "logs": [
+      "artifacts/vms-management-sdk-build.log",
+      "artifacts/vms-management-sdk-preview.log",
+      "artifacts/vms-management-sdk-linkage.log"
+    ]
+  },
+  "sources_sha256": {
+    "examples/sdk/CMakeLists.txt": "3b557aaa863cb97e0cbd04e1b9f68b5eedea0ebaec861db544949eea8228630c",
+    "examples/sdk/keyframe-preview.cpp": "03a129bb2efd11d386e58c755f6a516b63da57221a339696f0d4d378cf304171",
+    "include/amdva/streaming/catalog.hpp": "07306d3ef5850c3e03dd2e28237a2f839b3fb6c0634cbf747130b39602cee0ad",
+    "include/amdva/streaming/controller.hpp": "32f48daa0d1dfdc143e9a149a929e92a5f08a1f1b291665b97f24bf9c3cba422",
+    "include/amdva/streaming/playback.hpp": "3eb051f00992d042c1930fdcc4224c735759a152b9dc7d81153b2b6562d93f50",
+    "src/nvr/CMakeLists.txt": "9e771de138f07f22cc2f6bcc1ba5c4575125d764f4af0768b9f0a6a8ad41559e",
+    "src/nvr/thumbnail.cpp": "437d8c115467a4aba0df7d0b32ef1982caf1f92b5e5962e596a523b204a6d73f",
+    "src/nvr/thumbnail.hpp": "2694a6fcc380ee8dab3e2be26f5d99c635296fb952cd74df778b0b8790d76359",
+    "src/nvr/timeline.cpp": "9ed2fc44c55895f437427304512e5a0255a3602633ad3df52df13b1ae0e00080",
+    "src/nvr/timeline.hpp": "696659d8cfd03ee28416f6970f81ab34de60695df376a39d4169783a39061224",
+    "src/nvr/vms.cpp": "a3a7aafa8dedb7b4a5a57da8691305cc9661d506af08830082b469f183d0f089",
+    "src/nvr/window.hpp": "954f18f30e9465ff2f893e297656491e5e2bd28bbe90326a5bd6f14ede67b07e",
+    "src/streaming/CMakeLists.txt": "c8812631d93507bf05fdc34fef30da50624aef54de5a81086f118514d45eb723",
+    "src/streaming/catalog.cpp": "8cbe10c1c6f7260024d0c8dd2381fb5f637ed413565886958d03a266c8a84c48",
+    "src/streaming/config.cpp": "a7d79a55a871c0864328ec1edafb2417b37e2d9ff50a4e54f0052c83edd7b873",
+    "src/streaming/controller.cpp": "13acf41906c6baee64a2e0437703beb8ed9bd00bb72e324f65fe29e0ae81c290",
+    "src/streaming/playback.cpp": "5c5268d2f517a287f871c49c34146fe417d578adc36eea5683e5c9c4b57bbb11",
+    "tests/nvr_config_tests.cpp": "933e1e0fd974322a776a1c951cb8735c3e3009f3e6d864a4d83f9882c963e422",
+    "tests/recording_management_tests.cpp": "413f58b27e6950083157dd7ef8573ba38b706b6b45f9ec7f628a91d7ba5eacfa",
+    "tools/preview_validate.cpp": "7af26142f6002e453c6d4afeaf75548ae0d5a6d67e7ae56812f929b4f8d0c38c",
+    "tools/vms_management_validate.cpp": "ab34a083066c19e9c339e7ec47b08b42f16c88d2358e4b072ea8e0e88947040c",
+    "tools/vms_management_validate.py": "f8e558964687e2d2f081cd690b0b0b70f1606d5904f713218fdef17725ca1826"
+  },
+  "runtime_sha256": {
+    "build/src/nvr/amdva-nvr": "47f1ce40350f9c6113226e87438a1bc035e8276f407a38b22c4e1fbb82b8c609",
+    "build/src/nvr/amdva-vms-management-validate": "78d304bf166ae334c275823668bfa7da879106c99b50fa638a845f67fbb97142",
+    "build/src/streaming/libamdva_streaming.so": "bad0080e1221ac3a8064bdfe061906ee3cea64494746ef7eb458b83f5e6e326f",
+    "build/src/gst/libamdva_copy_audit.so": "e593840ee8e5227b1770601d66694c9439449839d8ead9157bf1b471948eaa29",
+    "artifacts/vms-management-build/src/streaming/amdva-preview-validate": "703c86a7d7faadac959cfbdf5f71f1db8ed75235b26893611e5af4ea2ea29afb",
+    "artifacts/vms-management-build/src/streaming/libamdva_streaming.so": "0f67ec188bfdd12411383bf533649c2053c4e55cb749f77059ae9d889c1cadfa",
+    "artifacts/vms-management-sdk/lib/libamdva_streaming.so": "0741ea04f7b8a57017219c0e14d10ac8cd87311a29270e4332db6895ebf6cc86",
+    "artifacts/vms-management-sdk-build/keyframe-preview": "597157de689cc18c9e04c2ff4a95a07fba3dbba2bad6a0c5aee6437ac6912a34"
+  },
+  "limitations": [
+    "Only this AMD/Wayland-EGL machine was tested.",
+    "Short functional runs do not establish long-term memory/FD stability.",
+    "300ms p95 is a response target, not a guarantee for arbitrary storage, codecs, GOPs or concurrent loads.",
+    "No software decode or CPU pixel fallback; unsupported recordings display an unavailable placeholder."
+  ],
+  "preview_retention_followup": {
+    "validated_at": "2026-10-16T11:40:19.539477+09:00",
+    "changes": [
+      "Retain last GPU image during loading in the same deletion generation; show actual image datetime and loading label.",
+      "Move popup immediately on mouse events using a native child surface, without hiding/remapping a Wayland tooltip.",
+      "Clear retained images on camera/tab/hover exit, non-loading unavailable results and deletion invalidation."
+    ],
+    "gui": {
+      "active_files_preserved": true,
+      "audit_errors": 0,
+      "cancel_release_gate": true,
+      "click_toggle": true,
+      "deleted": 5,
+      "expiry": true,
+      "max_ms": 288.132129,
+      "p50_ms": 95.971234,
+      "p95_ms": 224.126539,
+      "popup_movement_checks": 91,
+      "retained_loading_checks": 99,
+      "samples": 100,
+      "passed": true
+    },
+    "wayland_position_requests": 99,
+    "wayland_distinct_surface_positions": 87,
+    "log": "artifacts/vms-preview-retain-standard-gui",
+    "sources_sha256": {
+      "src/nvr/thumbnail.cpp": "01b97223bb27670c0c4ada32d2d056bbc7ed7d3aff87ab9b5f676629ee2f0543",
+      "src/nvr/thumbnail.hpp": "e65eea6ce44f62854aaf91054593f9d838001ee9e5f256650c119d625fb44c43",
+      "src/nvr/vms.cpp": "1c6dc387052a3a7813acb5c0654d4723752bd2abd2488ead06d67e66c03feabf",
+      "tools/vms_management_validate.cpp": "02518d287c3115ec29e77d3fb54a4cf66249e8636c392306e4b73538b5f6db07"
+    },
+    "runtime_sha256": {
+      "build/src/nvr/amdva-nvr": "352f03601765dc2f96c289ee00793c8854d418cacaac28f3e8cce5f5c3421bb9",
+      "build/src/nvr/amdva-vms-management-validate": "fb6f0cc352d7ee7b0a43c4c7ce694db31c35e82174b394a8982d10899055cbc9"
+    }
+  },
+  "image_only_popup_followup": {
+    "validated_at": "2026-10-16T11:49:20.014774+09:00",
+    "changes": [
+      "Removed all popup captions and the 24px caption area; popup is image-only at 320x180.",
+      "Retain last image while loading; hide until first image and on missing/unavailable results."
+    ],
+    "gui": {
+      "active_files_preserved": true,
+      "audit_errors": 0,
+      "cancel_release_gate": true,
+      "click_toggle": true,
+      "deleted": 5,
+      "expiry": true,
+      "max_ms": 288.191995,
+      "p50_ms": 95.850147,
+      "p95_ms": 224.207377,
+      "popup_movement_checks": 90,
+      "retained_loading_checks": 99,
+      "samples": 100,
+      "passed": true
+    },
+    "log": "artifacts/vms-preview-image-only-gui",
+    "sha256": {
+      "src/nvr/thumbnail.cpp": "33a7a205219f8b8346e7559d5d8b48e17d891b15e6177c55f69b39b7e6edd3d8",
+      "build/src/nvr/amdva-nvr": "81b0fa9485a6e890e43638cd8aa8643432ec0d75fb00b8589991d20660205f3a",
+      "build/src/nvr/amdva-vms-management-validate": "4240c1a37cedc385c019e81dd95193ecc534287e8587a8cd90e393f17352c884"
+    }
+  }
+}

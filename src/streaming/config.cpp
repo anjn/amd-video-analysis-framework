@@ -63,6 +63,10 @@ Options load_config(const std::string &path) {
         quota > 1000000 || reserve < 0 || reserve > 1000000)
         throw std::runtime_error("Invalid storage, segment or background interval");
     o.batch = unsigned(batch);
+    auto retention = number("retention_minutes", 60);
+    if (retention < 0 || retention > 2147483647 || retention != std::floor(retention))
+        throw std::runtime_error("Invalid retention_minutes");
+    o.retention_minutes = unsigned(retention);
     o.segment_seconds = unsigned(seconds);
     o.background_ai_interval_seconds = unsigned(interval);
     o.quota = uint64_t(quota * (1ull << 30));
@@ -188,6 +192,7 @@ void save_config(const std::string &path, const Options &o) {
     json_object_set_object_member(root, "telemetry", timing);
     json_object_set_int_member(root, "batch_size", o.batch);
     json_object_set_int_member(root, "segment_seconds", o.segment_seconds);
+    json_object_set_int_member(root, "retention_minutes", o.retention_minutes);
     json_object_set_boolean_member(root, "background_ai_enabled", o.background_ai_enabled);
     json_object_set_int_member(root, "background_ai_interval_seconds",
                                o.background_ai_interval_seconds);

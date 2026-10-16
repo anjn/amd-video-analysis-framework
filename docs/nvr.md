@@ -164,6 +164,12 @@ files can restore capacity, recording pauses and resumes at a keyframe when
 space becomes available. After an abrupt shutdown, previous active entries
 become deletion candidates; they are not claimed to be valid finalized MKVs.
 
+`retention_minutes` defaults to 60 and removes inactive files by their known
+end time; 0 disables time-based removal. Files spanning the cutoff or with
+unknown duration are excluded. Playback/extraction handles protect files until
+released. The [VMS recording controls](vms.md#camera-management-and-storage)
+provide retention editing and confirmed deletion of closed recordings.
+
 ## GPU ownership and scheduling
 
 Startup requires an observed increase of the dedicated VPE engine counter.

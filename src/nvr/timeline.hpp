@@ -13,6 +13,7 @@ class RecordingTimeline final : public QWidget {
     int64_t latest() const { return to_; }
     int64_t time_at(double x) const;
     std::function<void(int64_t)> seek_requested;
+    std::function<void(std::optional<int64_t>, QPoint)> preview_requested;
 
   protected:
     void paintEvent(QPaintEvent *) override;

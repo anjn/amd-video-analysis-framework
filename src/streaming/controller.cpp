@@ -779,7 +779,7 @@ Controller::Controller(Options options) : options_(std::move(options)) {
     if (options_.background_ai_interval_seconds < 1 ||
         options_.background_ai_interval_seconds > 3600)
         throw std::runtime_error("Invalid background AI interval");
-    if (!options_.segment_seconds || !options_.quota)
+    if (!options_.segment_seconds || !options_.quota || options_.retention_minutes > 2147483647u)
         throw std::runtime_error("Invalid recording limits");
     display_ = gst_va_display_drm_new_from_path("/dev/dri/renderD128");
     if (!display_)
@@ -885,6 +885,50 @@ void Controller::shutdown() {
     if (preview_.joinable())
         preview_.join();
     channels_.clear();
+}
+void Controller::retention_minutes(unsigned minutes) {
+    if (minutes > 2147483647u)
+        throw std::invalid_argument("Invalid retention_minutes");
+    command([this, minutes] {
+        options_.retention_minutes = minutes;
+        expired_delete_ = {};
+    });
+}
+void Controller::delete_closed_recordings(std::shared_future<void> released) {
+    command([this, released] {
+        if (deleting_)
+            return;
+        const auto operation = deletion_status_.operation + 1;
+        try {
+            manual_delete_ = catalog_->begin_delete();
+            deleting_ = true;
+            deletion_release_ = released;
+            std::lock_guard<std::mutex> lock(mutex_);
+            deletion_status_ = {};
+            deletion_status_.operation = operation;
+            deletion_status_.state = released.valid() ? "waiting" : "running";
+            deletion_status_.total = manual_delete_.total;
+        } catch (...) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            deletion_status_ = {};
+            deletion_status_.operation = operation;
+            deletion_status_.state = "error";
+            deletion_status_.failed = 1;
+        }
+    });
+}
+void Controller::cancel_recording_deletion() {
+    command([this] {
+        deleting_ = false;
+        manual_delete_.pending.clear();
+        deletion_release_ = {};
+        std::lock_guard<std::mutex> lock(mutex_);
+        deletion_status_.state = "cancelled";
+    });
+}
+DeletionStatus Controller::deletion_status() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return deletion_status_;
 }
 void Controller::request_reclaim() {
     // Transient GStreamer worker groups leave free pages in glibc arenas. Allow
@@ -1011,6 +1055,9 @@ void Controller::loop() {
             if (Clock::now() >= quota_at) {
                 try {
                     space = catalog_->enforce(options_.quota, options_.reserve);
+                    if (options_.retention_minutes && expired_delete_.done())
+                        expired_delete_ = catalog_->begin_delete(
+                            g_get_real_time() / 1000 - int64_t(options_.retention_minutes) * 60000);
                     storage_error.clear();
                 } catch (const std::exception &e) {
                     space = false;
@@ -1018,6 +1065,38 @@ void Controller::loop() {
                 }
                 quota_at = Clock::now() + std::chrono::seconds(1);
             }
+            if (deleting_ && (!deletion_release_.valid() ||
+                              deletion_release_.wait_for(std::chrono::seconds(0)) ==
+                                  std::future_status::ready)) {
+                bool released = true;
+                if (deletion_release_.valid()) {
+                    try {
+                        deletion_release_.get();
+                    } catch (...) {
+                        manual_delete_.failed++;
+                        manual_delete_.pending.clear();
+                        released = false;
+                    }
+                    deletion_release_ = {};
+                }
+                if (released)
+                    catalog_->delete_batch(manual_delete_);
+                deleting_ = !manual_delete_.done();
+                std::lock_guard<std::mutex> lock(mutex_);
+                deletion_status_ = {deleting_
+                                        ? "running"
+                                        : (manual_delete_.failed || manual_delete_.protected_files
+                                               ? "partial"
+                                               : "complete"),
+                                    manual_delete_.total,
+                                    manual_delete_.processed,
+                                    manual_delete_.deleted,
+                                    manual_delete_.bytes,
+                                    manual_delete_.protected_files,
+                                    manual_delete_.failed,
+                                    deletion_status_.operation};
+            } else if (!deleting_ && !expired_delete_.done())
+                catalog_->delete_batch(expired_delete_);
             // Older background deadlines win; rotate ties across equal-deadline cameras.
             std::vector<Channel *> order;
             for (size_t i = 0, n = channels_.size(); i < n; ++i)

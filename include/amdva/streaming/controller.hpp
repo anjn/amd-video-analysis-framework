@@ -11,6 +11,7 @@
 #include <condition_variable>
 #include <deque>
 #include <functional>
+#include <future>
 #include <gst/gst.h>
 #include <gst/va/gstvadisplay.h>
 #include <gst/video/video.h>
@@ -28,7 +29,7 @@ struct Source {
 };
 struct Options {
     std::string model, single_model, model_info, recording_root{"recordings"};
-    unsigned batch{4}, segment_seconds{60};
+    unsigned batch{4}, segment_seconds{60}, retention_minutes{60};
     bool background_ai_enabled{};
     bool tracking_enabled{true};
     bool preview_enabled{true};
@@ -93,6 +94,10 @@ struct Slot {
     bool job_done{};
     ~Slot();
 };
+struct DeletionStatus {
+    std::string state{"idle"};
+    uint64_t total{}, processed{}, deleted{}, bytes{}, protected_files{}, failed{}, operation{};
+};
 class Controller {
   public:
     explicit Controller(Options options);
@@ -107,6 +112,10 @@ class Controller {
     StorageStatus storage() const;
     void recording_duration(const std::string &, int64_t);
     std::vector<std::pair<std::string, std::string>> recording_cameras() const;
+    void retention_minutes(unsigned minutes);
+    void delete_closed_recordings(std::shared_future<void> released = {});
+    void cancel_recording_deletion();
+    DeletionStatus deletion_status() const;
     void preview_sources(const std::vector<std::string> &ids);
     void select(const std::string &id, bool selected);
     std::vector<Status> status() const;
@@ -147,6 +156,10 @@ class Controller {
     std::atomic<bool> inference_ready_{false}, status_ready_{false};
     std::atomic<unsigned> last_batch_{0};
     std::atomic<double> batch_ms_{0};
+    DeletionJob manual_delete_, expired_delete_;
+    DeletionStatus deletion_status_;
+    bool deleting_{};
+    std::shared_future<void> deletion_release_;
     bool reclaim_pending_{false};
     Clock::time_point reclaim_at_{};
     void request_reclaim();

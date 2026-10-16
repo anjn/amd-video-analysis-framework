@@ -1,5 +1,6 @@
 #include "amdva/streaming/playback.hpp"
 #include <algorithm>
+#include <cmath>
 #include <condition_variable>
 #include <gst/app/gstappsink.h>
 #include <gst/va/gstva.h>
@@ -18,6 +19,8 @@ struct PlaybackSession::Impl {
     std::deque<std::function<void()>> commands;
     PlaybackStatus status;
     bool ready{};
+    bool key_unit{};
+    std::function<void(GstSample *)> capture;
     std::thread worker;
     bool closing{}, playing{}, preroll{}, eos{};
     GstElement *pipeline{}, *sink{};
@@ -111,7 +114,7 @@ struct PlaybackSession::Impl {
         if (!ok || !gst_element_sync_state_with_parent(branch))
             s.unsupported = true;
     }
-    void load(std::shared_ptr<RecordingFile> f, bool play, int64_t at) {
+    void load(std::shared_ptr<RecordingFile> f, bool play, int64_t at, bool key = false) {
         retire();
         {
             std::lock_guard<std::mutex> l(mutex);
@@ -121,6 +124,7 @@ struct PlaybackSession::Impl {
             status.state = "opening";
         }
         file = std::move(f);
+        key_unit = key;
         linked = false;
         unsupported = false;
         pipeline = gst_pipeline_new(nullptr);
@@ -166,8 +170,8 @@ struct PlaybackSession::Impl {
         playing = play;
         preroll = true;
         preparing = true;
-        preparation_deadline = Clock::now() + std::chrono::seconds(5);
-        initial_seek = at > 0 ? at : -1;
+        preparation_deadline = Clock::now() + std::chrono::seconds(key ? 1 : 5);
+        initial_seek = at > 0 || key ? at : -1;
         if (gst_element_set_state(pipeline, GST_STATE_PAUSED) == GST_STATE_CHANGE_FAILURE)
             throw std::runtime_error("Cannot start recording decoder");
     }
@@ -214,7 +218,10 @@ struct PlaybackSession::Impl {
                     if (initial_seek >= 0) {
                         if (!gst_element_seek_simple(
                                 pipeline, GST_FORMAT_TIME,
-                                GstSeekFlags(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE),
+                                GstSeekFlags(
+                                    GST_SEEK_FLAG_FLUSH |
+                                    (key_unit ? GST_SEEK_FLAG_KEY_UNIT | GST_SEEK_FLAG_SNAP_BEFORE
+                                              : GST_SEEK_FLAG_ACCURATE)),
                                 initial_seek))
                             throw std::runtime_error("Recording is not seekable");
                         initial_seek = -1;
@@ -234,7 +241,10 @@ struct PlaybackSession::Impl {
                     if (!held)
                         held = Sample(sample, [](auto *p) { gst_sample_unref(p); });
                     bool rendered = false;
-                    if (enabled) {
+                    if (capture) {
+                        capture(sample);
+                        rendered = true;
+                    } else if (enabled) {
                         auto &out = *target;
                         std::lock_guard<std::mutex> l(out.mutex);
                         auto it = std::find_if(out.preview.begin(), out.preview.end(),
@@ -328,6 +338,24 @@ void PlaybackSession::open(std::shared_ptr<RecordingFile> f, bool play, int64_t 
     if (!f)
         throw std::invalid_argument("Missing recording");
     impl_->enqueue([s = impl_.get(), f = std::move(f), play, at] { s->load(f, play, at); });
+}
+void PlaybackSession::keyframe(std::shared_ptr<RecordingFile> file, int64_t at,
+                               std::function<void(GstSample *)> callback) {
+    impl_->enqueue([s = impl_.get(), file = std::move(file), at, callback = std::move(callback)] {
+        s->capture = callback;
+        s->load(file, false, at, true);
+    });
+}
+std::future<void> PlaybackSession::stop_and_release() {
+    auto done = std::make_shared<std::promise<void>>();
+    auto result = done->get_future();
+    impl_->enqueue([s = impl_.get(), done] {
+        s->retire();
+        s->capture = {};
+        s->set_state("stopped");
+        done->set_value();
+    });
+    return result;
 }
 void PlaybackSession::play() {
     impl_->enqueue([s = impl_.get()] {
@@ -676,6 +704,25 @@ void TimelinePlaybackSession::stop() {
         s->status.error.clear();
     });
 }
+std::future<void> TimelinePlaybackSession::stop_and_release() {
+    auto done = std::make_shared<std::promise<void>>();
+    auto future = done->get_future();
+    impl_->enqueue([s = impl_.get(), done] {
+        s->clear(true);
+        s->selected = false;
+        s->wanted = false;
+        for (auto &decoder : s->decoders)
+            decoder->stop_and_release().get();
+        {
+            std::lock_guard<std::mutex> lock(s->mutex);
+            s->status.state = "stopped";
+            s->status.error.clear();
+            s->status.notice.clear();
+        }
+        done->set_value();
+    });
+    return future;
+}
 void TimelinePlaybackSession::follow(bool expected) {
     impl_->enqueue([s = impl_.get(), expected] { s->following = expected; });
 }
@@ -684,4 +731,252 @@ TimelinePlaybackStatus TimelinePlaybackSession::status() const {
     return impl_->status;
 }
 Slot &TimelinePlaybackSession::slot() { return impl_->slot; }
+} // namespace amdva::streaming
+
+namespace amdva::streaming {
+struct GpuPreviewImage::Impl {
+    std::shared_ptr<GstVaDisplay> display;
+    std::unique_ptr<VaSession> va;
+    VASurfaceID surface{VA_INVALID_SURFACE};
+    ~Impl() {
+        if (va)
+            va->destroy_surface(surface);
+    }
+};
+GpuPreviewImage::~GpuPreviewImage() = default;
+VADRMPRIMESurfaceDescriptor GpuPreviewImage::export_surface() const {
+    if (!impl_)
+        throw std::runtime_error("Missing GPU preview image");
+    return impl_->va->export_surface(impl_->surface);
+}
+struct KeyframePreviewSession::Impl {
+    struct Request {
+        std::string camera;
+        int64_t at{};
+        uint64_t id{}, revision{};
+        Clock::time_point started;
+    };
+    struct Entry {
+        std::string file;
+        int64_t requested{};
+        std::shared_ptr<const GpuPreviewImage> image;
+    };
+    Catalog &catalog;
+    std::shared_ptr<GstVaDisplay> display;
+    Slot unused;
+    std::unique_ptr<PlaybackSession> decoder;
+    mutable std::mutex mutex;
+    std::condition_variable wake;
+    std::optional<Request> pending;
+    KeyframePreviewStatus status;
+    std::atomic<uint64_t> generation{0};
+    std::atomic<bool> closing{false};
+    std::deque<Entry> cache;
+    uint64_t cache_revision{};
+    std::vector<std::shared_ptr<std::promise<void>>> cancellations;
+    std::thread worker;
+    Impl(GstVaDisplay *d, Catalog &c) : catalog(c) {
+        if (!d)
+            throw std::invalid_argument("Missing preview display");
+        display = {GST_VA_DISPLAY(gst_object_ref(d)), [](auto *p) { gst_object_unref(p); }};
+        decoder.reset(new PlaybackSession(d, &unused));
+        worker = std::thread([this] { loop(); });
+    }
+    ~Impl() {
+        closing = true;
+        ++generation;
+        wake.notify_one();
+        worker.join();
+        decoder.reset();
+    }
+    std::shared_ptr<const GpuPreviewImage> image(GstSample *sample, const Recording &r) {
+        GstVideoInfo info{};
+        if (!gst_video_info_from_caps(&info, gst_sample_get_caps(sample)))
+            throw std::runtime_error("Missing preview caps");
+        auto result = std::make_shared<GpuPreviewImage>();
+        result->impl_ = std::make_shared<GpuPreviewImage::Impl>();
+        result->impl_->display = display;
+        result->impl_->va = std::make_unique<VaSession>(
+            static_cast<VADisplay>(gst_va_display_get_va_dpy(display.get())));
+        if (info.width <= 0 || info.height <= 0 || info.width > 1920 || info.height > 1080)
+            throw std::runtime_error("Unsupported preview dimensions");
+        const double scale = std::min({1., 320. / info.width, 180. / info.height});
+        result->width = std::max(2u, 2 * unsigned(std::ceil(info.width * scale / 2)));
+        result->height = std::max(2u, 2 * unsigned(std::ceil(info.height * scale / 2)));
+        result->impl_->surface = result->impl_->va->create_bgra(result->width, result->height);
+        Slot temporary;
+        temporary.target_width = result->width;
+        temporary.target_height = result->height;
+        Plane out;
+        out.surface = result->impl_->surface;
+        prepare_preview(display.get(), temporary, out, sample, 0, 0);
+        auto pts = GST_BUFFER_PTS(gst_sample_get_buffer(sample));
+        auto *segment = gst_sample_get_segment(sample);
+        auto ns = segment ? gst_segment_to_stream_time(segment, GST_FORMAT_TIME, pts) : pts;
+        if (!GST_CLOCK_TIME_IS_VALID(ns))
+            throw std::runtime_error("Missing keyframe time");
+        result->frame_ms = r.started_ms + ns / GST_MSECOND;
+        return result;
+    }
+    void publish(const Request &r, std::string state,
+                 std::shared_ptr<const GpuPreviewImage> image = {}, bool hit = false,
+                 std::string error = {}) {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (r.id != generation || r.revision != catalog.deletion_generation())
+            return;
+        status = {r.id,
+                  r.revision,
+                  std::move(state),
+                  std::move(error),
+                  r.at,
+                  std::chrono::duration<double, std::milli>(Clock::now() - r.started).count(),
+                  hit,
+                  unsigned(cache.size()),
+                  std::move(image)};
+    }
+    void process(const Request &request) {
+        if (cache_revision != request.revision) {
+            cache.clear();
+            cache_revision = request.revision;
+        }
+        auto record = catalog.resolve(request.camera, request.at);
+        if (!record || record->started_ms > request.at) {
+            publish(request, "missing");
+            return;
+        }
+        // Exact request positions are cached; keyframe identities are deduplicated
+        // after decoding, avoiding invented assumptions about the camera's GOP.
+        auto cached = std::find_if(cache.begin(), cache.end(), [&](auto &entry) {
+            return entry.file == record->name && entry.image->frame_ms <= request.at &&
+                   request.at <= entry.requested;
+        });
+        if (cached != cache.end()) {
+            auto entry = *cached;
+            cache.erase(cached);
+            cache.push_front(entry);
+            publish(request, "ready", entry.image, true);
+            return;
+        }
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            wake.wait_until(lock, request.started + std::chrono::milliseconds(75),
+                            [&] { return closing || generation != request.id; });
+        }
+        if (generation != request.id || closing)
+            return;
+        struct Capture {
+            std::mutex mutex;
+            std::shared_ptr<const GpuPreviewImage> image;
+        };
+        auto captured = std::make_shared<Capture>();
+        decoder->keyframe(catalog.open_recording(record->name),
+                          std::max<int64_t>(0, request.at - record->started_ms) * GST_MSECOND,
+                          [this, captured, r = *record](GstSample *sample) {
+                              auto frame = image(sample, r);
+                              std::lock_guard<std::mutex> lock(captured->mutex);
+                              captured->image = std::move(frame);
+                          });
+        const auto deadline = Clock::now() + std::chrono::seconds(1);
+        std::shared_ptr<const GpuPreviewImage> frame;
+        while (!closing && generation == request.id &&
+               catalog.deletion_generation() == request.revision && Clock::now() < deadline) {
+            {
+                std::lock_guard<std::mutex> lock(captured->mutex);
+                frame = captured->image;
+            }
+            if (frame || decoder->status().state == "error")
+                break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        const auto decoder_error = decoder->status().error;
+        decoder->stop_and_release().get();
+        if (generation != request.id || closing ||
+            catalog.deletion_generation() != request.revision)
+            return;
+        if (!frame || frame->frame_ms > request.at) {
+            publish(request, "unavailable", {}, false,
+                    !decoder_error.empty() ? decoder_error
+                    : frame                ? "Keyframe is after the requested time"
+                                           : "Keyframe preparation timed out");
+            return;
+        }
+        int64_t covered_until = request.at;
+        auto same = std::find_if(cache.begin(), cache.end(), [&](auto &entry) {
+            return entry.file == record->name && entry.image->frame_ms == frame->frame_ms;
+        });
+        if (same != cache.end()) {
+            frame = same->image;
+            covered_until = std::max(covered_until, same->requested);
+            cache.erase(same);
+        }
+        cache.push_front({record->name, covered_until, frame});
+        while (cache.size() > 32)
+            cache.pop_back();
+        publish(request, "ready", frame);
+    }
+    void loop() {
+        for (;;) {
+            std::optional<Request> request;
+            std::vector<std::shared_ptr<std::promise<void>>> cancelled;
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                wake.wait(lock, [&] { return closing || pending || !cancellations.empty(); });
+                cancelled.swap(cancellations);
+                request = std::move(pending);
+                pending.reset();
+            }
+            if (!cancelled.empty() || closing) {
+                decoder->stop_and_release().get();
+                cache.clear();
+                for (auto &promise : cancelled)
+                    promise->set_value();
+            }
+            if (closing)
+                break;
+            if (request && request->id == generation) {
+                if (generation != request->id || closing)
+                    continue;
+                try {
+                    process(*request);
+                } catch (const std::exception &e) {
+                    decoder->stop_and_release().get();
+                    publish(*request, "unavailable", {}, false, e.what());
+                }
+            }
+        }
+    }
+};
+KeyframePreviewSession::KeyframePreviewSession(GstVaDisplay *d, Catalog &c)
+    : impl_(std::make_unique<Impl>(d, c)) {}
+KeyframePreviewSession::~KeyframePreviewSession() = default;
+uint64_t KeyframePreviewSession::request(const std::string &camera, int64_t at) {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    const auto id = ++impl_->generation, revision = impl_->catalog.deletion_generation();
+    impl_->pending = Impl::Request{camera, at, id, revision, Clock::now()};
+    impl_->status = {id, revision, "loading", {}, at, 0, false, impl_->status.cached_images, {}};
+    impl_->wake.notify_one();
+    return id;
+}
+std::future<void> KeyframePreviewSession::cancel() {
+    auto promise = std::make_shared<std::promise<void>>();
+    auto future = promise->get_future();
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        ++impl_->generation;
+        impl_->pending.reset();
+        impl_->status = {};
+        impl_->cancellations.push_back(promise);
+    }
+    impl_->wake.notify_one();
+    return future;
+}
+KeyframePreviewStatus KeyframePreviewSession::status() const {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    auto result = impl_->status;
+    if (result.deletion_generation != impl_->catalog.deletion_generation()) {
+        result.image.reset();
+        result.state = "idle";
+    }
+    return result;
+}
 } // namespace amdva::streaming

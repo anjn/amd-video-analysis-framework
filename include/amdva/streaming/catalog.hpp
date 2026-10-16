@@ -1,5 +1,7 @@
 #pragma once
+#include <atomic>
 #include <cstdint>
+#include <deque>
 #include <filesystem>
 #include <memory>
 #include <mutex>
@@ -33,6 +35,11 @@ struct RecordingCoverage {
 };
 struct StorageStatus {
     uint64_t recorded_bytes{}, available_bytes{};
+};
+struct DeletionJob {
+    std::deque<std::string> pending;
+    uint64_t total{}, processed{}, deleted{}, bytes{}, protected_files{}, failed{};
+    bool done() const { return pending.empty(); }
 };
 class RecordingFile {
   public:
@@ -72,6 +79,10 @@ class Catalog {
     std::vector<std::pair<std::string, std::string>> cameras() const;
     bool enforce(uint64_t quota, uint64_t reserve);
     uint64_t bytes() const;
+    // Snapshot non-writing files. An optional cutoff includes only known ends <= cutoff.
+    DeletionJob begin_delete(std::optional<int64_t> cutoff_ms = {}) const;
+    void delete_batch(DeletionJob &); // Up to 32 files; checks a 10ms budget between entries.
+    uint64_t deletion_generation() const { return deletion_generation_.load(); }
     const std::filesystem::path &root() const { return root_; }
 
   private:
@@ -81,6 +92,7 @@ class Catalog {
     mutable std::recursive_mutex mutex_;
     std::vector<std::weak_ptr<RecordingFile>> playing_;
     std::set<std::string> duration_attempted_;
+    std::atomic<uint64_t> deletion_generation_{0};
     Recording row(sqlite3_stmt *) const;
     void sql(const char *statement);
 };

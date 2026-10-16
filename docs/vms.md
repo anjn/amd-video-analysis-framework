@@ -35,9 +35,30 @@ camera stops its reception and clears its mappings, without deleting history.
 
 The table retains connection, recording, analytics and telemetry details. The
 bottom bar displays catalogued recording bytes, current filesystem space, the
-configured quota and reserved free space. This release displays storage policy;
-it does not add recording schedules, per-camera recording switches, manual
-recording deletion or export.
+configured quota and reserved free space. Recording schedules, per-camera
+recording switches and export are not provided.
+
+On **Recordings**, **Retention (all cameras)** sets the history to keep in whole
+minutes. The default is **60 minutes**, including configs without a
+`retention_minutes` field. **Apply** saves the setting; **0 / Disabled** turns
+off time-based removal. About once per second the controller finds inactive
+files whose known end time is at or before `now - retention_minutes`. It never
+deletes a segment overlapping that cutoff or one with unknown duration.
+Playback, lookahead and extraction handles protect their files until released;
+expired files are retried later. Byte quota and reserved-space pruning still
+apply independently, even with retention disabled.
+
+**Delete all closed recordings** asks for confirmation and covers every camera,
+including removed cameras and interrupted/legacy history. It snapshots files
+that are not being written when the controller receives the request. Playback
+and seek extraction stop and release their handles before deletion begins.
+Active files and files finalized after that snapshot remain; live reception,
+recording and analytics continue. Progress reports checked, deleted, protected
+and failed files. **Cancel deletion** stops subsequent batches; it cannot restore
+already removed files. Each batch handles at most 32 entries and checks a 10ms time budget between
+files. Individual filesystem/database operations can exceed that budget. External
+files and symlinks are never followed or removed. Other SDK consumers holding
+files can cause a partial result; release them and repeat the operation.
 
 ## Recording timeline and playback
 
@@ -58,7 +79,29 @@ playback. Camera changes preserve the selected wall time and immediately
 load its image for the new camera. Playing/waiting playback continues; otherwise
 the image is shown paused. The first camera selection uses its earliest
 available time. If that time has no recording, the usual forward gap resolution
-applies. Stop clears the image and preserves the selected time.
+applies. Stop clears the image and preserves the selected time. Clicking the
+recording image toggles play/pause; clicking a waiting image pauses tail
+following, and clicking after Stop plays from the selected time.
+
+Hovering or dragging the timeline also opens a small GPU preview above it,
+without changing main playback until the seek is committed. A single worker
+coalesces requests for 75ms and seeks to a key unit at or before the requested
+time. VA decoding and VPE scaling produce an image of at most 320×180, imported
+into the native EGL popup through DMA-BUF. The popup contains only the image;
+its frame can precede the cursor by a GOP. No thumbnail pixels are mapped
+to the CPU, uploaded from CPU memory or saved to disk. A GPU LRU holds at most
+32 images; a repeated position in a proven keyframe interval can use the cache.
+While another position is loading, the popup retains its last GPU image and
+has no loading label or timestamp. Until the first image is available, or when
+there is no preview, the popup stays hidden. Its position follows the mouse
+immediately using a movable native child surface, including on Wayland. Camera
+changes, missing/unavailable results and deletion invalidation clear the retained
+image. Only the latest request may publish. Leaving the timeline, switching cameras
+or leaving Recordings cancels extraction and clears the cache. Gaps show no
+image; slow requests retain the previous image and decoding times out after
+one second. The response target is 300ms at the 95th percentile, rather than a
+guarantee for arbitrary files or concurrent decoder load. Deletion generations
+invalidate cached images before they can be redisplayed.
 
 Playback crosses file boundaries and recording-session changes automatically.
 The next recording is opened and prerolled using a second decoder, with at most
@@ -93,11 +136,12 @@ playback pacing uses GStreamer's monotonic media clock.
 Playback remains normal-speed H.264/H.265 under the existing progressive NV12,
 1080p, BT.709 limited-range restrictions. Audio and playback AI are not added.
 Leaving the recording page pauses playback. Live decode/AI/recording continue,
-requiring up to 16 live decoders plus two playback decoders. The VA decode,
+requiring up to 16 live decoders plus two playback decoders and one seek-preview
+decoder. The VA decode,
 VPE preview and DMA-BUF/EGL display path uses no CPU pixel mapping/upload and
-has no software decoder fallback. Only the currently opened and lookahead
-files are pinned against quota pruning; stop, seek and camera change release
-unneeded handles asynchronously.
+has no software decoder fallback. Currently opened, lookahead and extraction files are pinned against both
+quota and time pruning; stop, seek and camera change release unneeded handles
+asynchronously. Cached thumbnails own only small GPU surfaces, not file pins.
 
 ## Framework interfaces and migration
 
@@ -142,8 +186,29 @@ public catalog layout has changed. Existing file-based source APIs remain
 available, including the original two-argument playback `open` overload.
 Consumers must release EGL/GL references before destroying a playback session.
 
+Both playback session types add `stop_and_release()`, returning a future ready
+after decoder teardown and input-handle release. `KeyframePreviewSession` is
+also Qt-free: construct it with the retained display and a catalog that outlives
+it, call `request(camera, unix_ms)`, and poll `status()` for the request ID,
+state and immutable `GpuPreviewImage`. An exported surface descriptor transfers
+FD ownership to the caller. `cancel()` returns a release-barrier future and
+clears pending work and GPU cache. Shared image ownership survives cache
+eviction; renderers must finish GPU sampling before dropping that ownership.
+
+`Catalog::begin_delete(optional_cutoff_ms)` creates a snapshot job, and
+`delete_batch(job)` advances it with handle, active-file and path checks.
+`deletion_generation()` lets image consumers invalidate stale results.
+`Controller::retention_minutes`, `delete_closed_recordings` and
+`cancel_recording_deletion` enqueue management operations; `deletion_status`
+returns progress. An optional shared release future gates manual removal after
+its snapshot: GUI callers use it to coordinate asynchronous player/preview
+teardown without blocking the event loop. Catalog and controller operations
+are reusable by headless applications; confirmation and rendering belong to
+the desktop app.
+
 The [file-based SDK example](../examples/sdk/playback.cpp) and
-[timeline SDK example](../examples/sdk/timeline.cpp) demonstrate Qt-free
+[timeline SDK example](../examples/sdk/timeline.cpp) and
+[GPU keyframe-preview example](../examples/sdk/keyframe-preview.cpp) demonstrate Qt-free
 consumers. Each standalone example owns its catalog exclusively; never point
 it at an active NVR's recording root.
 
@@ -220,3 +285,49 @@ Both GUI runs completed without GPU copy auditor violations. Installed SDK
 playback decoded 300 frames for each codec. A build with `AMDVA_BUILD_NVR=OFF`
 also completed without a Qt dependency. These are correctness and resource
 checks, not a performance certification.
+
+### Recording management and GPU seek previews
+
+`recording-management-contract` checks expiration by segment end, cutoff
+overlap, unknown lengths, pins, snapshot protection for active/new files,
+bounded batches, missing files and symlink/external-file protection. Config
+tests cover the 60-minute default, persistence of zero and invalid values.
+
+```bash
+source scripts/env.sh
+python3 tools/vms_management_validate.py artifacts/vms-timeline-input.json \
+  artifacts/nvr-model/bus1080.h264 artifacts/nvr-model/blank1080.h265 \
+  artifacts/vms-timeline-fixtures/h264.mkv \
+  --output artifacts/vms-management-check
+```
+
+This creates a separate recording root and RTSP server. The hardware GUI check
+tests retention persistence, expiry protection/release, image-click playback,
+100 hover-to-frame-swap measurements, delete-all release barriers and
+preservation of active recordings while two live decode/AI pipelines continue.
+`amdva-preview-validate H264.mkv H265.mkv NEW_ROOT` separately tests 100 cold
+thumbnail requests, bounded caching, cancellation, gaps, corruption and deletion
+invalidation. Its fixtures are two-second 30fps files with one-second GOPs.
+Both checks can enable the copy auditor; the GUI check also audits GL pixel
+readback and CPU texture uploads. Results and limitations are recorded in
+[vms-management-validation-results.json](vms-management-validation-results.json).
+These short runs do not establish 16-live-plus-three-extra decoder capacity
+or long-term resource stability.
+
+The standard build passed all 26 CTest cases (23 in the isolated build). The
+standard GUI run completed 100 hover-to-swap samples with a 191.9ms 95th
+percentile and 288.1ms maximum, with zero GPU-copy/GL-image audit violations.
+It also verified retention, cancellation, image-click controls and deletion of
+five closed files while retaining active fragments and continuing live AI.
+The standalone two-second-GOP/B-frame test completed 100 cold H.264/H.265
+requests with an 88.8ms 95th percentile, then checked corruption and deletion
+invalidation. Installed SDK consumption produced a 320×180 GPU image without
+a Qt dependency in the streaming library. These are synthetic input-to-swap
+measurements, not physical display latency measurements.
+
+A subsequent preview-retention GUI regression verified 99 loading requests
+kept the previous GPU image and 91 mouse moves changed the popup position.
+Wayland protocol logs confirmed native subsurface position updates. Deletion
+invalidation still cleared retained pixels. The full management GUI scenario
+passed again with zero copy/GL-image audit violations; see the follow-up section
+in the management validation record.

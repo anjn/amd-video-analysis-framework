@@ -22,14 +22,20 @@ void RecordingTimeline::coverage(amdva::streaming::RecordingCoverage c) {
     from_ = coverage_.oldest_ms.value_or(to_);
     if (hovering_ || dragging_)
         hover_ = time_at(pointer_x_);
+    if (preview_requested && (hovering_ || dragging_))
+        preview_requested(coverage_.oldest_ms ? std::optional<int64_t>(hover_) : std::nullopt,
+                          mapToGlobal(QPoint(int(pointer_x_), 0)));
     update();
 }
 void RecordingTimeline::now(int64_t ms) {
     to_ = ms;
     if (!coverage_.oldest_ms)
         from_ = ms;
-    if (hovering_ || dragging_)
+    if (hovering_ || dragging_) {
         hover_ = time_at(pointer_x_);
+        if (preview_requested)
+            preview_requested(hover_, mapToGlobal(QPoint(int(pointer_x_), 0)));
+    }
     update();
 }
 void RecordingTimeline::position(int64_t ms) {
@@ -110,12 +116,18 @@ void RecordingTimeline::mousePressEvent(QMouseEvent *e) {
     hovering_ = true;
     pointer_x_ = e->position().x();
     hover_ = time_at(pointer_x_);
+    if (preview_requested && (hovering_ || dragging_))
+        preview_requested(coverage_.oldest_ms ? std::optional<int64_t>(hover_) : std::nullopt,
+                          mapToGlobal(QPoint(int(pointer_x_), 0)));
     update();
 }
 void RecordingTimeline::mouseMoveEvent(QMouseEvent *e) {
     hovering_ = true;
     pointer_x_ = e->position().x();
     hover_ = time_at(pointer_x_);
+    if (preview_requested && (hovering_ || dragging_))
+        preview_requested(coverage_.oldest_ms ? std::optional<int64_t>(hover_) : std::nullopt,
+                          mapToGlobal(QPoint(int(pointer_x_), 0)));
     update();
 }
 void RecordingTimeline::mouseReleaseEvent(QMouseEvent *e) {
@@ -130,6 +142,8 @@ void RecordingTimeline::mouseReleaseEvent(QMouseEvent *e) {
 }
 void RecordingTimeline::leaveEvent(QEvent *) {
     hovering_ = false;
+    if (preview_requested)
+        preview_requested({}, {});
     update();
 }
 } // namespace amdva::nvr

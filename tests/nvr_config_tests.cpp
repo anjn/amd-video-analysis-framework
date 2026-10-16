@@ -35,6 +35,8 @@ int main(int argc, char **argv) {
         auto o = load_config(path);
         require(o.tracking_enabled && o.results.method == "none", "Analytics defaults");
         require(o.telemetry.enabled && o.telemetry.stall_ms == 1000, "Telemetry defaults");
+        require(o.retention_minutes == 60, "Retention default");
+        o.retention_minutes = 0;
         o.telemetry.enabled = false;
         o.telemetry.stall_ms = 1200;
         require(o.batch == 4 && o.segment_seconds == 60, "Defaults");
@@ -53,6 +55,20 @@ int main(int argc, char **argv) {
         struct stat st {};
         stat(path.c_str(), &st);
         require((st.st_mode & 0777) == 0600, "Credential file permissions");
+        require(load_config(path).retention_minutes == 0, "Retention disable persistence");
+        for (double invalid : {-1., 1.5, 2147483648.}) {
+            auto value = base;
+            value["retention_minutes"] = invalid;
+            write(value);
+            bool rejected = false;
+            try {
+                load_config(path);
+            } catch (...) {
+                rejected = true;
+            }
+            require(rejected, "Invalid retention accepted");
+        }
+        save_config(path, o);
         require(!load_config(path).telemetry.enabled &&
                     load_config(path).telemetry.stall_ms == 1200,
                 "Telemetry persistence");
