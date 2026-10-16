@@ -1,6 +1,8 @@
 #include "window.hpp"
 #include <QApplication>
+#include <QComboBox>
 #include <QMetaObject>
+#include <QPushButton>
 #include <QSurfaceFormat>
 #include <QTabWidget>
 #include <QTimer>
@@ -28,7 +30,7 @@ int main(int argc, char **argv) {
         Window window(controller, options, argv[1]);
         window.show();
         auto *tabs = window.findChild<QTabWidget *>("vms-tabs");
-        auto *rows = window.findChild<QTableWidget *>("recording-list");
+        auto *camera = window.findChild<QComboBox *>("recording-camera");
         bool live = false, opened = false, played = false;
         const auto start = std::chrono::steady_clock::now();
         QTimer timer;
@@ -53,22 +55,21 @@ int main(int argc, char **argv) {
                     tabs->setCurrentIndex(1);
                 }
                 if (seconds > 18 && !opened) {
-                    for (int i = 0; i < rows->rowCount(); i++)
-                        if (rows->item(i, 4)->text() == "finalized") {
-                            rows->setCurrentCell(i, 0);
-                            QMetaObject::invokeMethod(rows, "cellDoubleClicked", Q_ARG(int, i),
-                                                      Q_ARG(int, 0));
-                            opened = true;
-                            break;
-                        }
+                    if (camera && camera->count()) {
+                        auto *play = window.findChild<QPushButton *>("playback-play");
+                        if (!play)
+                            throw std::runtime_error("Missing timeline play control");
+                        play->click();
+                        opened = true;
+                    }
                 }
-                if (opened && window.playback_status().frames > 10 && !played) {
+                if (opened && window.timeline_status().frames > 10 && !played) {
                     window.recording_view()->grabFramebuffer().save(
                         QString::fromStdString(std::string(argv[1]) + "-playback.png"));
                     played = true;
                 }
-                if (window.playback_status().state == "error")
-                    throw std::runtime_error(window.playback_status().error);
+                if (window.timeline_status().state == "error")
+                    throw std::runtime_error(window.timeline_status().error);
                 if (seconds >= 32) {
                     if (!live || !opened || !played)
                         throw std::runtime_error("Incomplete NVR dashboard scenarios");

@@ -1,9 +1,10 @@
 #include "amdva/streaming/playback.hpp"
+#include "timeline.hpp"
 #include "window.hpp"
 #include <QAbstractItemView>
 #include <QApplication>
 #include <QComboBox>
-#include <QDateTimeEdit>
+#include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFile>
@@ -19,7 +20,6 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QSaveFile>
-#include <QSlider>
 #include <QSplitter>
 #include <QTabWidget>
 #include <QTimer>
@@ -40,44 +40,6 @@ QString size_text(uint64_t n) {
         return QString::number(double(n) / 1024, 'f', 1) + " KiB";
     return QString::number(qulonglong(n)) + " B";
 }
-QString clock_text(int64_t ns) {
-    if (ns < 0)
-        return "--:--";
-    return QString("%1:%2:%3")
-        .arg(ns / 1000000000 / 3600, 2, 10, QChar('0'))
-        .arg(ns / 1000000000 / 60 % 60, 2, 10, QChar('0'))
-        .arg(ns / 1000000000 % 60, 2, 10, QChar('0'));
-}
-class Timeline final : public QWidget {
-  public:
-    std::vector<Recording> recordings;
-    int64_t from{}, to{};
-    std::function<void(int64_t)> clicked;
-    Timeline() {
-        setMinimumHeight(44);
-        setToolTip("Green: finalized recording · grey: gap or unavailable · click to seek");
-    }
-
-  protected:
-    void paintEvent(QPaintEvent *) override {
-        QPainter p(this);
-        p.fillRect(rect(), QColor(35, 38, 44));
-        if (to <= from)
-            return;
-        for (const auto &r : recordings)
-            if (r.available && r.duration_ns > 0) {
-                const double x = double(r.started_ms - from) * width() / (to - from),
-                             end = double(r.started_ms + r.duration_ns / 1000000 - from) * width() /
-                                   (to - from);
-                p.fillRect(QRectF(x, 5, std::max(1., end - x), height() - 10),
-                           r.state == "finalized" ? QColor(45, 160, 100) : QColor(170, 130, 60));
-            }
-    }
-    void mousePressEvent(QMouseEvent *e) override {
-        if (clicked && to > from)
-            clicked(from + int64_t(e->position().x() / std::max(1, width()) * (to - from)));
-    }
-};
 } // namespace
 struct Window::Vms {
     Window &w;
@@ -85,46 +47,44 @@ struct Window::Vms {
     QListWidget *cameras{};
     QComboBox *layout{}, *assignment{}, *filter{};
     QLabel *tile_label{}, *storage{}, *play_status{}, *play_position{}, *timeline_info{};
-    QDateTimeEdit *from{}, *to{};
-    QTableWidget *recordings{};
-    QSlider *seek{};
-    Timeline *timeline{};
+    RecordingTimeline *timeline{};
     QWidget *play_container{};
     Tiles *play_tiles{};
-    std::unique_ptr<PlaybackSession> player;
+    std::unique_ptr<TimelinePlaybackSession> player;
     std::array<std::string, 16> cells{};
     unsigned count{4}, selected{};
     int focus{-1};
-    bool ui_ready{}, dirty{}, query_pending{true}, busy{}, opening_cancelled{};
+    bool ui_ready{}, dirty{}, query_pending{true};
     uint64_t revision{};
-    std::vector<std::pair<int64_t, std::string>> pages;
-    int64_t before{INT64_MAX};
-    std::string before_name, current;
-    std::vector<Recording> rows, playlist;
+    int64_t cursor_ms{};
+    bool camera_changed{true}, camera_playing{};
     std::vector<std::pair<std::string, std::string>> source_names;
-    int64_t pending_seek{-1};
-    QString playback_notice;
     struct Result {
-        bool timeline_truncated{};
-        uint64_t revision;
-        std::vector<Recording> rows, playlist;
+        uint64_t revision{};
+        RecordingCoverage coverage;
         std::vector<std::pair<std::string, std::string>> cameras;
         StorageStatus storage;
     };
     std::future<Result> query;
-    std::future<std::shared_ptr<RecordingFile>> opening;
-    std::string opening_name;
-    int64_t opening_seek{};
     unsigned ticks{};
     explicit Vms(Window &window) : w(window) {}
-    void request(bool reset = true) {
-        if (reset) {
-            before = INT64_MAX;
-            before_name.clear();
-            pages.clear();
-        }
+    void request() {
         revision++;
         query_pending = true;
+    }
+    void select_camera() {
+        const auto state = player->status();
+        if (!camera_changed)
+            camera_playing = state.state == "playing" || state.state == "waiting";
+        player->stop();
+        camera_changed = true;
+        timeline->coverage({});
+        request();
+    }
+    bool follows(const std::string &id) const {
+        auto states = w.controller_.status();
+        return std::any_of(states.begin(), states.end(),
+                           [&](const auto &s) { return s.source.id == id; });
     }
     void load_ui() {
         QFile f(qs(w.config_ + ".ui.json"));
@@ -285,60 +245,33 @@ struct Window::Vms {
         auto *rl = new QVBoxLayout(record);
         auto *filters = new QHBoxLayout;
         filter = new QComboBox;
-        filter->addItem("All cameras", "");
         filter->setObjectName("recording-camera");
-        from = new QDateTimeEdit(QDateTime(QDate::currentDate(), QTime(0, 0)));
-        to = new QDateTimeEdit(QDateTime(QDate::currentDate().addDays(1), QTime(0, 0)));
-        for (auto *date : {from, to}) {
-            date->setCalendarPopup(true);
-            date->setDisplayFormat("yyyy-MM-dd HH:mm:ss");
-        }
-        auto *search = new QPushButton("Search"), *previous_page = new QPushButton("Previous page"),
-             *next_page = new QPushButton("Next page");
-        filters->addWidget(filter);
-        filters->addWidget(from);
-        filters->addWidget(to);
-        filters->addWidget(search);
-        filters->addWidget(previous_page);
-        filters->addWidget(next_page);
+        filters->addWidget(new QLabel("Camera"));
+        filters->addWidget(filter, 1);
         rl->addLayout(filters);
-        recordings = new QTableWidget(0, 6);
-        recordings->setObjectName("recording-list");
-        recordings->setHorizontalHeaderLabels(
-            {"Start", "Camera", "Duration", "Size", "State", "Recording"});
-        recordings->setSelectionBehavior(QAbstractItemView::SelectRows);
-        recordings->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        recordings->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
-        recordings->setMaximumHeight(230);
-        rl->addWidget(recordings);
-        timeline_info = new QLabel("Select one camera to show recording coverage.");
-        rl->addWidget(timeline_info);
-        timeline = new Timeline;
-        rl->addWidget(timeline);
-        player = std::make_unique<PlaybackSession>(w.controller_.display());
+        player = std::make_unique<TimelinePlaybackSession>(w.controller_.display(),
+                                                           w.controller_.recording_catalog());
         play_tiles = new Tiles(w.controller_, &player->slot());
         play_container = QWidget::createWindowContainer(play_tiles);
         play_container->setMinimumHeight(180);
         rl->addWidget(play_container, 1);
+        timeline_info = new QLabel("Green: recorded · grey: no playable recording");
+        rl->addWidget(timeline_info);
+        timeline = new RecordingTimeline;
+        rl->addWidget(timeline);
         auto *controls = new QHBoxLayout;
         auto *play = new QPushButton("Play"), *pause = new QPushButton("Pause"),
-             *stop = new QPushButton("Stop"), *prev = new QPushButton("Previous recording"),
-             *next = new QPushButton("Next recording");
+             *stop = new QPushButton("Stop");
         play->setObjectName("playback-play");
         pause->setObjectName("playback-pause");
         stop->setObjectName("playback-stop");
-        next->setObjectName("playback-next");
-        prev->setObjectName("playback-previous");
-        seek = new QSlider(Qt::Horizontal);
-        seek->setRange(0, 10000);
-        seek->setObjectName("playback-seek");
         play_position = new QLabel;
+        play_position->setObjectName("playback-position");
         play_status = new QLabel;
         play_status->setObjectName("playback-status");
-        for (auto *button : {prev, play, pause, stop, next})
+        for (auto *button : {play, pause, stop})
             controls->addWidget(button);
-        controls->addWidget(seek, 1);
-        controls->addWidget(play_position);
+        controls->addWidget(play_position, 1);
         rl->addLayout(controls);
         rl->addWidget(play_status);
         tabs->addTab(record, "Recordings");
@@ -419,64 +352,36 @@ struct Window::Vms {
                 request();
             apply();
         });
-        QObject::connect(filter, qOverload<int>(&QComboBox::activated), &w, [this] { request(); });
-        QObject::connect(search, &QPushButton::clicked, &w, [this] { request(); });
-        QObject::connect(next_page, &QPushButton::clicked, &w, [this] {
-            if (rows.empty())
-                return;
-            pages.emplace_back(before, before_name);
-            before = rows.back().started_ms;
-            before_name = rows.back().name;
-            request(false);
-        });
-        QObject::connect(previous_page, &QPushButton::clicked, &w, [this] {
-            if (pages.empty())
-                return;
-            before = pages.back().first;
-            before_name = pages.back().second;
-            pages.pop_back();
-            request(false);
-        });
-        QObject::connect(recordings, &QTableWidget::cellDoubleClicked, &w, [this](int row, int) {
-            if (row >= 0 && row < int(rows.size()))
-                open(rows[row]);
-        });
+        QObject::connect(filter, qOverload<int>(&QComboBox::activated), &w,
+                         [this] { select_camera(); });
         QObject::connect(play, &QPushButton::clicked, &w, [this] {
-            if (current.empty()) {
-                int row = recordings->currentRow();
-                if (row >= 0 && row < int(rows.size()))
-                    open(rows[row]);
-            } else {
-                if (player->status().state == "ended")
-                    player->seek(0);
-                player->play();
-                playback_notice.clear();
-            }
-        });
-        QObject::connect(pause, &QPushButton::clicked, &w, [this] { player->pause(); });
-        QObject::connect(stop, &QPushButton::clicked, &w, [this] {
-            opening_cancelled = true;
-            player->stop();
-            current.clear();
-            pending_seek = -1;
-            playback_notice.clear();
-        });
-        QObject::connect(next, &QPushButton::clicked, &w, [this] { advance(1, false); });
-        QObject::connect(prev, &QPushButton::clicked, &w, [this] { advance(-1, false); });
-        QObject::connect(seek, &QSlider::sliderReleased, &w, [this] {
+            camera_playing = true;
+            auto id = filter->currentData().toString().toStdString();
+            if (id.empty() || !timeline->oldest() || timeline->oldest() >= timeline->latest())
+                return;
             auto state = player->status();
-            if (state.duration_ns > 0)
-                player->seek(int64_t(double(seek->value()) / 10000 * state.duration_ns));
+            if (state.channel != id || state.state == "stopped" || state.state == "ended" ||
+                state.state == "error")
+                player->open(id, cursor_ms ? cursor_ms : timeline->oldest(), true, follows(id));
+            else
+                player->play();
         });
-        timeline->clicked = [this](int64_t at) {
-            for (const auto &r : playlist)
-                if (r.available && r.duration_ns > 0 && r.started_ms <= at &&
-                    r.started_ms + r.duration_ns / 1000000 > at) {
-                    open(r, (at - r.started_ms) * 1000000);
-                    return;
-                }
-            playback_notice =
-                "No recording at the selected time. Select the next available recording.";
+        QObject::connect(pause, &QPushButton::clicked, &w, [this] {
+            camera_playing = false;
+            player->pause();
+        });
+        QObject::connect(stop, &QPushButton::clicked, &w, [this] {
+            camera_changed = false;
+            camera_playing = false;
+            player->stop();
+        });
+        timeline->seek_requested = [this](int64_t at) {
+            auto id = filter->currentData().toString().toStdString();
+            if (id.empty())
+                return;
+            cursor_ms = at;
+            bool play = player->status().state != "paused";
+            player->open(id, at, play, follows(id));
         };
         auto *timer = new QTimer(&w);
         QObject::connect(timer, &QTimer::timeout, &w, [this] { tick(); });
@@ -514,59 +419,6 @@ struct Window::Vms {
         if (!assignment->view()->isVisible())
             assignment->setCurrentIndex(std::max(0, assignment->findData(qs(cells[selected]))));
     }
-    void open(const Recording &r, int64_t at = 0) {
-        if (!r.available || (r.state != "finalized" && r.state != "legacy")) {
-            playback_notice = "Recording is unavailable, interrupted or still being written.";
-            return;
-        }
-        if (opening.valid()) {
-            playback_notice = "Opening a recording; please wait.";
-            return;
-        }
-        opening_name = r.name;
-        opening_seek = at;
-        opening_cancelled = false;
-        opening = std::async(std::launch::async,
-                             [this, name = r.name] { return w.controller_.open_recording(name); });
-        // Selecting a row also chooses its camera for the timeline and continuation.
-        int idx = filter->findData(qs(r.channel));
-        if (idx >= 0 && idx != filter->currentIndex()) {
-            filter->setCurrentIndex(idx);
-            request();
-        }
-        playback_notice = "Opening recording…";
-    }
-    void advance(int direction, bool automatic) {
-        auto it = std::find_if(playlist.begin(), playlist.end(),
-                               [this](auto &r) { return r.name == current; });
-        if (it == playlist.end()) {
-            if (automatic)
-                playback_notice = "End of loaded recording range.";
-            return;
-        }
-        auto origin = *it;
-        while (true) {
-            if (direction > 0) {
-                if (++it == playlist.end())
-                    break;
-            } else {
-                if (it == playlist.begin())
-                    break;
-                --it;
-            }
-            if (!it->available || (it->state != "finalized" && it->state != "legacy"))
-                continue;
-            if (automatic && (origin.session.empty() || it->session != origin.session ||
-                              it->fragment != origin.fragment + 1)) {
-                playback_notice =
-                    "Recording gap or session change. Use Next recording to continue.";
-                return;
-            }
-            open(*it);
-            return;
-        }
-        playback_notice = "End of loaded recording range.";
-    }
     void tick() {
         try {
             if (!ui_ready && w.controller_.status_ready()) {
@@ -580,68 +432,46 @@ struct Window::Vms {
                 apply();
                 save_ui();
                 w.persist();
+                timeline->now(QDateTime::currentMSecsSinceEpoch());
+                if (!query.valid())
+                    query_pending = true;
+                player->follow(follows(filter->currentData().toString().toStdString()));
             }
-            if (ticks % 50 == 0 && !query.valid())
-                request(false);
             if (query.valid() &&
                 query.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
                 auto result = query.get();
-                busy = false;
                 if (result.revision == revision) {
-                    std::string selected_recording;
-                    const int selected_row = recordings->currentRow();
-                    if (selected_row >= 0 && selected_row < int(rows.size()))
-                        selected_recording = rows[selected_row].name;
-                    rows = std::move(result.rows);
-                    playlist = std::move(result.playlist);
-                    timeline->recordings = playlist;
-                    timeline->from = from->dateTime().toMSecsSinceEpoch();
-                    timeline->to = to->dateTime().toMSecsSinceEpoch();
-                    timeline->update();
-                    timeline_info->setText(result.timeline_truncated
-                                               ? "Timeline limited to the latest 10,000 segments. "
-                                                 "Narrow the date range."
-                                           : filter->currentData().toString().isEmpty()
-                                               ? "Select one camera to show recording coverage."
-                                               : QString("%1 recording intervals · grey areas have "
-                                                         "no known playable coverage")
-                                                     .arg(playlist.size()));
-                    recordings->setRowCount(rows.size());
-                    for (unsigned i = 0; i < rows.size(); i++) {
-                        auto &r = rows[i];
-                        QStringList text{QDateTime::fromMSecsSinceEpoch(r.started_ms)
-                                             .toString("yyyy-MM-dd HH:mm:ss"),
-                                         qs(r.camera_name.empty() ? r.channel : r.camera_name),
-                                         clock_text(r.duration_ns),
-                                         size_text(r.size),
-                                         r.available ? qs(r.state) : "missing",
-                                         qs(r.name)};
-                        for (int j = 0; j < text.size(); j++)
-                            recordings->setItem(i, j, new QTableWidgetItem(text[j]));
-                    }
-                    if (!selected_recording.empty()) {
-                        bool found = false;
-                        for (unsigned i = 0; i < rows.size(); i++)
-                            if (rows[i].name == selected_recording) {
-                                recordings->setCurrentCell(i, 0);
-                                found = true;
-                                break;
-                            }
-                        if (!found)
-                            recordings->clearSelection();
-                    }
-                    auto id = filter->currentData();
+                    const auto chosen = filter->currentData();
                     filter->clear();
-                    filter->addItem("All cameras", "");
-                    for (auto &c : result.cameras) {
-                        auto active =
-                            std::find_if(source_names.begin(), source_names.end(),
-                                         [&](auto &entry) { return entry.first == c.first; });
-                        filter->addItem(
-                            qs(active == source_names.end() ? c.second : active->second),
-                            qs(c.first));
+                    std::set<std::string> added;
+                    for (const auto &entry : source_names) {
+                        filter->addItem(qs(entry.second), qs(entry.first));
+                        added.insert(entry.first);
                     }
-                    filter->setCurrentIndex(std::max(0, filter->findData(id)));
+                    for (const auto &entry : result.cameras)
+                        if (added.insert(entry.first).second)
+                            filter->addItem(qs(entry.second), qs(entry.first));
+                    auto index = filter->findData(chosen);
+                    filter->setCurrentIndex(index >= 0 ? index : (filter->count() ? 0 : -1));
+                    if (filter->currentData() != chosen) {
+                        select_camera();
+                    } else {
+                        timeline->now(QDateTime::currentMSecsSinceEpoch());
+                        const auto oldest = result.coverage.oldest_ms;
+                        timeline->coverage(std::move(result.coverage));
+                        if (camera_changed && oldest) {
+                            if (!cursor_ms)
+                                cursor_ms = *oldest;
+                            const auto id = filter->currentData().toString().toStdString();
+                            player->open(id, cursor_ms, camera_playing, follows(id));
+                            camera_changed = false;
+                        }
+                        timeline_info->setText(result.coverage.pending_durations
+                                                   ? "Some older recordings have unknown duration "
+                                                     "· green: recorded · grey: unavailable"
+                                                   : "Green: recorded · grey: no playable "
+                                                     "recording · gaps are skipped");
+                    }
                     storage->setText(QString("Recorded %1 · free %2 · quota %3 · reserved free %4")
                                          .arg(size_text(result.storage.recorded_bytes),
                                               size_text(result.storage.available_bytes),
@@ -651,82 +481,39 @@ struct Window::Vms {
             }
             if (query_pending && !query.valid()) {
                 query_pending = false;
-                busy = true;
-                RecordingQuery q;
-                q.channel = filter->currentData().toString().toStdString();
-                q.from_ms = from->dateTime().toMSecsSinceEpoch();
-                q.to_ms = to->dateTime().toMSecsSinceEpoch();
-                q.before_ms = before;
-                q.before_name = before_name;
+                auto channel = filter->currentData().toString().toStdString();
                 auto generation = revision;
-                if (q.to_ms < q.from_ms)
-                    throw std::runtime_error("Search end must be after its start");
-                auto playback = player->status();
-                query = std::async(std::launch::async, [this, q, generation, playback] {
-                    if (playback.frames && playback.duration_ns >= 0)
-                        w.controller_.recording_duration(playback.recording, playback.duration_ns);
-                    Result result;
-                    result.revision = generation;
-                    result.rows = w.controller_.recordings(q);
-                    result.storage = w.controller_.storage();
-                    result.cameras = w.controller_.recording_cameras();
-                    if (!q.channel.empty()) {
-                        auto t = q;
-                        t.limit = 200;
-                        t.before_ms = INT64_MAX;
-                        t.before_name.clear();
-                        while (result.playlist.size() < 10000) {
-                            auto batch = w.controller_.recordings(t);
-                            if (batch.empty())
-                                break;
-                            result.playlist.insert(result.playlist.end(), batch.begin(),
-                                                   batch.end());
-                            t.before_ms = batch.back().started_ms;
-                            t.before_name = batch.back().name;
-                            if (batch.size() < 200)
-                                break;
-                        }
-                        result.timeline_truncated = result.playlist.size() >= 10000;
-                        std::reverse(result.playlist.begin(), result.playlist.end());
-                    }
-                    return result;
+                query = std::async(std::launch::async, [this, channel, generation] {
+                    auto &catalog = w.controller_.recording_catalog();
+                    if (!channel.empty())
+                        catalog.index_unknown(channel);
+                    Result out;
+                    out.revision = generation;
+                    if (!channel.empty())
+                        out.coverage = catalog.coverage(channel);
+                    out.cameras = catalog.cameras();
+                    out.storage = catalog.storage();
+                    return out;
                 });
             }
-            if (opening.valid() &&
-                opening.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-                auto file = opening.get();
-                if (!opening_cancelled) {
-                    current = opening_name;
-                    pending_seek = opening_seek;
-                    player->open(std::move(file));
-                    playback_notice.clear();
-                }
-            }
             auto state = player->status();
-            if (pending_seek >= 0 && (state.state == "playing" || state.state == "paused") &&
-                state.recording == current) {
-                if (pending_seek)
-                    player->seek(pending_seek);
-                pending_seek = -1;
-            }
-            if (state.state == "ended" && state.recording == current && opening_name == current &&
-                !opening.valid() && playback_notice.isEmpty())
-                advance(1, true);
-            play_status->setText(
-                playback_notice.isEmpty()
-                    ? qs(state.state) + (state.error.empty() ? QString{} : " · " + qs(state.error))
-                    : playback_notice);
-            play_position->setText(clock_text(state.position_ns) + " / " +
-                                   clock_text(state.duration_ns));
-            if (!seek->isSliderDown())
-                seek->setValue(state.duration_ns > 0 ? std::clamp(int(double(state.position_ns) /
-                                                                      state.duration_ns * 10000),
-                                                                  0, 10000)
-                                                     : 0);
+            if (!camera_changed &&
+                state.channel == filter->currentData().toString().toStdString() &&
+                state.state != "stopped")
+                cursor_ms = state.position_ms;
+            timeline->position(cursor_ms);
+            play_position->setText(cursor_ms ? QDateTime::fromMSecsSinceEpoch(cursor_ms).toString(
+                                                   "yyyy-MM-dd HH:mm:ss")
+                                             : QString{});
+            QString label = state.state == "waiting" ? "Waiting for the next finalized recording…"
+                                                     : qs(state.state);
+            if (!state.notice.empty())
+                label += " · " + qs(state.notice);
+            if (!state.error.empty())
+                label += " · " + qs(state.error);
+            play_status->setText(label);
         } catch (const std::exception &e) {
-            busy = false;
-            playback_notice = qs(e.what());
-            play_status->setText(playback_notice);
+            play_status->setText(qs(e.what()));
         }
     }
 };
@@ -735,13 +522,11 @@ Window::Window(Controller &c, Options options, std::string config)
       vms_(std::make_unique<Vms>(*this)) {
     vms_->build();
 }
-PlaybackStatus Window::playback_status() const { return vms_->player->status(); }
+TimelinePlaybackStatus Window::timeline_status() const { return vms_->player->status(); }
 Tiles *Window::recording_view() const { return vms_->play_tiles; }
 Window::~Window() {
     if (vms_->query.valid())
         vms_->query.wait();
-    if (vms_->opening.valid())
-        vms_->opening.wait();
     // GL users must release their surfaces before player/controller destruction.
     delete takeCentralWidget();
     tiles_ = nullptr;

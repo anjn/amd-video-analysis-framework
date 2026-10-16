@@ -3,9 +3,12 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <set>
 #include <string>
 #include <vector>
 struct sqlite3;
+struct sqlite3_stmt;
 namespace amdva::streaming {
 struct Recording {
     std::string name, channel, camera_name, session, state;
@@ -19,6 +22,14 @@ struct RecordingQuery {
     int64_t from_ms{}, to_ms{INT64_MAX}, before_ms{INT64_MAX};
     std::string before_name;
     unsigned limit{50};
+};
+struct RecordingInterval {
+    int64_t from_ms{}, to_ms{}; // Half-open [from, to), receiver-side wall time.
+};
+struct RecordingCoverage {
+    std::vector<RecordingInterval> intervals;
+    std::optional<int64_t> oldest_ms;
+    uint64_t pending_durations{};
 };
 struct StorageStatus {
     uint64_t recorded_bytes{}, available_bytes{};
@@ -44,6 +55,15 @@ class Catalog {
                 const std::string &camera_name = {}, const std::string &session = {},
                 unsigned fragment = 0);
     void closed(const std::string &filename, int64_t duration_ns = -1);
+    // Correct new recording timestamps from the recorder's media clock.
+    void media_start(const std::string &filename, int64_t started_ms);
+    RecordingCoverage coverage(const std::string &channel) const;
+    // Containing recording, or the first recording after the requested time.
+    std::optional<Recording> resolve(const std::string &channel, int64_t at_ms,
+                                     const std::string &exclude = {}) const;
+    std::optional<Recording> next(const Recording &) const;
+    // Container metadata only; bounded, no decoding. Call off the GUI thread.
+    void index_unknown(const std::string &channel);
     void interrupted(const std::string &filename);
     void duration(const std::string &filename, int64_t duration_ns);
     std::vector<Recording> list(const RecordingQuery & = {}) const;
@@ -60,6 +80,8 @@ class Catalog {
     int directory_{-1}, lock_{-1};
     mutable std::recursive_mutex mutex_;
     std::vector<std::weak_ptr<RecordingFile>> playing_;
+    std::set<std::string> duration_attempted_;
+    Recording row(sqlite3_stmt *) const;
     void sql(const char *statement);
 };
 } // namespace amdva::streaming

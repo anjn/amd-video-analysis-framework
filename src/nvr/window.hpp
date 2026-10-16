@@ -70,7 +70,7 @@ class Window final : public QMainWindow {
   public:
     Window(Controller &controller, Options options, std::string config);
     ~Window() override;
-    PlaybackStatus playback_status() const;
+    TimelinePlaybackStatus timeline_status() const;
     Tiles *live_view() const { return tiles_; }
     Tiles *recording_view() const;
 

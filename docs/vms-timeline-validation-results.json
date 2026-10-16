@@ -1,0 +1,142 @@
+{
+  "schema": 1,
+  "validated_at": "2026-10-15T18:26:45.675977+09:00",
+  "base_commit": "239b39ddefc6929730dfeb8aa9bf1b5b37226ebc",
+  "working_tree_changes": true,
+  "hardware": {
+    "cpu": "AMD Ryzen AI 9 HX 370",
+    "gpu": "AMD Radeon 890M",
+    "gpu_arch": "gfx1150",
+    "kernel": "6.17.0-1032-oem"
+  },
+  "scope": "Wall-time catalog and GUI playback correctness, hardware decoding and zero-copy audit. Two 1080p live cameras with AI and ten-second recording fragments. Does not certify 16-live-plus-two-playback capacity or long-term resource stability.",
+  "isolated_ctest": {
+    "tests": 22,
+    "failures": 0,
+    "passed": true,
+    "duration_s": 33.12,
+    "log": "artifacts/vms-timeline-ctest-final.log"
+  },
+  "hardware_playback": {
+    "passed": true,
+    "fixture": "640x360, 30fps, two-second H264/H265 Matroska fragments",
+    "paused_seek_ms": 3500,
+    "transitions_before_tail": 6,
+    "corrupt_files_skipped": 1,
+    "maximum_preview_delivery_interval_ms": 37.4584,
+    "audit_errors": 0,
+    "scenarios": [
+      "continuous boundaries",
+      "paused accurate seek",
+      "gaps",
+      "H264/H265 changes",
+      "corruption",
+      "wait and follow appended finalized fragments",
+      "camera changes",
+      "rapid requests",
+      "stop releases active and lookahead pins"
+    ],
+    "log": "artifacts/vms-timeline-hardware-6.log"
+  },
+  "gui": {
+    "passed": true,
+    "duration_s": 130,
+    "server_restarted": true,
+    "codec_swap": true,
+    "finalized_recordings_checked": 26,
+    "invalid_recordings": [],
+    "result": {
+      "audit_errors": 0,
+      "elapsed_s": 130.03084322,
+      "frames": 2831,
+      "max_present_gap_ms": 64.27689,
+      "position_ms": 1792056188143,
+      "state": "playing",
+      "transitions": 10
+    },
+    "artifacts": "artifacts/vms-timeline-gui-final",
+    "resource_growth_guard_exercised": false,
+    "resource_note": "Run duration is shorter than the 240-second warmup. Zero growth fields in the wrapper summary do not establish stability."
+  },
+  "installed_sdk": {
+    "passed": true,
+    "qt_dependency_in_streaming": false,
+    "timeline_preview_submissions": 183,
+    "timeline_transitions": 2,
+    "legacy_duration_indexing": true,
+    "file_playback_frames": 60,
+    "logs": [
+      "artifacts/vms-timeline-sdk-example.log",
+      "artifacts/vms-timeline-sdk-run.log",
+      "artifacts/vms-timeline-sdk-file-playback.log"
+    ]
+  },
+  "sources_sha256": {
+    "examples/sdk/CMakeLists.txt": "4b632cf0539aa175360c3c1d24f370acacc35bfb83043ccacf8a172f0cfe82b9",
+    "include/amdva/streaming/catalog.hpp": "f26d5fbe8f02a79afa425835a311f771eb4b6ba792da61102e9449a445afc05c",
+    "include/amdva/streaming/controller.hpp": "60fa985970ae85713feab481ff33b2510f5863f3c8426858b1729306e973101f",
+    "include/amdva/streaming/playback.hpp": "4fb5ecd6782bb301f97ee41515d6542c98f05b0c60f35c4dc338f4e7fe4b9575",
+    "src/nvr/CMakeLists.txt": "c063acff62aa4df0e044f06b048bc9c54650747c437fd95304ec515cef999c28",
+    "src/nvr/vms.cpp": "7206e836aecf1bbe0198edb3bf003ff1df563b33d3845da9aeade401354882bb",
+    "src/nvr/window.hpp": "3ea13ea06e78a5d0ecdbadf695fa5ef477e1b44ae7d0a54f249fcb6316f20438",
+    "src/streaming/CMakeLists.txt": "4218496ed0558dc94cdb6af2aabee5c0e12c05ff65d2c76a3cde3c7c87e698ac",
+    "src/streaming/catalog.cpp": "3fe5bdd17898c575e04d0ca8c30536f50c3efdb3445bfcad0e9735c28406a313",
+    "src/streaming/controller.cpp": "113499a162c882cbb69ce98fb1c9ffd1dd6fe264bbcbd051be1b4b204147bedb",
+    "src/streaming/playback.cpp": "dd98e2766e718433fbac969a333032253e0de21c566e9de3e8a0564516987651",
+    "tools/dashboard_nvr_validate.cpp": "61dc292cfc315181e326f067a47ff11a3e4f3d0894931741e85f2ef32923eeff",
+    "tools/vms_validate.cpp": "48a353247b851ba5265121be7208143689d355ebc829359761d79bff50d5a5de",
+    "examples/sdk/timeline.cpp": "7e3e60afc698d23ac8edb2d893cf629c9f90c7bb845ca145c271a9a0219ebb4d",
+    "src/nvr/timeline.cpp": "7262d7a14f1e7bbefbf7e91b589c482b5f66fa0f5b3454452d7d3e1d1be206b1",
+    "src/nvr/timeline.hpp": "fc4899e2d0142466b838e5b40139a258fee7677e1c6d5eda9547add9b0654d58",
+    "tests/timeline_catalog_tests.cpp": "0dc8c1c4d4e38b1b367d96d041fb1038444477479100c6456262248cb2d9f332",
+    "tests/timeline_widget_tests.cpp": "cc97c5eb52fdea2109d93b176f98f959b995433550596877ba64290fa0f280db",
+    "tools/timeline_validate.cpp": "6856018c8c861cd12e678ef84299e0be916059e830097b32c78fe1dafa8d53fe"
+  },
+  "standard_build_ctest": {
+    "tests": 25,
+    "failures": 0,
+    "passed": true,
+    "duration_s": 45.23,
+    "log": "artifacts/vms-timeline-standard-ctest.log"
+  },
+  "runtime_sha256": {
+    "build/src/nvr/amdva-nvr": "a7f4c3fd39970b4773d005c92563e0665f018e076f2ea62279a328a1b9f2cbf2",
+    "build/src/streaming/libamdva_streaming.so": "731eca8aed5c1e2b620a94453e096ff23f9ee152db891dc8f5e4f9553199ddb3",
+    "artifacts/vms-timeline-build/src/nvr/amdva-nvr": "7fea794fb2e714e618c81577eb6c073853f76e8f3bef5a301e65d23f23a81f63",
+    "artifacts/vms-timeline-build/src/streaming/libamdva_streaming.so": "ca88f069e41876eb98ca056d6336782f34f1bfb2e23652585f20901cb8b34597"
+  },
+  "camera_selection_update": {
+    "validated_at": "2026-10-16T10:25:32.339110+09:00",
+    "passed": true,
+    "duration_s": 65,
+    "checks": [
+      "Initial selected camera displays a paused frame without pressing Play",
+      "Paused camera switch preserves requested wall time within 2ms",
+      "Switched camera preroll position is within 100ms of selected time",
+      "Playback resumes and crosses three file boundaries",
+      "GPU copy audit has zero violations"
+    ],
+    "gui_result": {
+      "audit_errors": 0,
+      "camera_switch_preserved_time": true,
+      "elapsed_s": 65.032981787,
+      "frames": 874,
+      "max_present_gap_ms": 64.662094,
+      "position_ms": 1792113866827,
+      "state": "playing",
+      "transitions": 3
+    },
+    "artifacts": "artifacts/vms-camera-select-gui",
+    "widget_test": "artifacts/vms-camera-select-widget-test.log",
+    "standard_build": "artifacts/vms-camera-select-standard-build.log",
+    "sources_sha256": {
+      "src/nvr/vms.cpp": "38ae4d295484e954a17bad71d827085630809843147b2a40fa9011eeb03eba96",
+      "tools/vms_validate.cpp": "6c71770c6f1cd1f34f3c5531b6de19568c1d13af4dcb51306bcbbfa1e394363f"
+    },
+    "runtime_sha256": {
+      "build/src/nvr/amdva-nvr": "0d6609e51f01b9e2fd4adce2ce974ad1ca930191edcdecf153775c323271ed4d",
+      "artifacts/vms-timeline-build/src/nvr/amdva-vms-validate": "3e2bc1da5a952781eb8c0b093e2cf8114bf022168767691d48001c4e1de6f442"
+    },
+    "provenance_note": "Top-level hashes describe the original timeline implementation. This section records the subsequent selected-time camera preview update."
+  }
+}

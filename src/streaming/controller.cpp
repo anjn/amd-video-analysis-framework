@@ -92,6 +92,7 @@ struct Controller::Channel {
         GstElement *input{};
         std::string session{identifier()}, camera_name, channel;
         GstClockTime origin{GST_CLOCK_TIME_NONE};
+        int64_t wall_origin_ms{-1};
         bool ending{};
         Clock::time_point deadline;
         std::mutex mutex;
@@ -148,6 +149,11 @@ struct Controller::Channel {
                             const auto name = std::filesystem::path(loc).filename().string();
                             guint64 duration = GST_CLOCK_TIME_NONE;
                             gst_structure_get_uint64(s, "fragment-duration", &duration);
+                            guint64 offset = GST_CLOCK_TIME_NONE;
+                            gst_structure_get_uint64(s, "fragment-offset", &offset);
+                            if (wall_origin_ms >= 0 && GST_CLOCK_TIME_IS_VALID(offset))
+                                owner->controller.catalog_->media_start(
+                                    name, wall_origin_ms + offset / GST_MSECOND);
                             owner->controller.catalog_->closed(
                                 name, GST_CLOCK_TIME_IS_VALID(duration) ? int64_t(duration) : -1);
                             std::lock_guard<std::mutex> lock(mutex);
@@ -716,6 +722,8 @@ struct Controller::Channel {
                 if (space && Clock::now() >= record_retry) {
                     if (!recording && key)
                         start_record(gst_sample_get_caps(sample.get()));
+                    if (recording && recording->wall_origin_ms < 0)
+                        recording->wall_origin_ms = g_get_real_time() / 1000;
                     if (recording && !push(recording->input, sample, recording->origin)) {
                         end_record();
                         state.gaps++;

@@ -16,11 +16,42 @@ class PlaybackSession {
     PlaybackSession(const PlaybackSession &) = delete;
     PlaybackSession &operator=(const PlaybackSession &) = delete;
     void open(std::shared_ptr<RecordingFile>, bool play = true);
+    void open(std::shared_ptr<RecordingFile>, bool play, int64_t position_ns);
     void play();
     void pause();
     void seek(int64_t position_ns);
     void stop();
     PlaybackStatus status() const;
+    Slot &slot();
+
+  private:
+    friend class TimelinePlaybackSession;
+    PlaybackSession(GstVaDisplay *, Slot *);
+    void output(bool enabled, uint64_t generation);
+    bool ready() const;
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
+struct TimelinePlaybackStatus {
+    std::string channel, state{"stopped"}, error, notice;
+    int64_t requested_ms{}, position_ms{};
+    uint64_t frames{}, transitions{}, skipped{};
+};
+// Qt-free wall-time playback. Catalog must outlive this session; VA display is retained.
+// One active decoder plus one bounded, paused lookahead decoder.
+class TimelinePlaybackSession {
+  public:
+    TimelinePlaybackSession(GstVaDisplay *, Catalog &);
+    ~TimelinePlaybackSession();
+    TimelinePlaybackSession(const TimelinePlaybackSession &) = delete;
+    TimelinePlaybackSession &operator=(const TimelinePlaybackSession &) = delete;
+    void open(const std::string &channel, int64_t at_ms, bool play = true, bool follow = true);
+    void seek(int64_t at_ms);
+    void play();
+    void pause();
+    void stop();
+    void follow(bool expected);
+    TimelinePlaybackStatus status() const;
     Slot &slot();
 
   private:

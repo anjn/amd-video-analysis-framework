@@ -102,6 +102,8 @@ class Controller {
     void update_source(Source source);
     std::vector<Recording> recordings(const RecordingQuery &q = {}) const;
     std::shared_ptr<RecordingFile> open_recording(const std::string &name);
+    // The catalog must outlive playback sessions that use it.
+    Catalog &recording_catalog() { return *catalog_; }
     StorageStatus storage() const;
     void recording_duration(const std::string &, int64_t);
     std::vector<std::pair<std::string, std::string>> recording_cameras() const;
