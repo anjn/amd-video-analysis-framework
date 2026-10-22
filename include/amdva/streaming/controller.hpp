@@ -19,6 +19,9 @@
 #include <mutex>
 #include <thread>
 namespace amdva::streaming {
+// Shared admission and persistent preview-surface bounds.
+inline constexpr unsigned max_video_width = 2560;
+inline constexpr unsigned max_video_height = 1440;
 // Call before creating GStreamer, Qt or worker threads.
 void initialize_runtime();
 using Clock = std::chrono::steady_clock;

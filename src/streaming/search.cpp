@@ -99,7 +99,7 @@ extern "C" __global__ void crop_rgb(const unsigned char *src,unsigned pitch,unsi
 })",
                  "crop_rgb", gpu_arch(device)),
           rgb(size_t(limit) * limit * 3), limit(limit) {
-        converted = va.create_bgra(1920, 1080);
+        converted = va.create_bgra(max_video_width, max_video_height);
         imported = std::make_unique<ImportedSurface>(va.export_surface(converted));
     }
     ~Impl() {
@@ -119,7 +119,7 @@ SearchImage SearchCropper::crop(VASurfaceID surface, unsigned width, unsigned he
 std::vector<SearchImage> SearchCropper::crop_many(VASurfaceID surface, unsigned width,
                                                   unsigned height,
                                                   const std::vector<Detection> &boxes) {
-    if (!width || !height || width > 1920 || height > 1080)
+    if (!width || !height || width > max_video_width || height > max_video_height)
         throw std::invalid_argument("Unsupported search source size");
     std::vector<SearchImage> images;
     if (boxes.empty())

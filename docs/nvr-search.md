@@ -144,8 +144,8 @@ build/src/nvr/amdva-search-validate /path/to/test-config.json
 
 The validator exercises collection, English/Japanese text queries, card
 playback and dragging a recorded region. Use `amdva-rtsp-files` for MP4/MKV
-fixtures. Inputs above the demo's 1920×1080 limit should be converted to separate
-1080p test copies; original files are not modified.
+fixtures. The demo accepts progressive 8-bit H.264/H.265 inputs up to 2560×1440.
+Larger inputs require separate downscaled test copies; original files are not modified.
 
 Add `--exercise-deletion` only with a disposable recording root: it deletes
 closed test recordings and verifies removal of their search images. With the

@@ -367,8 +367,9 @@ struct Controller::Channel {
             return GST_FLOW_EOS;
         GstVideoInfo info{};
         if (!gst_video_info_from_caps(&info, gst_sample_get_caps(s.get())) ||
-            GST_VIDEO_INFO_FORMAT(&info) != GST_VIDEO_FORMAT_NV12 || info.width > 1920 ||
-            info.height > 1080 || info.width % 2 || info.height % 2 ||
+            GST_VIDEO_INFO_FORMAT(&info) != GST_VIDEO_FORMAT_NV12 ||
+            info.width > int(max_video_width) || info.height > int(max_video_height) ||
+            info.width % 2 || info.height % 2 ||
             info.interlace_mode != GST_VIDEO_INTERLACE_MODE_PROGRESSIVE ||
             (info.colorimetry.matrix != GST_VIDEO_COLOR_MATRIX_UNKNOWN &&
              info.colorimetry.matrix != GST_VIDEO_COLOR_MATRIX_BT709) ||
@@ -930,7 +931,7 @@ Controller::Controller(Options options) : options_(std::move(options)) {
             s.image = std::make_unique<ImportedSurface>(s.va->export_surface(s.ai_surface));
             if (options_.preview_enabled)
                 for (auto &p : s.preview)
-                    p.surface = s.va->create_bgra(1920, 1080);
+                    p.surface = s.va->create_bgra(max_video_width, max_video_height);
         }
         if (options_.background_ai_enabled)
             for (auto &s : background_slots_) {

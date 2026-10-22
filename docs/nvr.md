@@ -5,8 +5,8 @@
 with a shared MIGraphX batch executor, optionally also analyzing keyframes from
 hidden sources. Source registration has no fixed count
 limit; camera, storage, network and decoder capacity still limit a deployment.
-The initial validated format is progressive, even-sized, 8-bit NV12 up to
-1920×1080, BT.709 limited range, from H.264 or H.265 at 30 FPS. Audio is ignored.
+The supported input format is progressive, even-sized, 8-bit NV12 up to
+2560×1440, BT.709 limited range, from H.264 or H.265 at 30 FPS. Audio is ignored.
 
 ## Build and start
 
@@ -181,9 +181,12 @@ reduction performed by GL sampling. A minimized window therefore does not submit
 extreme reduction ratios to VPE.
 
 Each slot owns a 640×640 linear BGRA VPE output with a persistent HIP mapping,
-plus three 1920×1080 linear BGRA preview surfaces imported into EGL once.
+plus three 2560×1440 linear BGRA preview surfaces imported into EGL once.
 Only the occupied rectangle is sampled; tile size changes do not reimport GPU
-allocations. GL fences protect preview surfaces from reuse while rendering.
+allocations. The larger 16-slot preview pool adds about 295 MiB of pixel
+storage versus the former 1080p pool, before decoder/allocator overhead.
+Detector, ReID and embedding tensor sizes are independent of source resolution.
+GL fences protect preview surfaces from reuse while rendering.
 Selection changes reuse these pools, including across camera reconnects.
 
 Preview conversion runs separately from inference. Each source keeps only its
@@ -315,3 +318,25 @@ and the limitations of buffer-swap notification as a display measurement.
 
 See [NVR semantic search](nvr-search.md) for native EmbeddingGemma 2 setup,
 collection policy, text and region queries, and inline result playback.
+
+## 1440p validation (2026-10-22)
+
+The original sixteen 2560×1440, 30 FPS, 8-bit HEVC files in `~/work/videos/`
+were served over RTSP without transcoding. A three-minute run exercised 16
+visible cameras, four visible cameras and all cameras hidden in turn. All
+inputs retained their original resolution; tracking settled at 1.98–2.02 Hz
+per camera, with no tracking queue drops or camera errors. Process RSS was
+about 6.3 GiB (peak 7.1 GiB). This is a short functional check, not a long soak.
+The existing bounded YOLO, ReID and embedding input sizes were unchanged.
+
+Text search, recording-region search, inline playback and deletion passed.
+Full-size playback produced 2560×1440 output; 100 alternating H.264 1080p / HEVC
+1440p hover previews passed with zero copy-audit or VPE errors (p95 89 ms).
+For 1440p, hover previews use a 428×240 GPU texture to respect VPE's 6:1
+reduction limit, sampled into the 320×180 popup by OpenGL. All 32 CTest tests
+also passed.
+
+The prepared local launcher is `bash artifacts/1440p-demo/run-demo.sh`.
+It serves the original videos on port 18570 and uses isolated demo settings
+and recordings under `artifacts/1440p-demo/` (these local artifacts are not
+committed).

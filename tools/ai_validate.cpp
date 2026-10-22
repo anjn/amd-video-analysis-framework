@@ -123,6 +123,8 @@ int main(int argc, char **argv) {
                                                {"tracking_age_ms", tracking_age},
                                                {"selected", s.source.selected},
                                                {"slot", s.slot},
+                                               {"input_width", int(s.input_width)},
+                                               {"input_height", int(s.input_height)},
                                                {"received", double(s.received)},
                                                {"ai", double(s.ai)},
                                                {"background_ai", double(s.background_ai)},

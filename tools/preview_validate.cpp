@@ -37,6 +37,33 @@ int main(int argc, char **argv) {
             reinterpret_cast<unsigned long long (*)()>(dlsym(RTLD_DEFAULT, "amdva_audit_errors"));
         if (audit)
             audit();
+        // Exercise full-size preview output as well as the small hover thumbnails.
+        // This catches mismatches between admission limits and allocated surfaces.
+        for (const auto *name : {"0.mkv", "1.mkv"}) {
+            PlaybackSession full(display);
+            {
+                std::lock_guard<std::mutex> lock(full.slot().mutex);
+                full.slot().target_width = max_video_width;
+                full.slot().target_height = max_video_height;
+            }
+            full.open(catalog.open_recording(name), false);
+            const auto deadline = Clock::now() + std::chrono::seconds(5);
+            while (!full.status().frames && full.status().state != "error" &&
+                   Clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            check(full.status().frames > 0, "Full-size playback preview missing");
+            std::lock_guard<std::mutex> lock(full.slot().mutex);
+            const auto &planes = full.slot().preview;
+            const auto ready = std::find_if(planes.begin(), planes.end(),
+                                            [](const auto &p) { return p.state == 1; });
+            check(ready != planes.end(), "Full-size preview plane missing");
+            check(ready->width <= max_video_width && ready->height <= max_video_height &&
+                      (ready->width == max_video_width || ready->height == max_video_height),
+                  "Full-size preview did not reach display bounds");
+            std::cout << "Full preview: source=" << ready->original_width << "x"
+                      << ready->original_height << " output=" << ready->width << "x"
+                      << ready->height << '\n';
+        }
         KeyframePreviewSession preview(display, catalog);
         auto obtain = [&](std::string camera, int64_t time) {
             auto id = preview.request(camera, time);
@@ -57,7 +84,9 @@ int main(int argc, char **argv) {
             if (!s.image)
                 std::cerr << "request " << i << " state=" << s.state << '\n';
             check(s.image && s.state == "ready", "GPU preview missing");
-            check(s.image->width <= 320 && s.image->height <= 180, "Preview exceeds bounds");
+            check(s.image->width <= std::max(320u, 2 * ((max_video_width + 11) / 12)) &&
+                      s.image->height <= std::max(180u, 2 * ((max_video_height + 11) / 12)),
+                  "Preview exceeds safe VPE bounds");
             check(s.image->frame_ms <= s.requested_ms && s.image->frame_ms >= base,
                   "Keyframe snapshot is after target");
             check(s.image->frame_ms >= base + ((s.requested_ms - base) / gop_ms) * gop_ms - 34,

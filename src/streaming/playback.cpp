@@ -34,7 +34,7 @@ struct PlaybackSession::Impl {
             slot.va =
                 std::make_unique<VaSession>(static_cast<VADisplay>(gst_va_display_get_va_dpy(d)));
             for (auto &p : slot.preview)
-                p.surface = slot.va->create_bgra(1920, 1080);
+                p.surface = slot.va->create_bgra(max_video_width, max_video_height);
         }
         worker = std::thread([this] { loop(); });
     }
@@ -453,7 +453,7 @@ struct TimelinePlaybackSession::Impl {
         slot.va =
             std::make_unique<VaSession>(static_cast<VADisplay>(gst_va_display_get_va_dpy(display)));
         for (auto &p : slot.preview)
-            p.surface = slot.va->create_bgra(1920, 1080);
+            p.surface = slot.va->create_bgra(max_video_width, max_video_height);
         for (auto &decoder : decoders)
             decoder.reset(new PlaybackSession(display, &slot));
         worker = std::thread([this] { loop(); });
@@ -827,9 +827,12 @@ struct KeyframePreviewSession::Impl {
         result->impl_->display = display;
         result->impl_->va = std::make_unique<VaSession>(
             static_cast<VADisplay>(gst_va_display_get_va_dpy(display.get())));
-        if (info.width <= 0 || info.height <= 0 || info.width > 1920 || info.height > 1080)
+        if (info.width <= 0 || info.height <= 0 || info.width > int(max_video_width) ||
+            info.height > int(max_video_height))
             throw std::runtime_error("Unsupported preview dimensions");
-        const double scale = std::min({1., 320. / info.width, 180. / info.height});
+        // Keep the GPU image within the validated 6:1 VPE reduction range.
+        // The popup samples this texture into its 320x180 viewport.
+        const double scale = std::max(1. / 6., std::min({1., 320. / info.width, 180. / info.height}));
         result->width = std::max(2u, 2 * unsigned(std::ceil(info.width * scale / 2)));
         result->height = std::max(2u, 2 * unsigned(std::ceil(info.height * scale / 2)));
         result->impl_->surface = result->impl_->va->create_bgra(result->width, result->height);

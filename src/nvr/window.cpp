@@ -180,9 +180,9 @@ void Tiles::initializeGL() {
                 try {
                     const auto layout = validate_layout(d);
                     EGLint attrs[] = {EGL_WIDTH,
-                                      1920,
+                                      EGLint(streaming::max_video_width),
                                       EGL_HEIGHT,
-                                      1080,
+                                      EGLint(streaming::max_video_height),
                                       EGL_LINUX_DRM_FOURCC_EXT,
                                       EGLint(d.layers[0].drm_format),
                                       EGL_DMA_BUF_PLANE0_FD_EXT,
@@ -503,7 +503,8 @@ void Tiles::paintGL() {
         if (playback_)
             video_rect_ = QRectF((x + 1) * width() / 2, (1 - y) * height() / 2, w * width() / 2,
                                  h * height() / 2);
-        const float u = float(p.width) / 1920, v = float(p.height) / 1080;
+        const float u = float(p.width) / streaming::max_video_width,
+                    v = float(p.height) / streaming::max_video_height;
         const float quad[] = {x, y, 0, 0, x + w, y, u, 0, x, y - h, 0, v, x + w, y - h, u, v};
         gl_->glUseProgram(image_program_);
         gl_->glActiveTexture(GL_TEXTURE0);

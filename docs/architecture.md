@@ -11,7 +11,7 @@ video-only GstAnalytics batch container whose children have those caps.
 Dimensions must be even and progressive. Declared matrices must be BT.709 and
 range limited; unknown colorimetry is treated as BT.709 limited. P010, HDR,
 interlacing, system-memory inputs and arbitrary DMA-BUF decoder inputs are
-rejected. The NVR's validated admission limit is 1920x1080; the standalone
+rejected. The NVR's admission limit is 2560x1440; the standalone
 watermark accepts up to 4096x4096. Inference caps advertise up to 32766 but larger
 geometries remain subject to driver and intermediate-memory limits.
 
