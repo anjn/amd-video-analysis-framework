@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -18,6 +19,7 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QSaveFile>
+#include <QStyleHints>
 #include <QTimer>
 #include <QUrl>
 #include <QUuid>
@@ -99,6 +101,9 @@ Tiles::Tiles(Controller &c, Slot *playback)
     surface_format.setSamples(4);
     setFormat(surface_format);
     current_.fill(-1);
+    auto *selection_timer = new QTimer(this);
+    connect(selection_timer, &QTimer::timeout, this, [this] { poll_selection(); });
+    selection_timer->start(20);
 }
 void Tiles::observe_visibility() {
     const bool active = isVisible() && isExposed() && visibility() != QWindow::Minimized;
@@ -116,10 +121,19 @@ void Tiles::exposeEvent(QExposeEvent *event) {
     observe_visibility();
 }
 Tiles::~Tiles() {
+    if (extracting_.valid())
+        extracting_.wait();
     if (!context() || !gl_)
         return;
     makeCurrent();
     gl_->glFinish();
+    for (unsigned i = 0; i < slot_count(); ++i) {
+        auto &s = slot(i);
+        std::lock_guard<std::mutex> lock(s.mutex);
+        for (unsigned j = 0; j < 3; ++j)
+            if (current_[i] == int(j) || textures_[i][j].fence)
+                s.preview[j].state = 0;
+    }
     for (auto &group : textures_)
         for (auto &t : group) {
             if (t.fence)
@@ -334,6 +348,8 @@ void Tiles::paintGL() {
                 }
             }
         }
+        if (playback_ && frozen_ && current_[i] >= 0)
+            continue;
         if (s.channel.empty()) {
             release_current(i);
             for (auto &p : s.preview)
@@ -379,7 +395,8 @@ void Tiles::paintGL() {
         if (!playback_ && cell_count_ && s.channel != cells_[focus_ >= 0 ? unsigned(focus_) : tile])
             continue;
         const int image = current_[index];
-        if (image < 0 || s.channel.empty() || s.preview[image].generation != s.generation)
+        if (image < 0 || ((!playback_ || !frozen_) &&
+                          (s.channel.empty() || s.preview[image].generation != s.generation)))
             continue;
         auto &p = s.preview[image];
         const float cellw = 2.f / side, cellh = 2.f / side;
@@ -391,6 +408,9 @@ void Tiles::paintGL() {
             w = h * aspect / available;
         const float x = -1 + (tile % side) * cellw + (cellw - w) / 2,
                     y = 1 - (tile / side) * cellh - (cellh - h) / 2;
+        if (playback_)
+            video_rect_ = QRectF((x + 1) * width() / 2, (1 - y) * height() / 2, w * width() / 2,
+                                 h * height() / 2);
         const float u = float(p.width) / 1920, v = float(p.height) / 1080;
         const float quad[] = {x, y, 0, 0, x + w, y, u, 0, x, y - h, 0, v, x + w, y - h, u, v};
         gl_->glUseProgram(image_program_);
@@ -426,6 +446,17 @@ void Tiles::paintGL() {
                 vertices(points.data(), points.size() / 2, 2);
                 gl_->glDrawArrays(GL_LINES, 0, points.size() / 2);
             }
+        }
+        if (playback_ && dragging_) {
+            auto rect =
+                QRectF(selection_start_, selection_end_).normalized().intersected(video_rect_);
+            float a = 2 * rect.left() / width() - 1, b = 1 - 2 * rect.top() / height(),
+                  c = 2 * rect.right() / width() - 1, d = 1 - 2 * rect.bottom() / height();
+            float points[] = {a, b, c, b, c, d, a, d};
+            gl_->glUseProgram(box_program_);
+            gl_->glUniform4f(gl_->glGetUniformLocation(box_program_, "pen"), 1, .8f, 0, 1);
+            vertices(points, 4, 2);
+            gl_->glDrawArrays(GL_LINE_LOOP, 0, 4);
         }
         if (playback_ && playback_time_visible_ && p.wall_time_ms) {
             draw_text_overlay(
@@ -511,15 +542,98 @@ unsigned Tiles::picked(const QPointF &p) const {
                     unsigned(std::max(0., p.x()) * side / std::max(1, width())) +
                         side * unsigned(std::max(0., p.y()) * side / std::max(1, height())));
 }
+void Tiles::cancel_selection() {
+    selection_cancelled_ = true;
+    dragging_ = false;
+    if (!extracting_.valid())
+        frozen_ = false;
+    update();
+}
+void Tiles::poll_selection() {
+    if (!extracting_.valid() ||
+        extracting_.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+        return;
+    frozen_ = false;
+    dragging_ = false;
+    try {
+        auto image = extracting_.get();
+        if (!selection_cancelled_ && region_selected)
+            region_selected(std::move(image));
+    } catch (const std::exception &e) {
+        if (selection_error)
+            selection_error(e.what());
+    }
+    update();
+}
 void Tiles::mousePressEvent(QMouseEvent *e) {
+    if (playback_ && region_selected && e->button() == Qt::LeftButton && current_[0] >= 0 &&
+        video_rect_.contains(e->position())) {
+        if (extracting_.valid())
+            return;
+        frozen_ = true;
+        dragging_ = false;
+        selection_cancelled_ = false;
+        selection_start_ = selection_end_ = e->position();
+        return;
+    }
     if (activated)
         activated(picked(e->position()), false);
+}
+void Tiles::mouseMoveEvent(QMouseEvent *e) {
+    if (!frozen_ || extracting_.valid())
+        return;
+    selection_end_ = e->position();
+    if (!dragging_ && (selection_end_ - selection_start_).manhattanLength() >=
+                          QGuiApplication::styleHints()->startDragDistance()) {
+        dragging_ = true;
+        if (selection_started)
+            selection_started();
+    }
+    update();
+}
+void Tiles::mouseReleaseEvent(QMouseEvent *e) {
+    if (!frozen_ || extracting_.valid() || e->button() != Qt::LeftButton)
+        return;
+    if (!dragging_) {
+        frozen_ = false;
+        if (activated)
+            activated(0, false);
+        return;
+    }
+    selection_end_ = e->position();
+    auto rect = QRectF(selection_start_, selection_end_).normalized().intersected(video_rect_);
+    if (rect.width() < 2 || rect.height() < 2) {
+        cancel_selection();
+        return;
+    }
+    auto &s = slot(0);
+    std::lock_guard<std::mutex> lock(s.mutex);
+    if (current_[0] < 0) {
+        cancel_selection();
+        return;
+    }
+    auto &p = s.preview[current_[0]];
+    Detection box;
+    box.x = (rect.x() - video_rect_.x()) / video_rect_.width() * p.width;
+    box.y = (rect.y() - video_rect_.y()) / video_rect_.height() * p.height;
+    box.w = rect.width() / video_rect_.width() * p.width;
+    box.h = rect.height() / video_rect_.height() * p.height;
+    auto surface = p.surface;
+    auto width = p.width, height = p.height;
+    extracting_ = std::async(std::launch::async, [this, surface, width, height, box] {
+        streaming::SearchCropper cropper(controller_.display(), search_image_size, search_device);
+        return cropper.crop(surface, width, height, box);
+    });
 }
 void Tiles::mouseDoubleClickEvent(QMouseEvent *e) {
     if (activated)
         activated(picked(e->position()), true);
 }
 void Tiles::keyPressEvent(QKeyEvent *e) {
+    if (e->key() == Qt::Key_Escape && frozen_) {
+        cancel_selection();
+        return;
+    }
     if (e->key() == Qt::Key_Escape && focus_ >= 0 && activated)
         activated(unsigned(focus_), true);
     else

@@ -22,6 +22,13 @@ class Tiles final : public QOpenGLWindow {
         update();
     }
     ~Tiles() override;
+    std::function<void()> selection_started;
+    std::function<void(streaming::SearchImage)> region_selected;
+    std::function<void(std::string)> selection_error;
+    unsigned search_image_size{384}, search_device{};
+    void cancel_selection();
+    bool selection_busy() const { return extracting_.valid(); }
+    QRectF displayed_video_rect() const { return video_rect_; }
     std::string error() const { return error_; }
     uint64_t presented() const { return presented_; }
     void playback_time_visible(bool enabled) {
@@ -40,6 +47,8 @@ class Tiles final : public QOpenGLWindow {
     void paintGL() override;
     void exposeEvent(QExposeEvent *) override;
     void mousePressEvent(QMouseEvent *) override;
+    void mouseMoveEvent(QMouseEvent *) override;
+    void mouseReleaseEvent(QMouseEvent *) override;
     void mouseDoubleClickEvent(QMouseEvent *) override;
     void keyPressEvent(QKeyEvent *) override;
 
@@ -49,6 +58,11 @@ class Tiles final : public QOpenGLWindow {
         GLuint texture{};
         GLsync fence{};
     };
+    bool frozen_{}, dragging_{}, selection_cancelled_{};
+    QPointF selection_start_, selection_end_;
+    QRectF video_rect_;
+    std::future<streaming::SearchImage> extracting_;
+    void poll_selection();
     Controller &controller_;
     Slot *playback_{};
     Slot &slot(unsigned i) { return playback_ ? *playback_ : controller_.gpu_slots()[i]; }

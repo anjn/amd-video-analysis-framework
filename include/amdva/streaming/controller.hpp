@@ -33,6 +33,7 @@ struct Options {
     bool background_ai_enabled{};
     bool tracking_enabled{true};
     bool preview_enabled{true};
+    SearchOptions search;
     PublicationOptions results;
     TelemetryOptions telemetry;
     unsigned background_ai_interval_seconds{5};
@@ -63,6 +64,8 @@ struct Frame {
     unsigned width{}, height{};
     Clock::time_point received;
     bool preview_consumed{};
+    int64_t wall_time_ms{};
+    std::string recording_session;
 };
 struct Plane {
     TraceToken timing;
@@ -86,6 +89,7 @@ struct Slot {
     Frame latest;
     std::string channel;
     uint64_t generation{}, sequence{};
+    int64_t playback_until_ms{}; // Exclusive playback bound; zero means unbounded.
     std::vector<Detection> detections;
     std::vector<TrackedObject> tracked;
     std::unique_ptr<MetadataTracker> tracker;
@@ -133,6 +137,7 @@ class Controller {
     PublicationStatus publication_status() const;
     std::vector<TelemetrySnapshot> telemetry() const;
     void presentation_active(bool);
+    SearchService *search_service() { return search_.get(); }
     void shutdown();
 
   private:
@@ -157,6 +162,7 @@ class Controller {
     std::vector<std::unique_ptr<Channel>> channels_;
     std::unique_ptr<Catalog> catalog_;
     std::unique_ptr<ResultPublisher> publisher_;
+    std::unique_ptr<SearchService> search_;
     std::atomic<bool> inference_ready_{false}, status_ready_{false};
     std::atomic<unsigned> last_batch_{0};
     std::atomic<double> batch_ms_{0};

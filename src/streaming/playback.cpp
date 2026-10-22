@@ -253,6 +253,16 @@ struct PlaybackSession::Impl {
                     } else if (enabled) {
                         auto &out = *target;
                         std::lock_guard<std::mutex> l(out.mutex);
+                        if ((!external || out.generation == output_generation) && out.playback_until_ms &&
+                            GST_CLOCK_TIME_IS_VALID(frame_position) &&
+                            file->recording().started_ms + int64_t(frame_position / GST_MSECOND) >=
+                                out.playback_until_ms) {
+                            held.reset();
+                            playing = false;
+                            preroll = false;
+                            set_state("ended");
+                            continue;
+                        }
                         auto it = std::find_if(out.preview.begin(), out.preview.end(),
                                                [](auto &p) { return p.state == 0; });
                         if (it != out.preview.end() &&
@@ -433,7 +443,7 @@ struct TimelinePlaybackSession::Impl {
     std::thread worker;
     bool closing{}, wanted{}, following{true}, selected{}, activated{};
     int active{-1}, prepared{-1};
-    int64_t requested{}, next_poll{};
+    int64_t requested{}, next_poll{}, until{};
     uint64_t generation{};
     Impl(GstVaDisplay *display, Catalog &c) : catalog(c) {
         if (!display)
@@ -504,6 +514,7 @@ struct TimelinePlaybackSession::Impl {
         {
             std::lock_guard<std::mutex> lock(slot.mutex);
             slot.channel = channel;
+            slot.playback_until_ms = until;
         }
     }
     int64_t next_time() const {
@@ -543,9 +554,13 @@ struct TimelinePlaybackSession::Impl {
             std::lock_guard<std::mutex> lock(mutex);
             channel = status.channel;
         }
+        if (until && next_time() >= until)
+            return;
         auto r = cursor ? catalog.next(*cursor) : catalog.resolve(channel, requested);
         // Bound individual iterations even for large runs of corrupt files.
         for (unsigned n = 0; r && n < 32; ++n) {
+            if (until && r->started_ms >= until)
+                return;
             if (r->started_ms + (r->duration_ns + GST_MSECOND - 1) / GST_MSECOND > next_time() &&
                 !rejected.count(r->name) && prepare(*r, active == 0 ? 1 : 0))
                 return;
@@ -664,8 +679,18 @@ TimelinePlaybackSession::TimelinePlaybackSession(GstVaDisplay *d, Catalog &c)
     : impl_(std::make_unique<Impl>(d, c)) {}
 TimelinePlaybackSession::~TimelinePlaybackSession() = default;
 void TimelinePlaybackSession::open(const std::string &channel, int64_t at, bool play, bool follow) {
-    impl_->enqueue(
-        [s = impl_.get(), channel, at, play, follow] { s->locate(channel, at, play, follow); });
+    impl_->enqueue([s = impl_.get(), channel, at, play, follow] {
+        s->until = 0;
+        s->locate(channel, at, play, follow);
+    });
+}
+void TimelinePlaybackSession::open_range(const std::string &channel, int64_t from, int64_t until) {
+    if (from < 0 || until <= from)
+        throw std::invalid_argument("Invalid playback range");
+    impl_->enqueue([s = impl_.get(), channel, from, until] {
+        s->until = until;
+        s->locate(channel, from, true, false);
+    });
 }
 void TimelinePlaybackSession::seek(int64_t at) {
     impl_->enqueue([s = impl_.get(), at] {
@@ -674,7 +699,7 @@ void TimelinePlaybackSession::seek(int64_t at) {
             std::lock_guard<std::mutex> lock(s->mutex);
             channel = s->status.channel;
         }
-        s->locate(channel, at, s->wanted, s->following);
+        s->locate(channel, s->until ? std::min(at, s->until - 1) : at, s->wanted, s->following);
     });
 }
 void TimelinePlaybackSession::play() {

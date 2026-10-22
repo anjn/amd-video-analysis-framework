@@ -50,6 +50,7 @@ class TimelinePlaybackSession {
     TimelinePlaybackSession(const TimelinePlaybackSession &) = delete;
     TimelinePlaybackSession &operator=(const TimelinePlaybackSession &) = delete;
     void open(const std::string &channel, int64_t at_ms, bool play = true, bool follow = true);
+    void open_range(const std::string &channel, int64_t from_ms, int64_t until_ms);
     void seek(int64_t at_ms);
     void play();
     void pause();

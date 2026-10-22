@@ -236,6 +236,23 @@ struct Controller::Channel {
     std::atomic<int64_t> last_packet_us{0};
     bool removed{}, decode_wait{true};
     GstClockTime decode_origin{GST_CLOCK_TIME_NONE};
+    struct SearchStamp {
+        int64_t wall_ms{};
+        std::string session;
+    };
+    std::mutex search_stamp_mutex;
+    std::map<GstClockTime, SearchStamp> search_stamps;
+    void stamp(GstClockTime decoded_pts, GstClockTime original_pts) {
+        if (!controller.search_ || !recording || recording->origin == GST_CLOCK_TIME_NONE ||
+            original_pts < recording->origin || !GST_CLOCK_TIME_IS_VALID(original_pts))
+            return;
+        std::lock_guard<std::mutex> lock(search_stamp_mutex);
+        search_stamps[decoded_pts] = {recording->wall_origin_ms +
+                                          int64_t((original_pts - recording->origin) / GST_MSECOND),
+                                      recording->session};
+        while (search_stamps.size() > 256)
+            search_stamps.erase(search_stamps.begin());
+    }
     unsigned retries{};
     Clock::time_point reconnect{Clock::now()}, record_retry{};
     uint64_t decode_count_base{}, ai_count_base{};
@@ -377,6 +394,16 @@ struct Controller::Channel {
         slot.latest = {std::move(trace),      std::move(s),
                        c.state.generation,    unsigned(info.width),
                        unsigned(info.height), index >= 16 ? c.background_captured : Clock::now()};
+        {
+            std::lock_guard<std::mutex> lock(c.search_stamp_mutex);
+            auto it = c.search_stamps.find(
+                GST_BUFFER_PTS(gst_sample_get_buffer(slot.latest.sample.get())));
+            if (it != c.search_stamps.end()) {
+                slot.latest.wall_time_ms = it->second.wall_ms;
+                slot.latest.recording_session = it->second.session;
+                c.search_stamps.erase(it);
+            }
+        }
         return GST_FLOW_OK;
     }
     void start_receive() {
@@ -504,6 +531,7 @@ struct Controller::Channel {
                     throw std::runtime_error("Missing keyframe parameters");
                 // Header prepending creates a new compressed buffer; retain the AU identity.
                 set_frame_trace(buffer, frame_trace(gst_sample_get_buffer(sample.get())));
+                stamp(0, GST_BUFFER_PTS(gst_sample_get_buffer(sample.get())));
                 decode_timing->submit(buffer);
                 const auto flow = gst_app_src_push_buffer(GST_APP_SRC(decode_input), buffer);
                 if (flow != GST_FLOW_OK ||
@@ -532,6 +560,10 @@ struct Controller::Channel {
         timing->activity(TimingStage::Swap, false);
         decode_wait = true;
         decode_origin = GST_CLOCK_TIME_NONE;
+        {
+            std::lock_guard<std::mutex> lock(search_stamp_mutex);
+            search_stamps.clear();
+        }
     }
     void end_record() {
         if (recording) {
@@ -656,8 +688,10 @@ struct Controller::Channel {
             GST_CLOCK_TIME_IS_VALID(GST_BUFFER_DTS(b)) && GST_BUFFER_DTS(b) >= origin
                 ? GST_BUFFER_DTS(b) - origin
                 : GST_CLOCK_TIME_NONE;
-        if (input == decode_input && decode_timing)
+        if (input == decode_input && decode_timing) {
+            stamp(GST_BUFFER_PTS(b), pts);
             decode_timing->submit(b);
+        }
         return gst_app_src_push_buffer(GST_APP_SRC(input), b) == GST_FLOW_OK;
     }
     void tick(bool space) {
@@ -818,6 +852,8 @@ struct Controller::Channel {
     }
 };
 Controller::Controller(Options options) : options_(std::move(options)) {
+    if (options_.search.enabled)
+        options_.background_ai_enabled = true;
     if (options_.batch != 1 && options_.batch != 2 && options_.batch != 4 && options_.batch != 8 &&
         options_.batch != 16)
         throw std::runtime_error("Invalid batch size");
@@ -888,6 +924,11 @@ Controller::Controller(Options options) : options_(std::move(options)) {
         display_ = nullptr;
         throw;
     }
+    if (options_.search.enabled) {
+        search_ = std::make_unique<SearchService>(*catalog_, display_, options_.search);
+        // HIP graph capture must finish before the live GPU schedulers start.
+        search_->wait_initialized();
+    }
     control_ = std::thread([this] { loop(); });
     gpu_ = std::thread([this] { gpu_loop(); });
     preview_ = std::thread([this] { preview_loop(); });
@@ -929,6 +970,8 @@ void Controller::shutdown() {
         gpu_.join();
     if (preview_.joinable())
         preview_.join();
+    if (search_)
+        search_->shutdown();
     channels_.clear();
 }
 void Controller::retention_minutes(unsigned minutes) {
@@ -1555,6 +1598,8 @@ void Controller::gpu_loop() {
                     if (box.w > 0 && box.h > 0)
                         s.detections.push_back(box);
                 }
+                if (search_)
+                    search_->submit(item.frame, item.channel, s.detections);
                 s.detected_at = item.frame.received;
                 s.detection_width = item.frame.width;
                 s.detection_height = item.frame.height;

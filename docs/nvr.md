@@ -310,3 +310,8 @@ latency, update intervals, stops and explicit discards. The headless command and
 GUI validator add a top-level `telemetry` array to periodic JSON. There is no
 latency/FPS pass/fail policy. See [telemetry](telemetry.md) for exact boundaries
 and the limitations of buffer-swap notification as a display measurement.
+
+## Person search
+
+See [NVR semantic search](nvr-search.md) for native EmbeddingGemma 2 setup,
+collection policy, text and region queries, and inline result playback.

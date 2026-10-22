@@ -1,4 +1,5 @@
 #include "amdva/streaming/playback.hpp"
+#include "search_page.hpp"
 #include "thumbnail.hpp"
 #include "timeline.hpp"
 #include "window.hpp"
@@ -47,6 +48,7 @@ QString size_text(uint64_t n) {
 struct Window::Vms {
     Window &w;
     QTabWidget *tabs{};
+    SearchPage *search_page{};
     QListWidget *cameras{};
     QComboBox *layout{}, *assignment{}, *filter{};
     QLabel *tile_label{}, *storage{}, *play_status{}, *play_position{}, *timeline_info{};
@@ -60,7 +62,7 @@ struct Window::Vms {
     QPushButton *erase{}, *cancel_erase{};
     QLabel *deletion_info{};
     std::vector<QWidget *> playback_controls;
-    std::future<void> releasing_player, releasing_preview;
+    std::future<void> releasing_player, releasing_preview, releasing_search;
     std::shared_ptr<std::promise<void>> deletion_release;
     bool deleting_ui{}, preview_visible{};
     uint64_t deletion_operation{}, preview_request{};
@@ -95,6 +97,7 @@ struct Window::Vms {
             preview->cancel();
         if (deleting_ui)
             return;
+        play_tiles->cancel_selection();
         const auto state = player->status();
         if (!camera_changed)
             camera_playing = state.state == "playing" || state.state == "waiting";
@@ -345,6 +348,8 @@ struct Window::Vms {
                 control->setEnabled(false);
             erase->setEnabled(false);
             cancel_erase->setEnabled(true);
+            play_tiles->cancel_selection();
+            releasing_search = search_page->release();
             releasing_player = player->stop_and_release();
             releasing_preview = preview->cancel();
             deletion_release = std::make_shared<std::promise<void>>();
@@ -442,6 +447,20 @@ struct Window::Vms {
         w.summary_->setWordWrap(true);
         ml->addWidget(w.summary_);
         tabs->addTab(manage, "Cameras");
+        search_page = new SearchPage(w.controller_);
+        tabs->addTab(search_page, "Search");
+        if (w.controller_.search_service()) {
+            play_tiles->search_image_size = w.options_.search.image_size;
+            play_tiles->search_device = w.options_.search.device;
+            play_tiles->selection_started = [this] { player->pause(); };
+            play_tiles->region_selected = [this](streaming::SearchImage image) {
+                search_page->search_image(std::move(image));
+                tabs->setCurrentWidget(search_page);
+            };
+            play_tiles->selection_error = [this](std::string error) {
+                play_status->setText(QString::fromStdString(error));
+            };
+        }
         QObject::connect(add, &QPushButton::clicked, &w, [this] { edit_camera(false); });
         QObject::connect(edit, &QPushButton::clicked, &w, [this] { edit_camera(true); });
         QObject::connect(settings, &QPushButton::clicked, &w, [this] { tabs->setCurrentIndex(2); });
@@ -487,7 +506,10 @@ struct Window::Vms {
                              assign(item->data(Qt::UserRole).toString().toStdString());
                          });
         QObject::connect(tabs, &QTabWidget::currentChanged, &w, [this](int index) {
+            if (index != tabs->indexOf(search_page))
+                search_page->leave();
             if (index != 1) {
+                play_tiles->cancel_selection();
                 player->pause();
                 preview_visible = false;
                 popup->clear();
@@ -650,9 +672,13 @@ struct Window::Vms {
             }
             if (deleting_ui && releasing_player.valid() && releasing_preview.valid() &&
                 releasing_player.wait_for(std::chrono::seconds(0)) == std::future_status::ready &&
-                releasing_preview.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                releasing_preview.wait_for(std::chrono::seconds(0)) == std::future_status::ready &&
+                releasing_search.valid() &&
+                releasing_search.wait_for(std::chrono::seconds(0)) == std::future_status::ready &&
+                !play_tiles->selection_busy()) {
                 releasing_player.get();
                 releasing_preview.get();
+                releasing_search.get();
                 deletion_release->set_value();
                 deletion_release.reset();
             }

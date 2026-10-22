@@ -36,5 +36,14 @@
   "telemetry": {
     "enabled": true,
     "stall_ms": 1000
+  },
+  "search": {
+    "enabled": true,
+    "library": "libeg2.so",
+    "bundle": "../artifacts/nvr-search",
+    "device": 0,
+    "image_size": 384,
+    "interval_ms": 1000,
+    "queue_limit": 64
   }
 }

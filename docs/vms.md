@@ -359,3 +359,8 @@ Wayland protocol logs confirmed native subsurface position updates. Deletion
 invalidation still cleared retained pixels. The full management GUI scenario
 passed again with zero copy/GL-image audit violations; see the follow-up section
 in the management validation record.
+
+## Person search
+
+See [NVR semantic search](nvr-search.md) for native EmbeddingGemma 2 setup,
+collection policy, text and region queries, and inline result playback.

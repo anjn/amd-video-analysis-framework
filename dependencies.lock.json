@@ -589,5 +589,20 @@
       "onnxruntime": "1.24.4",
       "transformers": "4.57.1"
     }
+  },
+  "sqlite_vec": {
+    "version": "v0.1.6",
+    "source": "https://github.com/asg017/sqlite-vec",
+    "vendored_files": {
+      "third_party/sqlite-vec/sqlite-vec.h": "1cc36eca29094b761cf50be4b02f6b3f491e9b380bfccd89217c3cc9061808a5",
+      "third_party/sqlite-vec/LICENSE": "6ce72bbe12d975bd5286e5ab0a064c069693300c47bccbc57bec18485f1621ea",
+      "third_party/sqlite-vec/sqlite-vec.c": "aea2ff1524ab80ccd1d51c698b09a74403c2d6ef00949d2a083661b4660881fe"
+    },
+    "header": "sqlite-vec.h.tmpl specialized for v0.1.6"
+  },
+  "embeddinggemma2_rocm": {
+    "repository": "https://github.com/anjn/embeddinggemma2-rocm",
+    "commit": "351303e293e11bafe4aa09f8303ba8b4d294d128",
+    "integration": "optional native C ABI, prepared bundles remain external"
   }
 }

@@ -8,6 +8,11 @@
 namespace {
 std::atomic<bool> active{false};
 std::atomic<unsigned long long> violations{0},copies{0},bytes{0},layout_queries{0};
+thread_local const void *search_pointer{};
+thread_local size_t search_size{};
+thread_local int search_kind{};
+thread_local bool embedding_scope{};
+std::atomic<unsigned long long> search_bytes{0}, embedding_bytes{0};
 thread_local const void* metadata_pointer{};
 thread_local size_t metadata_bytes{};
 thread_local int metadata_kind{};
@@ -17,6 +22,14 @@ template<class F> F original(const char* name) {return reinterpret_cast<F>(dlsym
 void copy(size_t size,hipMemcpyKind kind,const void* source) {
     if(!active.load())return;
     ++copies;bytes+=size;
+    if (embedding_scope) {
+        embedding_bytes += size;
+        return;
+    }
+    if (source == search_pointer && size == search_size && int(kind) == search_kind) {
+        search_bytes += size;
+        return;
+    }
     const bool metadata=source==metadata_pointer&&size==metadata_bytes&&int(kind)==metadata_kind;
     // GPU batch assembly stays on-device. Host transfers require an exact,
     // bounded metadata declaration (or the legacy detection ABI size).
@@ -28,6 +41,20 @@ void image_operation(const char* operation) {
     if(active.load()) {++violations;std::fprintf(stderr,"AMDVA_AUDIT prohibited image operation: %s\n",operation);}
 }
 }
+extern "C" void amdva_audit_search_begin(const void *pointer, size_t size, int kind) {
+    if (size <= 1024 * 1024 * 3 && kind == int(hipMemcpyDeviceToHost)) {
+        search_pointer = pointer;
+        search_size = size;
+        search_kind = kind;
+    }
+}
+extern "C" void amdva_audit_search_end() {
+    search_pointer = nullptr;
+    search_size = 0;
+}
+extern "C" void amdva_audit_embedding_scope(bool active) { embedding_scope = active; }
+extern "C" unsigned long long amdva_audit_search_bytes() { return search_bytes.load(); }
+extern "C" unsigned long long amdva_audit_embedding_bytes() { return embedding_bytes.load(); }
 extern "C" void amdva_audit_start() {active=true;}
 extern "C" void amdva_audit_metadata_begin(const void* pointer,size_t size,int kind){
     if(size<=256*1024){metadata_pointer=pointer;metadata_bytes=size;metadata_kind=kind;}

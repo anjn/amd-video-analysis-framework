@@ -1,4 +1,5 @@
 #pragma once
+#include "amdva/streaming/search.hpp"
 #include <atomic>
 #include <cstdint>
 #include <deque>
@@ -58,6 +59,11 @@ class Catalog {
     ~Catalog();
     Catalog(const Catalog &) = delete;
     Catalog &operator=(const Catalog &) = delete;
+    void initialize_search();
+    bool store_observation(const SearchObservation &);
+    std::vector<SearchObservation> search(const std::array<float, 768> &, const std::string &model);
+    std::vector<uint8_t> observation_image(int64_t id) const;
+    void reconcile_search();
     void opened(const std::string &filename, const std::string &channel,
                 const std::string &camera_name = {}, const std::string &session = {},
                 unsigned fragment = 0);

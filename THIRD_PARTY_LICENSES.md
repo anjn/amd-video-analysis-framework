@@ -27,3 +27,16 @@ Retain their license files when packaging a binary distribution.
 The existing YOLOv8 model and Ultralytics bus test image were used only in ignored
 local validation artifacts. They are not included under this repository's MIT
 license. Consult the model/image provider's terms before distributing them.
+
+## NVR semantic search
+
+`third_party/sqlite-vec` contains sqlite-vec v0.1.6 under its MIT license;
+retain the included `LICENSE`. Its C source hash is recorded in
+`dependencies.lock.json`. The header is generated from the upstream template.
+PNG encoding links libpng (libpng license) and zlib (zlib license).
+
+The optional search runtime dynamically loads EmbeddingGemma 2 ROCm (MIT),
+which links LibTorch/PyTorch (BSD-style and bundled component licenses) and ROCm.
+The pinned source revision is recorded in `dependencies.lock.json`; retain its
+third-party notices when distributing that runtime. Google EmbeddingGemma 2
+weights and compiled bundles retain their own upstream model terms.

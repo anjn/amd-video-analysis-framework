@@ -101,6 +101,45 @@ Options load_config(const std::string &path) {
             o.telemetry.stall_ms = unsigned(v);
         }
     }
+    if (json_object_has_member(root, "search")) {
+        auto *search = required_object(root, "search");
+        if (json_object_has_member(search, "enabled")) {
+            if (json_node_get_value_type(json_object_get_member(search, "enabled")) !=
+                G_TYPE_BOOLEAN)
+                throw std::runtime_error("Expected boolean search.enabled");
+            o.search.enabled = json_object_get_boolean_member(search, "enabled");
+        }
+        for (const auto *key : {"library", "bundle"})
+            if (json_object_has_member(search, key)) {
+                std::string value = required_string(search, key);
+                if (std::string(key) == "bundle")
+                    o.search.bundle = (dir / value).lexically_normal().string();
+                else
+                    o.search.library = value.find('/') == std::string::npos
+                                           ? value
+                                           : (dir / value).lexically_normal().string();
+            }
+        for (auto field : {std::pair<const char *, unsigned *>{"image_size", &o.search.image_size},
+                           {"device", &o.search.device},
+                           {"interval_ms", &o.search.interval_ms},
+                           {"queue_limit", &o.search.queue_limit}}) {
+            if (!json_object_has_member(search, field.first))
+                continue;
+            auto *n = json_object_get_member(search, field.first);
+            if (json_node_get_value_type(n) != G_TYPE_INT64)
+                throw std::runtime_error("Search option must be an integer");
+            auto v = json_node_get_int(n);
+            if (v < 0 || v > 60000)
+                throw std::runtime_error("Search option out of range");
+            *field.second = unsigned(v);
+        }
+    }
+    if (o.search.image_size < 32 || o.search.image_size > 1024 || o.search.device > 15 ||
+        o.search.interval_ms < 100 || !o.search.queue_limit || o.search.queue_limit > 1024 ||
+        (o.search.enabled && o.search.bundle.empty()))
+        throw std::runtime_error("Invalid search configuration");
+    if (o.search.enabled)
+        o.background_ai_enabled = true;
     if (json_object_has_member(root, "results")) {
         auto *output = required_object(root, "results");
         if (json_object_has_member(output, "method"))
@@ -198,6 +237,15 @@ void save_config(const std::string &path, const Options &o) {
                                o.background_ai_interval_seconds);
     json_object_set_double_member(root, "quota_gib", double(o.quota) / (1ull << 30));
     json_object_set_double_member(root, "reserve_gib", double(o.reserve) / (1ull << 30));
+    auto *search = json_object_new();
+    json_object_set_boolean_member(search, "enabled", o.search.enabled);
+    json_object_set_string_member(search, "library", o.search.library.c_str());
+    json_object_set_string_member(search, "bundle", o.search.bundle.c_str());
+    json_object_set_int_member(search, "device", o.search.device);
+    json_object_set_int_member(search, "image_size", o.search.image_size);
+    json_object_set_int_member(search, "interval_ms", o.search.interval_ms);
+    json_object_set_int_member(search, "queue_limit", o.search.queue_limit);
+    json_object_set_object_member(root, "search", search);
     auto *output = json_object_new();
     json_object_set_string_member(output, "method", o.results.method.c_str());
     json_object_set_string_member(output, "file_path", o.results.file_path.c_str());

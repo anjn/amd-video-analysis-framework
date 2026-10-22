@@ -36,6 +36,32 @@ int main(int argc, char **argv) {
         require(o.tracking_enabled && o.results.method == "none", "Analytics defaults");
         require(o.telemetry.enabled && o.telemetry.stall_ms == 1000, "Telemetry defaults");
         require(o.retention_minutes == 60, "Retention default");
+        require(!o.search.enabled && o.search.image_size == 384 && o.search.queue_limit == 64,
+                "Search defaults");
+        {
+            auto value = base;
+            value["search"] =
+                QJsonObject{{"enabled", true}, {"bundle", "bundle"}, {"image_size", 384}};
+            write(value);
+            auto search = load_config(path);
+            require(search.search.enabled && search.background_ai_enabled &&
+                        search.search.bundle == (dir / "bundle"),
+                    "Search config and hidden cameras");
+            save_config(path, search);
+            require(load_config(path).search.bundle == search.search.bundle, "Search roundtrip");
+            for (int size : {0, 31, 1025}) {
+                value["search"] = QJsonObject{{"image_size", size}};
+                write(value);
+                bool rejected = false;
+                try {
+                    load_config(path);
+                } catch (...) {
+                    rejected = true;
+                }
+                require(rejected, "Search image size validation");
+            }
+            write(base);
+        }
         o.retention_minutes = 0;
         o.telemetry.enabled = false;
         o.telemetry.stall_ms = 1200;

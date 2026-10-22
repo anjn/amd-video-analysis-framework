@@ -55,6 +55,15 @@ Catalog::Catalog(const std::filesystem::path &root) {
                                 SQLITE_OPEN_NOFOLLOW,
                             nullptr) != SQLITE_OK)
             throw std::runtime_error("Cannot open recording catalog");
+        {
+            Statement mode(db_, "PRAGMA auto_vacuum");
+            if (sqlite3_step(mode.p) == SQLITE_ROW && sqlite3_column_int(mode.p, 0) == 0) {
+                // Migrate once so removing crop BLOBs can return disk space.
+                sqlite3_finalize(mode.p);
+                mode.p = nullptr;
+                sql("PRAGMA auto_vacuum=INCREMENTAL; VACUUM;");
+            }
+        }
         sql("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS "
             "recordings(name TEXT PRIMARY KEY, channel TEXT NOT NULL, created INTEGER NOT NULL, "
             "active INTEGER NOT NULL);");
@@ -88,6 +97,7 @@ Catalog::Catalog(const std::filesystem::path &root) {
             sql("CREATE INDEX IF NOT EXISTS recordings_media_time ON recordings"
                 "(channel,COALESCE(media_started_ms,created),name);");
             sql("COMMIT;");
+            initialize_search();
         } catch (...) {
             sql("ROLLBACK;");
             throw;
@@ -148,6 +158,10 @@ uint64_t Catalog::bytes() const {
             S_ISREG(st.st_mode))
             total += uint64_t(st.st_size);
     }
+    Statement payload(
+        db_, "SELECT COALESCE(SUM(length(png)+length(embedding)+256),0) FROM observations");
+    if (sqlite3_step(payload.p) == SQLITE_ROW)
+        total += sqlite3_column_int64(payload.p, 0);
     return total;
 }
 bool Catalog::enforce(uint64_t quota, uint64_t reserve) {
@@ -185,7 +199,8 @@ bool Catalog::enforce(uint64_t quota, uint64_t reserve) {
         s.text(1, item.first);
         s.done();
         ++deletion_generation_;
-        total = total > item.second ? total - item.second : 0;
+        sql("PRAGMA incremental_vacuum(256);");
+        total = bytes();
         free = std::filesystem::space(root_).available;
         if (total <= quota && free >= reserve)
             return true;
@@ -263,6 +278,7 @@ void Catalog::delete_batch(DeletionJob &job) {
             job.failed++;
         }
     }
+    sql("PRAGMA incremental_vacuum(256);");
 }
 
 RecordingFile::~RecordingFile() {
