@@ -123,8 +123,18 @@ struct SharedBatchExecutor::Impl {
                     packer.pad(input.storage->data(), jobs.size(), options.size, info.width,
                                info.height, info.normalization);
                     hip_check(hipDeviceSynchronize(), "Batch input completion");
-                    auto results = post.process(engine.infer({{input.name, input}}), jobs.size(),
-                                                options.confidence, options.nms);
+                    auto started = std::chrono::steady_clock::now();
+                    auto output = engine.infer({{input.name, input}});
+                    auto inferred = std::chrono::steady_clock::now();
+                    auto results =
+                        post.process(output, jobs.size(), options.confidence, options.nms);
+                    if (options.measured)
+                        options.measured(
+                            std::chrono::duration<double, std::milli>(inferred - started).count(),
+                            std::chrono::duration<double, std::milli>(
+                                std::chrono::steady_clock::now() - inferred)
+                                .count(),
+                            jobs.size());
                     for (unsigned i = 0; i < jobs.size(); i++) {
                         std::lock_guard<std::mutex> lock(mutex);
                         if (cancelled(jobs[i]->request))

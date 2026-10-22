@@ -1,5 +1,6 @@
 #pragma once
 #include "amdva/model.hpp"
+#include <functional>
 #include <future>
 namespace amdva {
 struct BatchOptions {
@@ -8,6 +9,8 @@ struct BatchOptions {
     int device{};
     float confidence{.25f}, nms{.45f};
     bool raw_outputs{};
+    // Completed stage timings per execution batch; callback must not throw.
+    std::function<void(double, double, unsigned)> measured;
 };
 struct InferenceRequest {
     DeviceTensor tensor;

@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
         require(o.tracking_enabled && o.results.method == "none", "Analytics defaults");
         require(o.telemetry.enabled && o.telemetry.stall_ms == 1000, "Telemetry defaults");
         require(o.retention_minutes == 60, "Retention default");
-        require(!o.search.enabled && o.search.image_size == 384 && o.search.queue_limit == 64,
+        require(!o.search.enabled && o.search.image_size == 384 && o.search.queue_limit == 128,
                 "Search defaults");
         {
             auto value = base;
@@ -49,7 +49,18 @@ int main(int argc, char **argv) {
             require(search.search.enabled && search.background_ai_enabled &&
                         search.search.bundle == (dir / "bundle"),
                     "Search config and hidden cameras");
+            search.ai_fps = 5;
+            search.search.embedding_width = 108;
+            search.search.embedding_height = 192;
+            search.search.embedding_batch = 4;
+            search.search.interval_ms = 15000;
+            search.search.min_person_height = .12;
             save_config(path, search);
+            auto tuned = load_config(path);
+            require(tuned.ai_fps == 5 && tuned.search.embedding_width == 108 &&
+                        tuned.search.embedding_height == 192 && tuned.search.embedding_batch == 4 &&
+                        tuned.search.interval_ms == 15000 && tuned.search.min_person_height == .12,
+                    "AI tuning roundtrip");
             require(load_config(path).search.bundle == search.search.bundle &&
                         load_config(path).search.reid_model == (dir / "osnet.mxr"),
                     "Search and ReID roundtrip");
@@ -115,6 +126,11 @@ int main(int argc, char **argv) {
                  {"reserve_gib", -1},
                  {"segment_seconds", 0.5},
                  {"batch_size", 3},
+                 {"ai_fps", 3},
+                 {"ai_fps", 1.5},
+                 {"search", QJsonObject{{"embedding_width", 108}}},
+                 {"search", QJsonObject{{"embedding_batch", 9}}},
+                 {"search", QJsonObject{{"min_person_height", 1.1}}},
                  {"sources", "bad"},
                  {"tracking_enabled", "true"},
                  {"telemetry", "bad"},

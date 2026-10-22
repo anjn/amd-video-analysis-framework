@@ -1,0 +1,22 @@
+{
+  "family": "yolov8",
+  "input": {
+    "shape": [
+      1,
+      3,
+      384,
+      640
+    ],
+    "format": "NCHW",
+    "normalize": [
+      0.0,
+      1.0
+    ],
+    "channel_order": "RGB"
+  },
+  "output": {
+    "format": "cxcywh",
+    "num_classes": 80
+  },
+  "labels": "../artifacts/nvr-model/coco80.txt"
+}

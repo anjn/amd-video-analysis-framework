@@ -7,14 +7,12 @@ thumbnails and a selector for every matched image. **Play nearby video** plays
 that scene inside the card, with pause and seek controls. Only one card plays
 at a time; leaving Search releases playback.
 
-Without ReID configured, the collection policy samples at most one detected frame per second
-from each visible camera. In that mode, hidden cameras use the existing background keyframe
-AI interval (five seconds by default). Enabling search also enables background
-AI. Every person detected in an admitted frame is a candidate. Work is bounded
-by 64 pending crops and four source frames, including the frame being processed;
-overload skips new collection and reports a counter. Search requests take
-priority between crops. This is sampled, best-effort indexing, not exhaustive
-tracking or person identification. Existing recordings are not backfilled.
+The **AI Statistics** tab reports completed stage timings and per-camera update
+rates. Detection/tracking defaults to 2 Hz per camera; collection requests one
+embedding every five seconds per person and slows down under load. See
+[AI performance and the 16-camera configuration](nvr-ai-performance.md) for
+model selection, bounded queues, priorities and benchmark commands. This is
+sampled, best-effort indexing; existing recordings are not backfilled.
 
 ## Native runtime setup
 
@@ -67,8 +65,8 @@ search service with a visible error; reception and recording still start.
   "bundle": "../artifacts/nvr-search",
   "device": 0,
   "image_size": 384,
-  "interval_ms": 1000,
-  "queue_limit": 64
+  "interval_ms": 5000,
+  "queue_limit": 128
 }
 ```
 
@@ -165,7 +163,7 @@ long-duration throughput or large-archive search performance.
 
 ## Person tracking and ReID
 
-Set `search.reid_model` to a compiled OSNet x1.0 MSMT17 checkpoint to enable
+Set `search.reid_model` to a compiled OSNet MSMT17 checkpoint to enable
 person cards. An empty/omitted path retains the original time-based grouping.
 The example configuration uses `../artifacts/reid-model/osnet-x1-msmt17.mxr`.
 A configured model that cannot load fails the search service visibly; it does
@@ -192,22 +190,24 @@ the person ID. Ambiguous matches create separate identities. These conservative
 initial thresholds require site-specific evaluation; similar clothes and heavy
 occlusion can still cause mistakes.
 
-Person tracking accepts up to five detected frames per second per camera;
-actual frequency depends on detection and embedding load. Semantic image saves
-remain limited to `search.interval_ms` per person (default one second). The
-bounded queue drops excess collection and exposes its counter. Frame timestamps,
-not assumed frame numbers, drive motion and expiry. With ReID enabled, both stored and ReID crops use the tight person box rather
-than the legacy ten-percent margin. ReID uses bounded RGB crops,
-bilinear resize to 256×128, ImageNet RGB normalization and L2-normalized
-512-dimensional features. These features are separate from the 768-dimensional
-EmbeddingGemma vectors used for text and region queries.
+Detection and tracking run at `ai_fps` (1, 2 or 5; default 2) per camera.
+Frame timestamps, not assumed frame numbers, drive motion and expiry. The
+tracking worker replaces queued frames with the latest frame for that camera;
+the semantic worker separately keeps the latest crop for each person. A
+confirmed, high-confidence observation is required for semantic collection.
+With ReID enabled, stored and ReID crops use the tight person box rather than
+the legacy ten-percent margin. ReID applies bilinear resizing to its compiled
+input shape, ImageNet RGB normalization and L2-normalized 512-dimensional
+features. These features are separate from the 768-dimensional EmbeddingGemma
+vectors used for text and region queries. Partial ReID batches repeat the last
+valid image and discard padded outputs.
 
 With ReID enabled, hidden cameras retain continuous hardware decoding and
-inference instead of five-second keyframe snapshots. There are four dedicated
-hidden-camera slots in this demo, in addition to sixteen display slots. Further
-hidden cameras report `waiting for continuous AI capacity` and continue
-recording. Selecting a camera frees its hidden slot. GPU/decoder capacity should
-be measured before increasing these limits.
+inference instead of five-second keyframe snapshots. Sixteen dedicated hidden
+slots support the intended total of sixteen cameras with any visibility mix.
+This is a scheduling capacity, not a throughput guarantee for arbitrary input
+formats, frame rates or person counts. Without ReID, hidden-camera analysis
+retains the legacy keyframe interval.
 
 Search results aggregate by camera and person ID. A card offers a selector for
 its matched tracklet intervals, avoiding playback through an entire absence.

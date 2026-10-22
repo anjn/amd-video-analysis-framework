@@ -1,3 +1,4 @@
+#include "ai_page.hpp"
 #include "amdva/streaming/playback.hpp"
 #include "search_page.hpp"
 #include "thumbnail.hpp"
@@ -449,6 +450,18 @@ struct Window::Vms {
         tabs->addTab(manage, "Cameras");
         search_page = new SearchPage(w.controller_);
         tabs->addTab(search_page, "Search");
+        tabs->addTab(new AiPage(w.controller_, w.options_,
+                                [this](unsigned fps, unsigned interval) {
+                                    w.controller_.ai_frequency(fps, interval);
+                                    w.options_.ai_fps = fps;
+                                    w.options_.search.interval_ms = interval;
+                                    try {
+                                        w.persist(true);
+                                    } catch (const std::exception &e) {
+                                        QMessageBox::warning(&w, "AI settings", qs(e.what()));
+                                    }
+                                }),
+                     "AI Statistics");
         if (w.controller_.search_service()) {
             play_tiles->search_image_size = w.options_.search.image_size;
             play_tiles->search_device = w.options_.search.device;

@@ -63,6 +63,10 @@ Options load_config(const std::string &path) {
         quota > 1000000 || reserve < 0 || reserve > 1000000)
         throw std::runtime_error("Invalid storage, segment or background interval");
     o.batch = unsigned(batch);
+    const auto fps = number("ai_fps", 2);
+    if (fps != 1 && fps != 2 && fps != 5)
+        throw std::runtime_error("ai_fps must be 1, 2 or 5");
+    o.ai_fps = unsigned(fps);
     auto retention = number("retention_minutes", 60);
     if (retention < 0 || retention > 2147483647 || retention != std::floor(retention))
         throw std::runtime_error("Invalid retention_minutes");
@@ -122,7 +126,10 @@ Options load_config(const std::string &path) {
         for (auto field : {std::pair<const char *, unsigned *>{"image_size", &o.search.image_size},
                            {"device", &o.search.device},
                            {"interval_ms", &o.search.interval_ms},
-                           {"queue_limit", &o.search.queue_limit}}) {
+                           {"queue_limit", &o.search.queue_limit},
+                           {"embedding_width", &o.search.embedding_width},
+                           {"embedding_height", &o.search.embedding_height},
+                           {"embedding_batch", &o.search.embedding_batch}}) {
             if (!json_object_has_member(search, field.first))
                 continue;
             auto *n = json_object_get_member(search, field.first);
@@ -142,6 +149,24 @@ Options load_config(const std::string &path) {
                 o.search.reid_model = (dir / value).lexically_normal().string();
         }
     }
+    if (json_object_has_member(root, "search")) {
+        auto *search = required_object(root, "search");
+        if (json_object_has_member(search, "min_person_height")) {
+            auto *n = json_object_get_member(search, "min_person_height");
+            if (json_node_get_value_type(n) != G_TYPE_DOUBLE &&
+                json_node_get_value_type(n) != G_TYPE_INT64)
+                throw std::runtime_error("Invalid minimum person height");
+            o.search.min_person_height = json_node_get_double(n);
+        }
+    }
+    if (!std::isfinite(o.search.min_person_height) || o.search.min_person_height < 0 ||
+        o.search.min_person_height > 1 ||
+        (o.search.embedding_width == 0) != (o.search.embedding_height == 0) ||
+        o.search.embedding_width > 1024 || o.search.embedding_height > 1024 ||
+        (o.search.embedding_width &&
+         (o.search.embedding_width < 32 || o.search.embedding_height < 32)) ||
+        !o.search.embedding_batch || o.search.embedding_batch > 8)
+        throw std::runtime_error("Invalid embedding layout");
     if (o.search.image_size < 32 || o.search.image_size > 1024 || o.search.device > 15 ||
         o.search.interval_ms < 100 || !o.search.queue_limit || o.search.queue_limit > 1024 ||
         (o.search.enabled && o.search.bundle.empty()))
@@ -237,6 +262,7 @@ void save_config(const std::string &path, const Options &o) {
     json_object_set_boolean_member(timing, "enabled", o.telemetry.enabled);
     json_object_set_int_member(timing, "stall_ms", o.telemetry.stall_ms);
     json_object_set_object_member(root, "telemetry", timing);
+    json_object_set_int_member(root, "ai_fps", o.ai_fps);
     json_object_set_int_member(root, "batch_size", o.batch);
     json_object_set_int_member(root, "segment_seconds", o.segment_seconds);
     json_object_set_int_member(root, "retention_minutes", o.retention_minutes);
@@ -254,6 +280,10 @@ void save_config(const std::string &path, const Options &o) {
     json_object_set_int_member(search, "image_size", o.search.image_size);
     json_object_set_int_member(search, "interval_ms", o.search.interval_ms);
     json_object_set_int_member(search, "queue_limit", o.search.queue_limit);
+    json_object_set_int_member(search, "embedding_width", o.search.embedding_width);
+    json_object_set_int_member(search, "embedding_height", o.search.embedding_height);
+    json_object_set_int_member(search, "embedding_batch", o.search.embedding_batch);
+    json_object_set_double_member(search, "min_person_height", o.search.min_person_height);
     json_object_set_object_member(root, "search", search);
     auto *output = json_object_new();
     json_object_set_string_member(output, "method", o.results.method.c_str());

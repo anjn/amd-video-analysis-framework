@@ -1,0 +1,1191 @@
+{
+  "fixture": "16 independent 30-second 1080p H.264 excerpts looping from original 10-minute videos; originals unchanged",
+  "source_people": "User reports 40 people across the full original set; these camera-local IDs and excerpt loop cuts are not identity ground truth",
+  "duration_seconds": 1804,
+  "stored_observations": 5401,
+  "peak_rss_mib": 7380.62109375,
+  "phases": [
+    {
+      "mode": "all 16 visible",
+      "stable_from_seconds": 94,
+      "stable_to_seconds": 599,
+      "rss_mib_range": [
+        6299.609375,
+        6308.77734375
+      ],
+      "effective_embedding_intervals_ms": [
+        30000,
+        60000
+      ],
+      "Detection update": {
+        "min_hz": 1.9833333333333334,
+        "mean_hz": 2.0003676470588236,
+        "max_hz": 2.0166666666666666
+      },
+      "Tracking association": {
+        "min_hz": 1.9833333333333334,
+        "mean_hz": 1.9999795751633986,
+        "max_hz": 2.0166666666666666
+      },
+      "tracking_queue_max_pending": 12,
+      "tracking_queue_cumulative_dropped": 0,
+      "embedding_queue_max_pending": 128,
+      "last_window_stages": [
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 10.83913225,
+          "mean_batch": 1,
+          "mean_ms": 7.145134479166667,
+          "p95_ms": 9.1993995,
+          "pending": 0,
+          "rate": 32,
+          "stage": "Detection update",
+          "wait_ms": 60.67907588697916
+        },
+        {
+          "camera": "",
+          "dropped": 5628,
+          "max_ms": 0,
+          "mean_batch": 0,
+          "mean_ms": 0,
+          "p95_ms": 0,
+          "pending": 124,
+          "rate": 0,
+          "stage": "Embedding queue",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 232.543237,
+          "mean_batch": 4,
+          "mean_ms": 222.91622919148932,
+          "p95_ms": 230.617527,
+          "pending": 0,
+          "rate": 0.7833333333333333,
+          "stage": "Image embedding",
+          "wait_ms": 35582.907233829785
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 34.477829,
+          "mean_batch": 1,
+          "mean_ms": 11.187312125654445,
+          "p95_ms": 23.706771,
+          "pending": 0,
+          "rate": 3.183333333333333,
+          "stage": "PNG + DB save",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 4.807663,
+          "mean_batch": 3.7078125,
+          "mean_ms": 2.4536968875000045,
+          "p95_ms": 3.519964,
+          "pending": 0,
+          "rate": 32,
+          "stage": "Person crop",
+          "wait_ms": 44.96026420000002
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 8.15995,
+          "mean_batch": 4.0311438278595695,
+          "mean_ms": 2.7674987417893586,
+          "p95_ms": 4.816390999999999,
+          "pending": 0,
+          "rate": 29.433333333333334,
+          "stage": "ReID inference + transfer",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 6.926181,
+          "mean_batch": 4.0311438278595695,
+          "mean_ms": 1.7401992536806314,
+          "p95_ms": 3.180649,
+          "pending": 0,
+          "rate": 29.433333333333334,
+          "stage": "ReID preprocess",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 0.132989,
+          "mean_batch": 3.7078125,
+          "mean_ms": 0.021828104166666695,
+          "p95_ms": 0.056539,
+          "pending": 0,
+          "rate": 32,
+          "stage": "Tracking association",
+          "wait_ms": 112.35159793854142
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 0,
+          "mean_batch": 0,
+          "mean_ms": 0,
+          "p95_ms": 0,
+          "pending": 0,
+          "rate": 0,
+          "stage": "Tracking queue",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 38.658546,
+          "mean_batch": 4,
+          "mean_ms": 24.736911593749998,
+          "p95_ms": 32.744306,
+          "pending": 0,
+          "rate": 8,
+          "stage": "YOLO executor total",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 7.585662,
+          "mean_batch": 4,
+          "mean_ms": 6.637803575000001,
+          "p95_ms": 7.182967,
+          "pending": 0,
+          "rate": 8,
+          "stage": "YOLO inference",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 31.545189,
+          "mean_batch": 4,
+          "mean_ms": 17.698260904166666,
+          "p95_ms": 25.788661,
+          "pending": 0,
+          "rate": 8,
+          "stage": "YOLO postprocess",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 6.497293,
+          "mean_batch": 4,
+          "mean_ms": 3.843530073068893,
+          "p95_ms": 5.263525,
+          "pending": 0,
+          "rate": 7.983333333333333,
+          "stage": "YOLO preprocess",
+          "wait_ms": 12.259455793319415
+        }
+      ],
+      "last_cameras": [
+        {
+          "ai": 1198,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam0",
+          "received": 17995,
+          "selected": true,
+          "slot": 0
+        },
+        {
+          "ai": 1198,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam1",
+          "received": 17995,
+          "selected": true,
+          "slot": 1
+        },
+        {
+          "ai": 1198,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam2",
+          "received": 17996,
+          "selected": true,
+          "slot": 2
+        },
+        {
+          "ai": 1198,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam3",
+          "received": 17995,
+          "selected": true,
+          "slot": 3
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam4",
+          "received": 17995,
+          "selected": true,
+          "slot": 4
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam5",
+          "received": 17996,
+          "selected": true,
+          "slot": 5
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam6",
+          "received": 17996,
+          "selected": true,
+          "slot": 6
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam7",
+          "received": 17996,
+          "selected": true,
+          "slot": 7
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam8",
+          "received": 17996,
+          "selected": true,
+          "slot": 8
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam9",
+          "received": 17996,
+          "selected": true,
+          "slot": 9
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam10",
+          "received": 17997,
+          "selected": true,
+          "slot": 10
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam11",
+          "received": 17996,
+          "selected": true,
+          "slot": 11
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam12",
+          "received": 17995,
+          "selected": true,
+          "slot": 12
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam13",
+          "received": 17996,
+          "selected": true,
+          "slot": 13
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam14",
+          "received": 17995,
+          "selected": true,
+          "slot": 14
+        },
+        {
+          "ai": 1197,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam15",
+          "received": 17996,
+          "selected": true,
+          "slot": 15
+        }
+      ]
+    },
+    {
+      "mode": "4 visible / 12 hidden",
+      "stable_from_seconds": 694,
+      "stable_to_seconds": 1199,
+      "rss_mib_range": [
+        6308.43359375,
+        6312.32421875
+      ],
+      "effective_embedding_intervals_ms": [
+        30000
+      ],
+      "Detection update": {
+        "min_hz": 1.9833333333333334,
+        "mean_hz": 1.9998366013071895,
+        "max_hz": 2.0166666666666666
+      },
+      "Tracking association": {
+        "min_hz": 1.9833333333333334,
+        "mean_hz": 1.9999183006535948,
+        "max_hz": 2.0166666666666666
+      },
+      "tracking_queue_max_pending": 9,
+      "tracking_queue_cumulative_dropped": 0,
+      "embedding_queue_max_pending": 128,
+      "last_window_stages": [
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 11.204351,
+          "mean_batch": 1,
+          "mean_ms": 7.027040163883077,
+          "p95_ms": 8.6387565,
+          "pending": 0,
+          "rate": 31.933333333333334,
+          "stage": "Detection update"
+        },
+        {
+          "camera": "",
+          "dropped": 10714,
+          "max_ms": 0,
+          "mean_batch": 0,
+          "mean_ms": 0,
+          "p95_ms": 0,
+          "pending": 121,
+          "rate": 0,
+          "stage": "Embedding queue",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 232.315713,
+          "mean_batch": 4,
+          "mean_ms": 225.51836053061226,
+          "p95_ms": 231.496492,
+          "pending": 0,
+          "rate": 0.8166666666666667,
+          "stage": "Image embedding",
+          "wait_ms": 35354.362851122445
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 30.514771,
+          "mean_batch": 1,
+          "mean_ms": 9.0028513877551,
+          "p95_ms": 17.965029,
+          "pending": 0,
+          "rate": 3.2666666666666666,
+          "stage": "PNG + DB save",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 4.490442,
+          "mean_batch": 3.7111459968602825,
+          "mean_ms": 2.405041192046049,
+          "p95_ms": 3.452179,
+          "pending": 0,
+          "rate": 31.85,
+          "stage": "Person crop",
+          "wait_ms": 31.30939965044477
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 7.880132,
+          "mean_batch": 4.031267765776009,
+          "mean_ms": 2.737052880045481,
+          "p95_ms": 4.84868,
+          "pending": 0,
+          "rate": 29.316666666666666,
+          "stage": "ReID inference + transfer",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 6.903208,
+          "mean_batch": 4.031267765776009,
+          "mean_ms": 1.7129924911881753,
+          "p95_ms": 3.150981,
+          "pending": 0,
+          "rate": 29.316666666666666,
+          "stage": "ReID preprocess",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 0.147089,
+          "mean_batch": 3.712565445026178,
+          "mean_ms": 0.021816285863874307,
+          "p95_ms": 0.055839,
+          "pending": 0,
+          "rate": 31.833333333333332,
+          "stage": "Tracking association"
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 0,
+          "mean_batch": 0,
+          "mean_ms": 0,
+          "p95_ms": 0,
+          "pending": 5,
+          "rate": 0,
+          "stage": "Tracking queue",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 32.665321,
+          "mean_batch": 3.950515463917526,
+          "mean_ms": 24.31224710309279,
+          "p95_ms": 30.719188,
+          "pending": 0,
+          "rate": 8.083333333333334,
+          "stage": "YOLO executor total",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 7.427724,
+          "mean_batch": 3.950515463917526,
+          "mean_ms": 6.5609980845360845,
+          "p95_ms": 7.041467,
+          "pending": 0,
+          "rate": 8.083333333333334,
+          "stage": "YOLO inference",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 25.462524,
+          "mean_batch": 3.950515463917526,
+          "mean_ms": 17.35987727628867,
+          "p95_ms": 23.646862,
+          "pending": 0,
+          "rate": 8.083333333333334,
+          "stage": "YOLO postprocess",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 4.93668,
+          "mean_batch": 3.950515463917526,
+          "mean_ms": 3.4481837298969067,
+          "p95_ms": 4.264683,
+          "pending": 0,
+          "rate": 8.083333333333334,
+          "stage": "YOLO preprocess",
+          "wait_ms": 16.75064203298969
+        }
+      ],
+      "last_cameras": [
+        {
+          "ai": 2399,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam0",
+          "received": 35995,
+          "selected": true,
+          "slot": 0
+        },
+        {
+          "ai": 2399,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam1",
+          "received": 35995,
+          "selected": true,
+          "slot": 1
+        },
+        {
+          "ai": 2399,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam2",
+          "received": 35996,
+          "selected": true,
+          "slot": 2
+        },
+        {
+          "ai": 2398,
+          "background_ai": 0,
+          "error": "",
+          "id": "cam3",
+          "received": 35995,
+          "selected": true,
+          "slot": 3
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1189,
+          "error": "",
+          "id": "cam4",
+          "received": 35995,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1190,
+          "error": "",
+          "id": "cam5",
+          "received": 35996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1189,
+          "error": "",
+          "id": "cam6",
+          "received": 35996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1189,
+          "error": "",
+          "id": "cam7",
+          "received": 35996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1190,
+          "error": "",
+          "id": "cam8",
+          "received": 35996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1190,
+          "error": "",
+          "id": "cam9",
+          "received": 35996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1190,
+          "error": "",
+          "id": "cam10",
+          "received": 35996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1189,
+          "error": "",
+          "id": "cam11",
+          "received": 35995,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1189,
+          "error": "",
+          "id": "cam12",
+          "received": 35995,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1190,
+          "error": "",
+          "id": "cam13",
+          "received": 35996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1189,
+          "error": "",
+          "id": "cam14",
+          "received": 35995,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 1189,
+          "error": "",
+          "id": "cam15",
+          "received": 35996,
+          "selected": false,
+          "slot": -1
+        }
+      ]
+    },
+    {
+      "mode": "all 16 hidden",
+      "stable_from_seconds": 1294,
+      "stable_to_seconds": 1799,
+      "rss_mib_range": [
+        6314.8359375,
+        6317.7421875
+      ],
+      "effective_embedding_intervals_ms": [
+        30000,
+        60000
+      ],
+      "Detection update": {
+        "min_hz": 1.9833333333333334,
+        "mean_hz": 1.9998366013071895,
+        "max_hz": 2.0166666666666666
+      },
+      "Tracking association": {
+        "min_hz": 1.9833333333333334,
+        "mean_hz": 1.999264705882353,
+        "max_hz": 2.0166666666666666
+      },
+      "tracking_queue_max_pending": 12,
+      "tracking_queue_cumulative_dropped": 0,
+      "embedding_queue_max_pending": 128,
+      "last_window_stages": [
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 9.11421475,
+          "mean_batch": 1,
+          "mean_ms": 6.935588541493757,
+          "p95_ms": 8.19929375,
+          "pending": 0,
+          "rate": 32.13333333333333,
+          "stage": "Detection update"
+        },
+        {
+          "camera": "",
+          "dropped": 16241,
+          "max_ms": 0,
+          "mean_batch": 0,
+          "mean_ms": 0,
+          "p95_ms": 0,
+          "pending": 123,
+          "rate": 0,
+          "stage": "Embedding queue",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 229.530114,
+          "mean_batch": 4,
+          "mean_ms": 227.7184975625,
+          "p95_ms": 229.275832,
+          "pending": 0,
+          "rate": 0.8,
+          "stage": "Image embedding",
+          "wait_ms": 35271.52605204167
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 32.651213,
+          "mean_batch": 1,
+          "mean_ms": 8.075211218750002,
+          "p95_ms": 15.619224,
+          "pending": 0,
+          "rate": 3.2,
+          "stage": "PNG + DB save",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 3.871223,
+          "mean_batch": 3.703722854188211,
+          "mean_ms": 2.4393601323681473,
+          "p95_ms": 3.436509,
+          "pending": 0,
+          "rate": 32.233333333333334,
+          "stage": "Person crop",
+          "wait_ms": 61.156629192347445
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 7.350528000000001,
+          "mean_batch": 4.028683914510686,
+          "mean_ms": 2.6383964707536602,
+          "p95_ms": 3.876137,
+          "pending": 0,
+          "rate": 29.633333333333333,
+          "stage": "ReID inference + transfer",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 6.745499000000001,
+          "mean_batch": 4.028683914510686,
+          "mean_ms": 1.5731907019122597,
+          "p95_ms": 2.247723,
+          "pending": 0,
+          "rate": 29.633333333333333,
+          "stage": "ReID preprocess",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 0.118422,
+          "mean_batch": 3.703722854188211,
+          "mean_ms": 0.018915904860392966,
+          "p95_ms": 0.044607,
+          "pending": 0,
+          "rate": 32.233333333333334,
+          "stage": "Tracking association"
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 0,
+          "mean_batch": 0,
+          "mean_ms": 0,
+          "p95_ms": 0,
+          "pending": 0,
+          "rate": 0,
+          "stage": "Tracking queue",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 32.278475,
+          "mean_batch": 4,
+          "mean_ms": 24.35086807053944,
+          "p95_ms": 29.615336,
+          "pending": 0,
+          "rate": 8.033333333333333,
+          "stage": "YOLO executor total",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 7.194567,
+          "mean_batch": 4,
+          "mean_ms": 6.5327456887966795,
+          "p95_ms": 6.829514,
+          "pending": 0,
+          "rate": 8.033333333333333,
+          "stage": "YOLO inference",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 25.212689,
+          "mean_batch": 4,
+          "mean_ms": 17.44330419502075,
+          "p95_ms": 22.519372,
+          "pending": 0,
+          "rate": 8.033333333333333,
+          "stage": "YOLO postprocess",
+          "wait_ms": 0
+        },
+        {
+          "camera": "",
+          "dropped": 0,
+          "max_ms": 4.498183,
+          "mean_batch": 4,
+          "mean_ms": 3.3916546673596657,
+          "p95_ms": 4.177974,
+          "pending": 0,
+          "rate": 8.016666666666667,
+          "stage": "YOLO preprocess",
+          "wait_ms": 12.619757569646572
+        }
+      ],
+      "last_cameras": [
+        {
+          "ai": 2408,
+          "background_ai": 1190,
+          "error": "",
+          "id": "cam0",
+          "received": 53995,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 2408,
+          "background_ai": 1190,
+          "error": "",
+          "id": "cam1",
+          "received": 53995,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 2408,
+          "background_ai": 1190,
+          "error": "",
+          "id": "cam2",
+          "received": 53996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 2408,
+          "background_ai": 1190,
+          "error": "",
+          "id": "cam3",
+          "received": 53995,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam4",
+          "received": 53995,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam5",
+          "received": 53996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam6",
+          "received": 53996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam7",
+          "received": 53996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam8",
+          "received": 53996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam9",
+          "received": 53996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam10",
+          "received": 53996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam11",
+          "received": 53995,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam12",
+          "received": 53995,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam13",
+          "received": 53996,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam14",
+          "received": 53995,
+          "selected": false,
+          "slot": -1
+        },
+        {
+          "ai": 1207,
+          "background_ai": 2390,
+          "error": "",
+          "id": "cam15",
+          "received": 53995,
+          "selected": false,
+          "slot": -1
+        }
+      ]
+    }
+  ],
+  "retained_observations_per_camera": {
+    "cam0": 68,
+    "cam1": 53,
+    "cam10": 91,
+    "cam11": 111,
+    "cam12": 18,
+    "cam13": 27,
+    "cam14": 9,
+    "cam15": 17,
+    "cam2": 69,
+    "cam3": 58,
+    "cam4": 30,
+    "cam5": 32,
+    "cam6": 49,
+    "cam7": 56,
+    "cam8": 90,
+    "cam9": 96
+  },
+  "timestamp_note": "The 30-minute run exposed an unset decoded-frame timestamp on continuous hidden cameras. Rates, durations and queue results remain valid. Invalid aggregate frame-age waits in hidden/mixed phases are omitted below. A subsequent 120-second integration run validates the timestamp correction in every visibility mode.",
+  "timestamp_fix_validation": {
+    "duration_seconds": 120,
+    "phases": [
+      {
+        "mode": 0,
+        "min_tracking_age_ms": 150.098327,
+        "max_tracking_age_ms": 725.497711
+      },
+      {
+        "mode": 1,
+        "min_tracking_age_ms": 71.098469,
+        "max_tracking_age_ms": 614.81726
+      },
+      {
+        "mode": 2,
+        "min_tracking_age_ms": 78.225134,
+        "max_tracking_age_ms": 623.710396
+      }
+    ],
+    "last_window_stages": [
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 11.358837,
+        "mean_batch": 1,
+        "mean_ms": 7.2710167845188165,
+        "p95_ms": 9.7844935,
+        "pending": 0,
+        "rate": 31.866666666666667,
+        "stage": "Detection update",
+        "wait_ms": 59.90192583211296
+      },
+      {
+        "camera": "",
+        "dropped": 783,
+        "max_ms": 0,
+        "mean_batch": 0,
+        "mean_ms": 0,
+        "p95_ms": 0,
+        "pending": 128,
+        "rate": 0,
+        "stage": "Embedding queue",
+        "wait_ms": 0
+      },
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 231.974733,
+        "mean_batch": 4,
+        "mean_ms": 228.0436306250001,
+        "p95_ms": 230.614874,
+        "pending": 0,
+        "rate": 0.8,
+        "stage": "Image embedding",
+        "wait_ms": 35512.96035441668
+      },
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 20.383162,
+        "mean_batch": 1,
+        "mean_ms": 7.461833380208332,
+        "p95_ms": 15.932688,
+        "pending": 0,
+        "rate": 3.2,
+        "stage": "PNG + DB save",
+        "wait_ms": 0
+      },
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 8.454557,
+        "mean_batch": 3.7032967032967035,
+        "mean_ms": 2.4056937346938767,
+        "p95_ms": 3.417353,
+        "pending": 0,
+        "rate": 31.85,
+        "stage": "Person crop",
+        "wait_ms": 44.607153571951855
+      },
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 7.879869,
+        "mean_batch": 4.027856736782263,
+        "mean_ms": 2.635849722001136,
+        "p95_ms": 3.981318,
+        "pending": 0,
+        "rate": 29.316666666666666,
+        "stage": "ReID inference + transfer",
+        "wait_ms": 0
+      },
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 6.845787999999999,
+        "mean_batch": 4.027856736782263,
+        "mean_ms": 1.5736050153496335,
+        "p95_ms": 2.346162,
+        "pending": 0,
+        "rate": 29.316666666666666,
+        "stage": "ReID preprocess",
+        "wait_ms": 0
+      },
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 0.122044,
+        "mean_batch": 3.7055439330543933,
+        "mean_ms": 0.019339792364016777,
+        "p95_ms": 0.047918,
+        "pending": 0,
+        "rate": 31.866666666666667,
+        "stage": "Tracking association",
+        "wait_ms": 110.83677423117142
+      },
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 0,
+        "mean_batch": 0,
+        "mean_ms": 0,
+        "p95_ms": 0,
+        "pending": 5,
+        "rate": 0,
+        "stage": "Tracking queue",
+        "wait_ms": 0
+      },
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 36.926825,
+        "mean_batch": 3.553903345724907,
+        "mean_ms": 22.663018131970265,
+        "p95_ms": 32.505174,
+        "pending": 0,
+        "rate": 8.966666666666667,
+        "stage": "YOLO executor total",
+        "wait_ms": 0
+      },
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 7.049973,
+        "mean_batch": 3.553903345724907,
+        "mean_ms": 6.4795321579925655,
+        "p95_ms": 6.818933,
+        "pending": 0,
+        "rate": 8.966666666666667,
+        "stage": "YOLO inference",
+        "wait_ms": 0
+      },
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 29.981484,
+        "mean_batch": 3.553903345724907,
+        "mean_ms": 15.798746702602218,
+        "p95_ms": 25.49214,
+        "pending": 0,
+        "rate": 8.966666666666667,
+        "stage": "YOLO postprocess",
+        "wait_ms": 0
+      },
+      {
+        "camera": "",
+        "dropped": 0,
+        "max_ms": 7.556031,
+        "mean_batch": 3.5547309833024117,
+        "mean_ms": 3.1779352653061257,
+        "p95_ms": 4.203411,
+        "pending": 0,
+        "rate": 8.983333333333333,
+        "stage": "YOLO preprocess",
+        "wait_ms": 12.068681437847872
+      }
+    ]
+  }
+}

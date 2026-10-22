@@ -391,9 +391,13 @@ struct Controller::Channel {
         if (slot.latest.sample && !slot.latest.preview_consumed)
             c.timing->counter(TimingCounter::LatestReplaced);
         auto trace = frame_trace(gst_sample_get_buffer(s.get()));
-        slot.latest = {std::move(trace),      std::move(s),
-                       c.state.generation,    unsigned(info.width),
-                       unsigned(info.height), index >= 16 ? c.background_captured : Clock::now()};
+        slot.latest = {std::move(trace),
+                       std::move(s),
+                       c.state.generation,
+                       unsigned(info.width),
+                       unsigned(info.height),
+                       index >= 16 && !c.continuous_search() ? c.background_captured
+                                                             : Clock::now()};
         {
             std::lock_guard<std::mutex> lock(c.search_stamp_mutex);
             auto it = c.search_stamps.find(
@@ -489,7 +493,7 @@ struct Controller::Channel {
             }
         }
         if (background_slot < 0) {
-            state.background_state = "waiting for continuous AI capacity (4 hidden cameras)";
+            state.background_state = "waiting for continuous AI capacity (16 hidden cameras)";
             return;
         }
         try {
@@ -901,6 +905,7 @@ struct Controller::Channel {
     }
 };
 Controller::Controller(Options options) : options_(std::move(options)) {
+    ai_runtime_->configure(options_.ai_fps, std::clamp(options_.search.interval_ms, 5000u, 60000u));
     if (options_.search.enabled)
         options_.background_ai_enabled = true;
     if (options_.batch != 1 && options_.batch != 2 && options_.batch != 4 && options_.batch != 8 &&
@@ -974,7 +979,8 @@ Controller::Controller(Options options) : options_(std::move(options)) {
         throw;
     }
     if (options_.search.enabled) {
-        search_ = std::make_unique<SearchService>(*catalog_, display_, options_.search);
+        search_ =
+            std::make_unique<SearchService>(*catalog_, display_, options_.search, ai_runtime_);
         // HIP graph capture must finish before the live GPU schedulers start.
         search_->wait_initialized();
     }
@@ -1432,6 +1438,13 @@ void Controller::gpu_loop() {
     try {
         hip_check(hipSetDevice(0), "AI device");
         BatchOptions configuration;
+        configuration.measured = [runtime = ai_runtime_, ready = &inference_ready_](
+                                     double inference, double post, unsigned batch) {
+            if (!ready->load())
+                return;
+            runtime->record("YOLO inference", "", inference, 0, batch);
+            runtime->record("YOLO postprocess", "", post, 0, batch);
+        };
         configuration.model = options_.model;
         configuration.model_info = options_.model_info;
         configuration.size = options_.batch;
@@ -1443,14 +1456,16 @@ void Controller::gpu_loop() {
         auto batch = SharedBatchExecutor::acquire(configuration);
         const auto &info = batch->info();
         const PixelNormalization defaults;
-        if (info.task != "detection" || info.width != 640 || info.height != 640 ||
-            info.classes != 80 || info.input_name != "images" || !info.letterbox ||
-            info.normalization.bgr != defaults.bgr || info.normalization.scale != defaults.scale ||
+        if (info.task != "detection" || !info.width || !info.height || info.width > 640 ||
+            info.height > 640 || info.classes != 80 || info.input_name != "images" ||
+            !info.letterbox || info.normalization.bgr != defaults.bgr ||
+            info.normalization.scale != defaults.scale ||
             info.normalization.padding != defaults.padding ||
             info.normalization.mean != defaults.mean ||
             info.normalization.stddev != defaults.stddev)
-            throw std::runtime_error("NVR streaming analytics requires YOLOv8 COCO80 at 640x640 "
-                                     "with default RGB letterbox normalization");
+            throw std::runtime_error(
+                "NVR streaming analytics requires YOLOv8-compatible COCO80 up to 640x640 "
+                "with default RGB letterbox normalization");
         std::shared_ptr<SharedBatchExecutor> single;
         if (options_.batch > 1) {
             configuration.model = options_.single_model;
@@ -1458,12 +1473,13 @@ void Controller::gpu_loop() {
             configuration.instance_id = prefix + "/single";
             single = SharedBatchExecutor::acquire(configuration);
         }
-        auto input =
-            std::make_shared<DeviceBuffer>(size_t(options_.batch) * 3 * 640 * 640 * sizeof(float));
+        auto input = std::make_shared<DeviceBuffer>(size_t(options_.batch) * 3 * info.width *
+                                                    info.height * sizeof(float));
         auto view = [&](unsigned slot) {
-            auto *ptr = static_cast<float *>(input->data()) + size_t(slot) * 3 * 640 * 640;
+            auto *ptr =
+                static_cast<float *>(input->data()) + size_t(slot) * 3 * info.width * info.height;
             return std::shared_ptr<DeviceBuffer>(
-                new DeviceBuffer(ptr, size_t(3) * 640 * 640 * sizeof(float)),
+                new DeviceBuffer(ptr, size_t(3) * info.width * info.height * sizeof(float)),
                 [owner = input](DeviceBuffer *p) { delete p; });
         };
         ImagePacker pack;
@@ -1471,30 +1487,35 @@ void Controller::gpu_loop() {
         // resource baselines; lazy kernels/workspaces must not first appear on
         // a later reconnect's single-image batch.
         {
-            pack.pad(input->data(), 0, options_.batch, 640, 640);
+            pack.pad(input->data(), 0, options_.batch, info.width, info.height);
             hip_check(hipDeviceSynchronize(), "Warmup input");
             std::vector<InferenceRequest> requests;
             for (unsigned i = 0; i < options_.batch; i++)
-                requests.push_back({{"images", TensorType::Float32, {1, 3, 640, 640}, view(i), 0},
-                                    prefix + "/warmup/" + std::to_string(i),
-                                    0,
-                                    0});
+                requests.push_back(
+                    {{"images", TensorType::Float32, {1, 3, info.height, info.width}, view(i), 0},
+                     prefix + "/warmup/" + std::to_string(i),
+                     0,
+                     0});
             auto warmup = batch->submit_many(std::move(requests));
             for (auto &result : warmup)
                 (void)result.get();
             if (single)
                 (void)single
-                    ->submit({{"images", TensorType::Float32, {1, 3, 640, 640}, view(0), 0},
+                    ->submit({{"images",
+                               TensorType::Float32,
+                               {1, 3, info.height, info.width},
+                               view(0),
+                               0},
                               prefix + "/warmup/single",
                               0,
                               0})
                     .get();
         }
         inference_ready_ = true;
-        std::array<Sample, 20> previous;
+        std::array<Sample, 32> previous;
         unsigned background_cursor = 0;
         unsigned cursor = 0;
-        double rate = 5;
+        double rate = ai_runtime_->fps();
         auto waiting = Clock::time_point{};
         struct Item {
             unsigned slot;
@@ -1503,11 +1524,12 @@ void Controller::gpu_loop() {
             unsigned sw, sh, px, py;
         };
         while (!stopping_) {
+            rate = ai_runtime_->fps();
             std::vector<Item> items;
             const auto now = Clock::now();
             std::vector<unsigned> order;
-            for (unsigned i = 0; i < 4; ++i) {
-                const unsigned index = 16 + (background_cursor + i) % 4;
+            for (unsigned i = 0; i < background_slots_.size(); ++i) {
+                const unsigned index = 16 + (background_cursor + i) % background_slots_.size();
                 auto &s = ai_slot(index);
                 std::lock_guard<std::mutex> l(s.mutex);
                 if (!s.channel.empty() && s.latest.sample &&
@@ -1519,8 +1541,8 @@ void Controller::gpu_loop() {
             }
             for (unsigned i = 0; i < 16; ++i)
                 order.push_back((cursor + i) % 16);
-            for (unsigned i = 0; i < 4; ++i) {
-                const unsigned index = 16 + (background_cursor + i) % 4;
+            for (unsigned i = 0; i < background_slots_.size(); ++i) {
+                const unsigned index = 16 + (background_cursor + i) % background_slots_.size();
                 if (order.empty() || order.front() != index)
                     order.push_back(index);
             }
@@ -1547,10 +1569,12 @@ void Controller::gpu_loop() {
                      std::chrono::duration<double>(now - s.last_ai).count() < 1.0 / rate))
                     continue;
                 const auto &f = s.latest;
-                const double scale = std::min(640.0 / f.width, 640.0 / f.height);
+                const double scale =
+                    std::min(double(info.width) / f.width, double(info.height) / f.height);
                 const unsigned sw = std::max(1u, unsigned(std::lround(f.width * scale))),
                                sh = std::max(1u, unsigned(std::lround(f.height * scale)));
-                items.push_back({index, f, s.channel, sw, sh, (640 - sw) / 2, (640 - sh) / 2});
+                items.push_back(
+                    {index, f, s.channel, sw, sh, (info.width - sw) / 2, (info.height - sh) / 2});
             }
             if (items.empty()) {
                 waiting = {};
@@ -1564,6 +1588,8 @@ void Controller::gpu_loop() {
                 continue;
             }
             waiting = {};
+            const auto waiting_gpu = Clock::now();
+            auto gpu_lease = ai_runtime_->acquire(AiRuntime::Tracking);
             const auto started = Clock::now();
             unsigned valid = 0;
             std::vector<Item> prepared;
@@ -1585,12 +1611,21 @@ void Controller::gpu_loop() {
                 s.ai_geometry = geometry;
                 s.va->scale(gst_va_buffer_get_surface(buffer), s.ai_surface, item.frame.width,
                             item.frame.height, item.sw, item.sh);
-                auto *output = static_cast<float *>(input->data()) + size_t(valid) * 3 * 640 * 640;
+                auto *output = static_cast<float *>(input->data()) +
+                               size_t(valid) * 3 * info.width * info.height;
                 pack.pack(*s.image,
-                          ImageTransform::make(item.frame.width, item.frame.height, 640, 640),
+                          ImageTransform::make(item.frame.width, item.frame.height, info.width,
+                                               info.height),
                           output);
                 hip_check(hipDeviceSynchronize(), "AI packing completion");
-                s.last_ai = Clock::now();
+                const auto period = std::chrono::duration_cast<Clock::duration>(
+                    std::chrono::duration<double>(1.0 / rate));
+                const auto admitted = Clock::now();
+                // Keep the cadence after a short non-preemptible GPU task, retaining at most one
+                // overdue update.
+                s.last_ai = s.last_ai == Clock::time_point{}
+                                ? admitted
+                                : std::max(s.last_ai + period, admitted - period);
                 previous[item.slot] = item.frame.sample;
                 prepared.push_back(item);
                 ++valid;
@@ -1598,16 +1633,22 @@ void Controller::gpu_loop() {
             if (!valid)
                 continue;
             if (valid > 1 && valid < options_.batch) {
-                pack.pad(input->data(), valid, options_.batch, 640, 640);
+                pack.pad(input->data(), valid, options_.batch, info.width, info.height);
                 hip_check(hipDeviceSynchronize(), "Batch padding completion");
             }
             auto executor = valid == 1 && single ? single : batch;
             std::vector<InferenceRequest> requests;
             for (unsigned i = 0; i < valid; i++)
-                requests.push_back({{"images", TensorType::Float32, {1, 3, 640, 640}, view(i), 0},
-                                    prefix + "/" + prepared[i].channel,
-                                    prepared[i].frame.generation,
-                                    prepared[i].slot});
+                requests.push_back(
+                    {{"images", TensorType::Float32, {1, 3, info.height, info.width}, view(i), 0},
+                     prefix + "/" + prepared[i].channel,
+                     prepared[i].frame.generation,
+                     prepared[i].slot});
+            const auto infer_started = Clock::now();
+            ai_runtime_->record(
+                "YOLO preprocess", "",
+                std::chrono::duration<double, std::milli>(infer_started - started).count(),
+                std::chrono::duration<double, std::milli>(started - waiting_gpu).count(), valid);
             auto pending = executor->submit_many(std::move(requests));
             std::vector<std::vector<Detection>> results(valid);
             for (unsigned i = 0; i < valid; i++)
@@ -1616,17 +1657,12 @@ void Controller::gpu_loop() {
             const auto completed = Clock::now();
             const double elapsed =
                 std::chrono::duration<double, std::milli>(completed - started).count();
+            ai_runtime_->record(
+                "YOLO executor total", "",
+                std::chrono::duration<double, std::milli>(completed - infer_started).count(), 0,
+                valid);
             batch_ms_ = elapsed;
             last_batch_ = valid;
-            unsigned selected = 0;
-            for (auto &s : slots_) {
-                std::lock_guard<std::mutex> l(s.mutex);
-                if (!s.channel.empty())
-                    selected++;
-            }
-            const double capacity =
-                0.75 * valid * 1000 / std::max(1.0, elapsed) / std::max(1u, selected);
-            double desired = std::clamp(capacity, 0.1, 30.0);
             for (unsigned i = 0; i < valid; ++i) {
                 const auto &item = prepared[i];
                 auto &s = ai_slot(item.slot);
@@ -1682,16 +1718,17 @@ void Controller::gpu_loop() {
                     publisher_->publish(analysis_json(metadata));
                     gst_buffer_unref(metadata);
                 }
+                ai_runtime_->record(
+                    "Detection update", item.channel, elapsed / valid,
+                    std::chrono::duration<double, std::milli>(completed - item.frame.received)
+                        .count());
                 s.inferred++;
                 if (item.slot >= 16) {
                     s.job_done = true;
-                    background_cursor = (item.slot - 16 + 1) % 4;
+                    background_cursor = (item.slot - 16 + 1) % background_slots_.size();
                 }
-                if (item.slot < 16 &&
-                    completed - item.frame.received > std::chrono::milliseconds(200))
-                    desired = std::min(desired, rate * 0.8);
             }
-            rate = std::clamp(rate * 0.8 + desired * 0.2, 0.1, 30.0);
+            // The requested per-camera rate is explicit; do not increase it with spare GPU time.
             for (const auto &item : prepared)
                 if (item.slot < 16)
                     cursor = (item.slot + 1) % 16;
@@ -1787,5 +1824,11 @@ void Controller::update_source(Source source) {
                 return;
             }
     });
+}
+} // namespace amdva::streaming
+
+namespace amdva::streaming {
+void Controller::ai_frequency(unsigned fps, unsigned interval) {
+    ai_runtime_->configure(fps, interval);
 }
 } // namespace amdva::streaming

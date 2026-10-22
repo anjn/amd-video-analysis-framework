@@ -29,6 +29,7 @@ struct Source {
 };
 struct Options {
     std::string model, single_model, model_info, recording_root{"recordings"};
+    unsigned ai_fps{2};
     unsigned batch{4}, segment_seconds{60}, retention_minutes{60};
     bool background_ai_enabled{};
     bool tracking_enabled{true};
@@ -138,14 +139,17 @@ class Controller {
     std::vector<TelemetrySnapshot> telemetry() const;
     void presentation_active(bool);
     SearchService *search_service() { return search_.get(); }
+    std::shared_ptr<AiRuntime> ai_runtime() const { return ai_runtime_; }
+    void ai_frequency(unsigned fps, unsigned embedding_interval_ms);
     void shutdown();
 
   private:
     struct Channel;
     Options options_;
+    std::shared_ptr<AiRuntime> ai_runtime_ = std::make_shared<AiRuntime>();
     GstVaDisplay *display_{};
     std::array<Slot, 16> slots_;
-    std::array<Slot, 4> background_slots_;
+    std::array<Slot, 16> background_slots_;
     Slot &ai_slot(unsigned index) {
         return index < 16 ? slots_[index] : background_slots_[index - 16];
     }

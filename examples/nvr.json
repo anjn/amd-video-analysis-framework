@@ -43,8 +43,9 @@
     "bundle": "../artifacts/nvr-search",
     "device": 0,
     "image_size": 384,
-    "interval_ms": 1000,
-    "queue_limit": 64,
+    "interval_ms": 5000,
+    "queue_limit": 128,
     "reid_model": "../artifacts/reid-model/osnet-x1-msmt17.mxr"
-  }
+  },
+  "ai_fps": 2
 }

@@ -1,6 +1,7 @@
 #pragma once
 #include "amdva/model.hpp"
 #include "amdva/runtime.hpp"
+#include "amdva/streaming/ai.hpp"
 #include "amdva/streaming/person_tracking.hpp"
 #include <array>
 #include <chrono>
@@ -13,7 +14,9 @@ struct Frame;
 struct SearchOptions {
     bool enabled{};
     std::string library{"libeg2.so"}, bundle, reid_model;
-    unsigned device{}, image_size{384}, interval_ms{1000}, queue_limit{64};
+    unsigned device{}, image_size{384}, interval_ms{5000}, queue_limit{128};
+    unsigned embedding_width{}, embedding_height{}, embedding_batch{1};
+    double min_person_height{.1};
 };
 struct SearchImage {
     unsigned width{}, height{};
@@ -42,7 +45,7 @@ struct SearchResult {
     std::vector<SearchGroup> groups;
 };
 struct SearchStatus {
-    std::string state{"disabled"}, error;
+    std::string state{"disabled"}, error, reid_shape;
     uint64_t stored{}, dropped{}, pending{};
     double inference_ms{};
 };
@@ -56,6 +59,8 @@ class SearchCropper {
     SearchCropper(GstVaDisplay *, unsigned limit, unsigned device = 0);
     ~SearchCropper();
     SearchImage crop(VASurfaceID, unsigned width, unsigned height, Detection);
+    std::vector<SearchImage> crop_many(VASurfaceID, unsigned width, unsigned height,
+                                       const std::vector<Detection> &);
 
   private:
     struct Impl;
@@ -73,7 +78,7 @@ struct PersonTrackFrame {
 };
 class SearchService {
   public:
-    SearchService(Catalog &, GstVaDisplay *, SearchOptions);
+    SearchService(Catalog &, GstVaDisplay *, SearchOptions, std::shared_ptr<AiRuntime> = {});
     ~SearchService();
     void submit(const Frame &, const std::string &channel, const std::vector<Detection> &);
     uint64_t text(std::string);

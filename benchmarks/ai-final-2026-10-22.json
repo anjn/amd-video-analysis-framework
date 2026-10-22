@@ -1,0 +1,339 @@
+{
+  "date": "2026-10-22",
+  "hardware": "Ryzen AI 9 HX 370 / Radeon 890M (gfx1150)",
+  "kernel": "6.17.0-1033-oem",
+  "power": "User lowered power setting before all these measurements; BIOS wattage not recorded. CPU governor powersave, GPU performance level auto.",
+  "method": "20 warmups, >=200 iterations and >=30 sec per repeat, three repeats; sequential, no NVR workload. Detector/ReID resident synthetic inputs; embedding deterministic synthetic RGB.",
+  "results": {
+    "embedding/108x192-b4.json": {
+      "width": 108,
+      "height": 192,
+      "batch": 4,
+      "timing": "completed native wall time, includes preprocessing and output transfer",
+      "runs": [
+        {
+          "samples": 200,
+          "mean_ms": 195.7507611050005,
+          "p50_ms": 195.82551600001352,
+          "p95_ms": 196.33548699994208,
+          "max_ms": 196.61317999998573,
+          "per_image_ms": 48.93769027625012
+        },
+        {
+          "samples": 200,
+          "mean_ms": 195.71286831000975,
+          "p50_ms": 195.92167600012544,
+          "p95_ms": 196.38825600009113,
+          "max_ms": 196.59473699994123,
+          "per_image_ms": 48.92821707750244
+        },
+        {
+          "samples": 200,
+          "mean_ms": 195.53540596000744,
+          "p50_ms": 195.567654000115,
+          "p95_ms": 196.4021999999659,
+          "max_ms": 196.97377700003926,
+          "per_image_ms": 48.88385149000186
+        }
+      ],
+      "max_rss_mib": 3143.83984375
+    },
+    "embedding/384x384-b1.json": {
+      "width": 384,
+      "height": 384,
+      "batch": 1,
+      "timing": "completed native wall time, includes preprocessing and output transfer",
+      "runs": [
+        {
+          "samples": 572,
+          "mean_ms": 52.48838468531858,
+          "p50_ms": 52.14416700005131,
+          "p95_ms": 57.940552999980355,
+          "max_ms": 58.29734499980077,
+          "per_image_ms": 52.48838468531858
+        },
+        {
+          "samples": 574,
+          "mean_ms": 52.33532070905746,
+          "p50_ms": 52.33322699996279,
+          "p95_ms": 52.497813999934806,
+          "max_ms": 52.601237000089895,
+          "per_image_ms": 52.33532070905746
+        },
+        {
+          "samples": 573,
+          "mean_ms": 52.35729048516682,
+          "p50_ms": 52.35447200016097,
+          "p95_ms": 52.5271920000705,
+          "max_ms": 52.772461999893494,
+          "per_image_ms": 52.35729048516682
+        }
+      ],
+      "max_rss_mib": 3085.953125
+    },
+    "osnet_x0_25-128x256-b1.json": {
+      "shape": [
+        1,
+        3,
+        256,
+        128
+      ],
+      "timing": "completed wall time, inference only",
+      "runs": [
+        {
+          "samples": 43236,
+          "mean_ms": 0.693812,
+          "p50_ms": 0.686123,
+          "p95_ms": 0.736444,
+          "max_ms": 1.91627,
+          "per_image_ms": 0.693812,
+          "images_per_second": 1441.31
+        },
+        {
+          "samples": 44099,
+          "mean_ms": 0.680228,
+          "p50_ms": 0.677244,
+          "p95_ms": 0.700264,
+          "max_ms": 1.75295,
+          "per_image_ms": 0.680228,
+          "images_per_second": 1470.1
+        },
+        {
+          "samples": 43120,
+          "mean_ms": 0.695672,
+          "p50_ms": 0.684655,
+          "p95_ms": 0.744945,
+          "max_ms": 2.70758,
+          "per_image_ms": 0.695672,
+          "images_per_second": 1437.46
+        }
+      ],
+      "max_rss_mib": 1445.47
+    },
+    "osnet_x0_25-128x256-b4.json": {
+      "shape": [
+        4,
+        3,
+        256,
+        128
+      ],
+      "timing": "completed wall time, inference only",
+      "runs": [
+        {
+          "samples": 24793,
+          "mean_ms": 1.20993,
+          "p50_ms": 1.20398,
+          "p95_ms": 1.2436,
+          "max_ms": 1.74417,
+          "per_image_ms": 0.302482,
+          "images_per_second": 3305.98
+        },
+        {
+          "samples": 24857,
+          "mean_ms": 1.20683,
+          "p50_ms": 1.20349,
+          "p95_ms": 1.2332,
+          "max_ms": 2.51715,
+          "per_image_ms": 0.301707,
+          "images_per_second": 3314.48
+        },
+        {
+          "samples": 24968,
+          "mean_ms": 1.20143,
+          "p50_ms": 1.20104,
+          "p95_ms": 1.23111,
+          "max_ms": 2.32537,
+          "per_image_ms": 0.300357,
+          "images_per_second": 3329.37
+        }
+      ],
+      "max_rss_mib": 1450.78
+    },
+    "osnet_x1_0-128x256-b1.json": {
+      "shape": [
+        1,
+        3,
+        256,
+        128
+      ],
+      "timing": "completed wall time, inference only",
+      "runs": [
+        {
+          "samples": 21385,
+          "mean_ms": 1.40277,
+          "p50_ms": 1.39115,
+          "p95_ms": 1.45289,
+          "max_ms": 2.85797,
+          "per_image_ms": 1.40277,
+          "images_per_second": 712.875
+        },
+        {
+          "samples": 21466,
+          "mean_ms": 1.39748,
+          "p50_ms": 1.39078,
+          "p95_ms": 1.4428,
+          "max_ms": 2.54414,
+          "per_image_ms": 1.39748,
+          "images_per_second": 715.574
+        },
+        {
+          "samples": 21438,
+          "mean_ms": 1.39929,
+          "p50_ms": 1.39308,
+          "p95_ms": 1.44381,
+          "max_ms": 2.458,
+          "per_image_ms": 1.39929,
+          "images_per_second": 714.65
+        }
+      ],
+      "max_rss_mib": 1478.19
+    },
+    "yolo11n-640x384-b1.json": {
+      "shape": [
+        1,
+        3,
+        384,
+        640
+      ],
+      "timing": "completed wall time, inference only",
+      "runs": [
+        {
+          "samples": 19287,
+          "mean_ms": 1.55538,
+          "p50_ms": 1.55128,
+          "p95_ms": 1.5727,
+          "max_ms": 2.01888,
+          "per_image_ms": 1.55538,
+          "images_per_second": 642.931
+        },
+        {
+          "samples": 19303,
+          "mean_ms": 1.55407,
+          "p50_ms": 1.55233,
+          "p95_ms": 1.57038,
+          "max_ms": 2.46209,
+          "per_image_ms": 1.55407,
+          "images_per_second": 643.473
+        },
+        {
+          "samples": 19341,
+          "mean_ms": 1.55104,
+          "p50_ms": 1.5491,
+          "p95_ms": 1.56742,
+          "max_ms": 2.47996,
+          "per_image_ms": 1.55104,
+          "images_per_second": 644.727
+        }
+      ],
+      "max_rss_mib": 1448.73
+    },
+    "yolo11n-640x384-b4.json": {
+      "shape": [
+        4,
+        3,
+        384,
+        640
+      ],
+      "timing": "completed wall time, inference only",
+      "runs": [
+        {
+          "samples": 5414,
+          "mean_ms": 5.54107,
+          "p50_ms": 5.53421,
+          "p95_ms": 5.59083,
+          "max_ms": 6.12258,
+          "per_image_ms": 1.38527,
+          "images_per_second": 721.882
+        },
+        {
+          "samples": 5402,
+          "mean_ms": 5.55352,
+          "p50_ms": 5.55211,
+          "p95_ms": 5.60336,
+          "max_ms": 5.81664,
+          "per_image_ms": 1.38838,
+          "images_per_second": 720.263
+        },
+        {
+          "samples": 5403,
+          "mean_ms": 5.55282,
+          "p50_ms": 5.55064,
+          "p95_ms": 5.60449,
+          "max_ms": 5.91583,
+          "per_image_ms": 1.3882,
+          "images_per_second": 720.355
+        }
+      ],
+      "max_rss_mib": 1459.31
+    },
+    "yolov8n-640x640-b4.json": {
+      "shape": [
+        4,
+        3,
+        640,
+        640
+      ],
+      "timing": "completed wall time, inference only",
+      "runs": [
+        {
+          "samples": 3083,
+          "mean_ms": 9.73228,
+          "p50_ms": 9.6411,
+          "p95_ms": 10.3547,
+          "max_ms": 10.8492,
+          "per_image_ms": 2.43307,
+          "images_per_second": 411.003
+        },
+        {
+          "samples": 3104,
+          "mean_ms": 9.66529,
+          "p50_ms": 9.67814,
+          "p95_ms": 9.74643,
+          "max_ms": 9.84605,
+          "per_image_ms": 2.41632,
+          "images_per_second": 413.852
+        },
+        {
+          "samples": 3088,
+          "mean_ms": 9.71782,
+          "p50_ms": 9.7281,
+          "p95_ms": 9.79291,
+          "max_ms": 10.1411,
+          "per_image_ms": 2.42946,
+          "images_per_second": 411.615
+        }
+      ],
+      "max_rss_mib": 1415.84
+    }
+  },
+  "model_sha256": {
+    "yolo11n.pt": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+    "osnet_x0_25-msmt17.pth": "cf55163d78fc44c62c82f85ab62d39f10438679b5abe8c698ae08cfa84aa6e18"
+  },
+  "compiled_models": {
+    "yolo11n-640x384-b1": {
+      "schema": 2,
+      "gpu": "gfx1150",
+      "offload_copy": false,
+      "precision": "fp16",
+      "batch": 1,
+      "sha256": "9b192087dde78403dfabf03ee168bee6a1ed6573567e3299390f86e7c2337365"
+    },
+    "yolo11n-640x384-b4": {
+      "schema": 2,
+      "gpu": "gfx1150",
+      "offload_copy": false,
+      "precision": "fp16",
+      "batch": 4,
+      "sha256": "b8da6d1518bf0a38d88362d06ecd44c2769094d7acde5e8b737946a85ee43e7e"
+    },
+    "osnet_x0_25-128x256-b4": {
+      "schema": 2,
+      "gpu": "gfx1150",
+      "offload_copy": false,
+      "precision": "fp16",
+      "batch": 4,
+      "sha256": "69b653f8696c9211e9bea6b93e107bfdd2a56e8c73acd2a9861811d70d5324b4"
+    }
+  }
+}
