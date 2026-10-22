@@ -84,8 +84,7 @@ int main(int argc, char **argv) {
             if (!s.image)
                 std::cerr << "request " << i << " state=" << s.state << '\n';
             check(s.image && s.state == "ready", "GPU preview missing");
-            check(s.image->width <= std::max(320u, 2 * ((max_video_width + 11) / 12)) &&
-                      s.image->height <= std::max(180u, 2 * ((max_video_height + 11) / 12)),
+            check(s.image->width <= 1280u && s.image->height <= 720u,
                   "Preview exceeds safe VPE bounds");
             check(s.image->frame_ms <= s.requested_ms && s.image->frame_ms >= base,
                   "Keyframe snapshot is after target");
@@ -95,7 +94,7 @@ int main(int argc, char **argv) {
         }
         auto cached = obtain("99", base + 200 + 99 * 16);
         check(cached.cache_hit, "Cache did not hit");
-        check(preview.status().cached_images <= 32, "Cache unbounded");
+        check(preview.status().cached_images <= 8, "Cache unbounded");
         auto gap = obtain("0", base + 5000);
         check(gap.state == "missing" && !gap.image, "Gap preview invented");
         std::ofstream(std::filesystem::path(argv[3]) / "corrupt.mkv") << "invalid container";

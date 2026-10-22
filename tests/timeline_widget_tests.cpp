@@ -21,7 +21,11 @@ int main(int argc, char **argv) {
         widget.position(start);
         check(widget.time_at(0) == start && widget.time_at(1000) == end, "Edge clamp");
         check(widget.time_at(500) == start + (end - start) / 2, "64-bit whole-history mapping");
-        unsigned requests = 0;
+        unsigned requests = 0, previews = 0;
+        widget.preview_requested = [&](std::optional<int64_t> at, QPoint) {
+            if (at)
+                ++previews;
+        };
         int64_t selected = 0;
         widget.seek_requested = [&](int64_t time) {
             requests++;
@@ -39,6 +43,12 @@ int main(int argc, char **argv) {
         check(!requests, "Drag seeks before release");
         event(QEvent::MouseButtonRelease, 988, Qt::LeftButton, Qt::NoButton);
         check(requests == 1 && selected == end, "Release commits timestamp");
+        auto before = previews;
+        widget.now(end + 1000);
+        widget.coverage(coverage);
+        check(previews == before, "Committed seek restarted hover on coverage refresh");
+        event(QEvent::MouseMove, 500, Qt::NoButton, Qt::NoButton);
+        check(previews > before, "Mouse movement did not restart hover");
         widget.show();
         app.processEvents();
         check(!widget.grab().isNull(), "Timeline paint");

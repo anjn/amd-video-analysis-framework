@@ -1,3 +1,4 @@
+#include "../src/nvr/timeline.hpp"
 #include "search_page.hpp"
 #include "window.hpp"
 #include <QApplication>
@@ -38,6 +39,7 @@ int main(int argc, char **argv) {
         auto *submit = window.findChild<QPushButton *>("search-submit");
         auto audit = reinterpret_cast<void (*)()>(dlsym(RTLD_DEFAULT, "amdva_audit_start"));
         bool auditing = false;
+        unsigned live_drag_checks = 0;
         auto errors =
             reinterpret_cast<unsigned long long (*)()>(dlsym(RTLD_DEFAULT, "amdva_audit_errors"));
         QTimer timer;
@@ -69,7 +71,7 @@ int main(int argc, char **argv) {
                         window.live_view()->grabFramebuffer().save(QString::fromStdString(
                             (std::filesystem::path(argv[1]).parent_path() / "person-overlay.png")
                                 .string()));
-                    tabs->setCurrentIndex(3);
+                    tabs->setCurrentIndex(2);
                     input->setText("a person wearing a purple skirt");
                     submit->click();
                     stage = 1;
@@ -139,7 +141,11 @@ int main(int argc, char **argv) {
                     }
                     if (page && page->playback_status().frames > 3 && page->presented() > 3) {
                         std::cout << "Card frames=" << page->playback_status().frames << std::endl;
-                        tabs->setCurrentIndex(1);
+                        tabs->setCurrentIndex(0);
+                        window.live_view()->activated(0, true);
+                        auto *timeline = dynamic_cast<RecordingTimeline *>(
+                            window.findChild<QWidget *>("recording-timeline"));
+                        timeline->seek_requested(last);
                         stage = 5;
                     }
                 } else if (stage == 5 && window.recording_view()->displayed_playback_time() > 0) {
@@ -167,7 +173,7 @@ int main(int argc, char **argv) {
                     stage = 6;
                 } else if (stage == 6) {
                     auto r = service->result();
-                    if (tabs->currentIndex() == 3 && r.request > request && !r.groups.empty()) {
+                    if (tabs->currentIndex() == 2 && r.request > request && !r.groups.empty()) {
                         if (errors && errors())
                             throw std::runtime_error("Copy audit violations");
                         std::cout << "PASS: live collection, English/Japanese search, result "
@@ -177,8 +183,15 @@ int main(int argc, char **argv) {
                             std::cout << "camera=" << source.source.id
                                       << " display_fps=" << source.display_fps
                                       << " background_ai=" << source.background_ai << std::endl;
+                        if (live_drag_checks < 2) {
+                            request = r.request;
+                            tabs->setCurrentIndex(0);
+                            window.findChild<QPushButton *>("playback-live")->click();
+                            stage = 8;
+                            return;
+                        }
                         if (argc == 3) {
-                            window.findChild<QPushButton *>("playback-stop")->click();
+                            window.findChild<QPushButton *>("playback-live")->click();
                             auto *page = dynamic_cast<SearchPage *>(
                                 window.findChild<QWidget *>("search-page"));
                             auto release = page->release().share();
@@ -188,6 +201,25 @@ int main(int argc, char **argv) {
                         } else
                             app.quit();
                     }
+                } else if (stage == 8 && window.live_view()->isExposed()) {
+                    auto *v = window.live_view();
+                    auto rect = v->displayed_video_rect();
+                    if (rect.isEmpty())
+                        return;
+                    v->hold_live(live_drag_checks == 0);
+                    QPointF a = rect.topLeft() + QPointF(rect.width() * .2, rect.height() * .2);
+                    QPointF b = rect.topLeft() + QPointF(rect.width() * .7, rect.height() * .8);
+                    QMouseEvent press(QEvent::MouseButtonPress, a, a, Qt::LeftButton,
+                                      Qt::LeftButton, Qt::NoModifier);
+                    QMouseEvent move(QEvent::MouseMove, b, b, Qt::NoButton, Qt::LeftButton,
+                                     Qt::NoModifier);
+                    QMouseEvent release(QEvent::MouseButtonRelease, b, b, Qt::LeftButton,
+                                        Qt::NoButton, Qt::NoModifier);
+                    QApplication::sendEvent(v, &press);
+                    QApplication::sendEvent(v, &move);
+                    QApplication::sendEvent(v, &release);
+                    ++live_drag_checks;
+                    stage = 6;
                 } else if (stage == 7 && tick > deletion_start + 10) {
                     auto state = controller.deletion_status();
                     if (state.state != "running" && state.state != "waiting") {

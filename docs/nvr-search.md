@@ -1,7 +1,7 @@
 # Person search in the NVR/VMS demo
 
 The **Search** tab finds recorded person crops using a text description or a
-region dragged on the **Recordings** video. Both modes use the same result
+region dragged on live or recorded video in **Live** single view. Both modes use the same result
 cards. Each card shows the camera, timestamps, cosine similarity, up to four
 thumbnails and a selector for every matched image. **Play nearby video** plays
 that scene inside the card, with pause and seek controls. Only one card plays
@@ -118,7 +118,7 @@ freed pages after deletion. Database migration is additive and enables
 incremental vacuum once for older catalogs. Consumers must rebuild against the
 updated streaming headers.
 
-A drag pins the displayed playback surface from mouse press through crop
+A drag pins the displayed live or playback surface from mouse press through crop
 completion. Dragging pauses playback; release submits the region and switches
 to Search. A click retains the play/pause action, and Esc cancels selection.
 Coordinates exclude letterboxing, account for display scaling, and never include

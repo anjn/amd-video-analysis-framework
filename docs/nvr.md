@@ -35,9 +35,9 @@ import are required. Software rendering is rejected. No CPU image upload fallbac
 is provided.
 
 Use **Live** to assign cameras to fixed 1/4/9/16-view tiles and double-click a
-tile for single-view focus. **Cameras** provides add/edit/remove and status
-information. **Recordings** provides camera/time search, a coverage timeline,
-and hardware playback with pause, seek and segment continuation. Every
+tile for single-view focus with a coverage timeline, in-place hover preview,
+recording playback and a Back to Live action. **Cameras** provides add/edit/remove,
+status, retention settings and recording deletion. Every
 registered camera records regardless of its live-view selection. See the
 [VMS GUI guide](vms.md) for operation, playback boundaries and catalog migration.
 Configuration changes are saved atomically with owner-only permissions; the
@@ -332,8 +332,8 @@ The existing bounded YOLO, ReID and embedding input sizes were unchanged.
 Text search, recording-region search, inline playback and deletion passed.
 Full-size playback produced 2560×1440 output; 100 alternating H.264 1080p / HEVC
 1440p hover previews passed with zero copy-audit or VPE errors (p95 89 ms).
-For 1440p, hover previews use a 428×240 GPU texture to respect VPE's 6:1
-reduction limit, sampled into the 320×180 popup by OpenGL. All 32 CTest tests
+At that revision, 1440p hover previews used a 428×240 GPU texture to respect VPE's 6:1
+reduction limit, sampled into the former 320×180 popup by OpenGL. All 32 CTest tests
 also passed.
 
 The prepared local launcher is `bash artifacts/1440p-demo/run-demo.sh`.

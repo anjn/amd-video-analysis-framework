@@ -1,6 +1,6 @@
 # Desktop video management
 
-The NVR desktop now has **Live**, **Recordings** and **Cameras** pages. It uses
+The NVR desktop now has **Live**, **Cameras**, **Search** and **AI Statistics** pages. It uses
 Qt Widgets and the existing hardware EGL renderer. RTSP reception, recording,
 reconnection, selected-camera analytics and optional background analytics remain
 services in `amdva_streaming`.
@@ -57,7 +57,7 @@ bottom bar displays catalogued recording bytes, current filesystem space, the
 configured quota and reserved free space. Recording schedules, per-camera
 recording switches and export are not provided.
 
-On **Recordings**, **Retention (all cameras)** sets the history to keep in whole
+On **Cameras**, **Retention (all cameras)** sets the history to keep in whole
 minutes. The default is **60 minutes**, including configs without a
 `retention_minutes` field. **Apply** saves the setting; **0 / Disabled** turns
 off time-based removal. About once per second the controller finds inactive
@@ -81,55 +81,47 @@ files can cause a partial result; release them and repeat the operation.
 
 ## Recording timeline and playback
 
-The **Recordings** page selects one camera at a time, including removed cameras
-with retained history. There is no file list, date filter or per-file slider.
-The timeline always spans that camera's oldest available finalized recording to
-the current local time. It refreshes coverage approximately once per second and
-has no zoom controls or 10,000-fragment truncation. Long histories necessarily
-have coarser mouse precision at a fixed window width.
+Single view on **Live** contains the recording timeline. Double-click a tile
+(or choose one view) to enter it; double-click or Esc returns to the grid.
+The camera dropdown includes removed cameras with retained recordings. The
+camera name uses the large GPU text overlay in single view; black title strips
+remain only in the grid. The timeline spans the oldest finalized recording to
+now, with green recorded intervals and grey gaps. Coverage refreshes each second.
 
-Green shows known playable coverage; grey shows gaps or unavailable coverage.
-A white marker follows the playback position. Hovering shows a vertical guide
-and `yyyy-MM-dd HH:mm:ss` label inside the timeline. Click, or release a drag,
-to seek by absolute time; dragging does not repeatedly restart the decoder.
-A gap selection jumps forward to the next available recording and displays a
-notice. Playback stays paused when seeking while paused; other seeks start
-playback. Camera changes preserve the selected wall time and immediately
-load its image for the new camera. Playing/waiting playback continues; otherwise
-the image is shown paused. The first camera selection uses its earliest
-available time. If that time has no recording, the usual forward gap resolution
-applies. Stop clears the image and preserves the selected time. Clicking the
-recording image toggles play/pause; clicking a waiting image pauses tail
-following, and clicking after Stop plays from the selected time.
+Click the timeline to start playback at that wall time, including when previously
+paused. Gaps resolve forward with a notice. Click the video to pause/resume;
+there are no Play/Pause/Stop buttons. Clicking live video freezes only display;
+recording and inference continue. Another click resumes the latest live frame.
+**Back to Live** releases recording playback and shows the current live stream.
+Playback at the archive tail waits for finalized segments instead of switching
+to live automatically. A camera change returns to that camera's live view.
 
-The recording image shows its local playback datetime (`yyyy-MM-dd HH:mm:ss`)
-in the upper left. **Show playback time** toggles this overlay and defaults to
-on; its value is saved in `<config>.ui.json`. The timestamp travels with the
-displayed decoded frame, so pausing and seeking show that image's time rather
-than the current system time or a timer estimate. Text is drawn as GPU geometry
-without mapping video pixels or uploading glyph images. The seek-preview popup
-remains image-only. The frame timestamp is available as `Plane::wall_time_ms`;
-SDK consumers must rebuild after this public structure change.
+Frame datetime (`yyyy-MM-dd HH:mm:ss`) is always shown in the lower-left area;
+live uses `Live`, or `Live · Paused`, in the same place. The timestamp belongs
+to the displayed decoded frame, not a timer estimate. The old time visibility
+preference is ignored. Camera name and optional stream information use GPU text
+geometry, without video readback or glyph texture uploads.
 
-Hovering or dragging the timeline also opens a small GPU preview above it,
-without changing main playback until the seek is committed. A single worker
-coalesces requests for 75ms and seeks to a key unit at or before the requested
-time. VA decoding and VPE scaling produce an image of at most 320×180, imported
-into the native EGL popup through DMA-BUF. The popup contains only the image;
-its frame can precede the cursor by a GOP. No thumbnail pixels are mapped
-to the CPU, uploaded from CPU memory or saved to disk. A GPU LRU holds at most
-32 images; a repeated position in a proven keyframe interval can use the cache.
-While another position is loading, the popup retains its last GPU image and
-has no loading label or timestamp. Until the first image is available, or when
-there is no preview, the popup stays hidden. Its position follows the mouse
-immediately using a movable native child surface, including on Wayland. Camera
-changes, missing/unavailable results and deletion invalidation clear the retained
-image. Only the latest request may publish. Leaving the timeline, switching cameras
-or leaving Recordings cancels extraction and clears the cache. Gaps show no
-image; slow requests retain the previous image and decoding times out after
-one second. The response target is 300ms at the 95th percentile, rather than a
-guarantee for arbitrary files or concurrent decoder load. Deletion generations
-invalidate cached images before they can be redisplayed.
+Hovering temporarily replaces the main image with a keyframe preview and its
+actual frame time, labelled `Preview`. Recording playback pauses during hover
+and resumes its prior state on leaving; paused playback stays paused. Live
+returns to the newest frame, or its held frame if paused. Clicking the timeline
+commits a new playing position. There is no popup window. Loading, gaps and
+errors display a preview status instead of a stale image from another request.
+
+One preview worker coalesces requests for 75ms and decodes a key unit at or
+before the requested position. VA/VPE produces a GPU image bounded to 1280×720;
+DMA-BUF imports feed the main EGL renderer. An eight-image LRU bounds memory.
+Only the latest request may publish; camera changes, leaving hover and deletion
+cancel work and release the cache. No full video pixels are copied to the CPU.
+A preview may precede the requested time by a GOP.
+
+Drag a region on live, held-live or recorded video to search. The displayed
+surface is pinned until crop extraction finishes. Dragging pauses recorded
+playback; Esc cancels and restores its previous state. Click/double-click/drag
+are distinguished using the desktop thresholds. Search uses the existing bounded
+crop and embedding pipeline. Returning from Search restores the camera and
+playback mode.
 
 Playback crosses file boundaries and recording-session changes automatically.
 The next recording is opened and prerolled using a second decoder, with at most
@@ -151,7 +143,10 @@ seconds. Fatal catalog errors appear in playback status without stopping live
 reception, recording or analytics.
 
 New recordings derive segment start times from a receiver wall-clock anchor
-and `splitmuxsink` media offsets, rather than asynchronous file-creation timing.
+and the first encoded sample supplied by `splitmuxsink::format-location-full`.
+The timestamp is inserted atomically with the open recording; finalized fragment
+offsets confirm it at close. This avoids rejecting analysis near a boundary while
+file-creation time is later than the media clock.
 Existing recordings retain their previous registered timestamps. These are
 receiver-side dates, not camera capture times or synchronized surveillance
 clocks. Container-only duration indexing runs off the GUI thread, at most one
@@ -162,14 +157,41 @@ The playback datetime is based on the preview frame's stream timestamp;
 playback pacing uses GStreamer's monotonic media clock.
 
 Playback remains normal-speed H.264/H.265 under the existing progressive NV12,
-1080p, BT.709 limited-range restrictions. Audio and playback AI are not added.
-Leaving the recording page pauses playback. Live decode/AI/recording continue,
+2560×1440, BT.709 limited-range restrictions. Audio is not added.
+Leaving Live pauses recording playback and returning restores its prior state. Live decode/AI/recording continue,
 requiring up to 16 live decoders plus two playback decoders and one seek-preview
 decoder. The VA decode,
 VPE preview and DMA-BUF/EGL display path uses no CPU pixel mapping/upload and
 has no software decoder fallback. Currently opened, lookahead and extraction files are pinned against both
 quota and time pruning; stop, seek and camera change release unneeded handles
 asynchronously. Cached thumbnails own only small GPU surfaces, not file pins.
+
+## Recorded detection overlays
+
+Each analyzed frame saves normalized boxes, confidence, person/track identifiers,
+camera, recording session, analysis run and media-aligned wall time in SQLite.
+Empty detection frames are saved too. This is independent of the slower embedding
+collection and requires no inference during playback. Existing recordings without
+these records play normally without boxes; there is no historical backfill.
+
+The main recording view, seek previews and search-result clips share the renderer.
+They use the latest preceding analysis in the same recording/session, holding
+boxes for at most twice the analysis interval (capped at two seconds). Empty
+frames clear boxes; seeks and deletion invalidate cached results. There is no
+coordinate interpolation or cross-camera identity matching. Labels and colors
+match live person IDs, with confidence-only labels when ReID is disabled.
+
+`Catalog::enqueue_analysis` sends records to a bounded 1,024-frame writer queue.
+Transactions save up to 64 frames at a time, flushing every 250ms. Overflow drops
+the oldest unsaved frame. AI Statistics reports `Analysis DB save`,
+`Analysis save queue` and failures; storage errors are also shown in view status.
+The additive `analysis_frames` / `analysis_objects` tables contribute to the
+storage quota estimate and are pruned with their recordings. Late completions cannot recreate data for deleted recordings.
+`Catalog::analysis` retrieves bounded time ranges off the rendering thread.
+`Catalog::opened` accepts an optional media start timestamp while retaining
+source compatibility through its default argument. Public `Plane` and
+`GpuPreviewImage` metadata now includes recording identity
+and interval bounds; SDK consumers must rebuild.
 
 ## Framework interfaces and migration
 
@@ -241,6 +263,28 @@ consumers. Each standalone example owns its catalog exclusively; never point
 it at an active NVR's recording root.
 
 ## Validation
+
+The [unified-view validation record](../benchmarks/unified-view-2026-10-22.json)
+covers the 2026-10-22 implementation. Original 1440p HEVC videos ran on 16
+channels for 600 seconds while switching grid/live/playback/hover modes.
+Tracking stayed at 1.983–2.017 Hz per camera in stable windows; persisted
+analysis measured 2.000 Hz per camera across recording boundaries. Both queue
+drop counters remained zero, including startup. Peak process RSS was 7,425 MiB.
+The GPU copy audit passed. This is a ten-minute check, not a long soak.
+
+The 33-test suite passed, followed by the affected catalog/timeline/Unicode
+contracts. The GUI checks covered all three region-search modes, text search,
+inline playback, hover restoration, actual mouse clicks, archived-camera
+selection, expiry and deletion. With Japanese camera names, 100 in-place hover
+samples measured p95 160 ms / maximum 289 ms with zero copy/GL-image violations.
+The cold preview test separately passed 100 H.264 1080p / HEVC 1440p requests.
+
+Prepared local demo: `bash artifacts/unified-view/run-demo.sh`. It uses the
+original videos, port 18570 and isolated settings/recordings under
+`artifacts/unified-view/`; these artifacts are not committed.
+
+The numeric results below describe earlier UI revisions. The unified view replaces
+their popup, clock-toggle and paused-seek behavior as described above.
 
 `playback-error-contract` exercises malformed recordings, repeated stop/open,
 error isolation and playback-handle release. Catalog tests cover migration,

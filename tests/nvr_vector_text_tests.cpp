@@ -1,4 +1,5 @@
 #include "vector_text.hpp"
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <cmath>
 #include <iostream>
@@ -37,6 +38,15 @@ int main(int argc, char **argv) {
         auto same = font.layout("H.264 1920x1080 29.7 fps 5.5 Mbps");
         check(same.triangles == run.triangles && same.width == run.width,
               "Cached outlines changed");
+        const auto camera = font.layout(QString::fromUtf8("入口カメラ 𠮷 Live"));
+        check(camera.width > 0 && !camera.triangles.empty(), "Unicode camera name outline missing");
+        check(font.layout(QString::fromUtf8("入口カメラ 𠮷 Live")).triangles == camera.triangles,
+              "Fallback font cache changed");
+        const auto families = QFontDatabase::families();
+        if (families.contains("Noto Sans CJK JP") || families.contains("Noto Serif CJK JP"))
+            check(font.layout(QString::fromUtf8("入")).triangles !=
+                      font.layout(QString(QChar::ReplacementCharacter)).triangles,
+                  "Available Japanese glyph replaced by placeholder");
         auto spaces = font.layout("   ");
         check(spaces.width > 0 && spaces.triangles.empty(), "Space rendered a glyph");
         for (auto point : run.triangles)

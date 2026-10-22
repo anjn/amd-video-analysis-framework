@@ -53,6 +53,16 @@ class RecordingFile {
     int fd_{-1};
     Recording recording_;
 };
+struct RecordedObject {
+    Detection box; // Normalized source coordinates.
+    uint64_t person{}, track{};
+};
+struct RecordedAnalysis {
+    std::string channel, session, run;
+    int64_t time_ms{};
+    unsigned valid_ms{1000};
+    std::vector<RecordedObject> objects;
+};
 class Catalog {
   public:
     explicit Catalog(const std::filesystem::path &root);
@@ -60,13 +70,19 @@ class Catalog {
     Catalog(const Catalog &) = delete;
     Catalog &operator=(const Catalog &) = delete;
     void initialize_search();
+    void enqueue_analysis(RecordedAnalysis, std::shared_ptr<AiRuntime>);
+    void store_analysis(const std::vector<RecordedAnalysis> &);
+    std::vector<RecordedAnalysis> analysis(const std::string &channel, int64_t from,
+                                           int64_t to) const;
+    std::string analysis_error() const;
+
     bool store_observation(const SearchObservation &);
     std::vector<SearchObservation> search(const std::array<float, 768> &, const std::string &model);
     std::vector<uint8_t> observation_image(int64_t id) const;
     void reconcile_search();
     void opened(const std::string &filename, const std::string &channel,
                 const std::string &camera_name = {}, const std::string &session = {},
-                unsigned fragment = 0);
+                unsigned fragment = 0, std::optional<int64_t> media_started_ms = {});
     void closed(const std::string &filename, int64_t duration_ns = -1);
     // Correct new recording timestamps from the recorder's media clock.
     void media_start(const std::string &filename, int64_t started_ms);
@@ -92,6 +108,10 @@ class Catalog {
     const std::filesystem::path &root() const { return root_; }
 
   private:
+    struct AnalysisWriter;
+    std::shared_ptr<AnalysisWriter> analysis_writer_;
+    void initialize_analysis();
+    void stop_analysis();
     std::filesystem::path root_;
     sqlite3 *db_{};
     int directory_{-1}, lock_{-1};

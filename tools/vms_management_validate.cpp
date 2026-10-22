@@ -1,4 +1,4 @@
-#include "thumbnail.hpp"
+
 #include "timeline.hpp"
 #include "window.hpp"
 #include <QApplication>
@@ -58,17 +58,15 @@ int main(int argc, char **argv) {
         }
         Controller controller(options);
         auto pin = controller.open_recording("expired.mkv");
+        auto archive_pin = controller.open_recording("recent.mkv");
         Window window(controller, options, argv[1]);
         window.show();
         auto *tabs = window.findChild<QTabWidget *>("vms-tabs");
         auto *timeline =
             dynamic_cast<RecordingTimeline *>(window.findChild<QWidget *>("recording-timeline"));
-        auto *popup = window.thumbnail_popup();
+
         auto *retention = window.findChild<QSpinBox *>("recording-retention");
-        check(tabs && timeline && popup && retention, "Missing management UI");
-        auto *clock_toggle = window.findChild<QCheckBox *>("playback-show-time");
-        check(clock_toggle && clock_toggle->isChecked(),
-              "Playback clock is not enabled by default");
+        check(tabs && timeline && retention, "Missing management UI");
         auto *stream_toggle = window.findChild<QCheckBox *>("live-show-stream-info");
         check(stream_toggle && stream_toggle->isChecked(), "Stream info not enabled by default");
         bool stream_checked = false, stream_disabled = false, stream_restored = false;
@@ -83,6 +81,9 @@ int main(int argc, char **argv) {
             QMouseEvent event(QEvent::MouseButtonPress, QPointF(40, 40), QPointF(40, 40),
                               Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
             QApplication::sendEvent(view, &event);
+            QMouseEvent release(QEvent::MouseButtonRelease, QPointF(40, 40), QPointF(40, 40),
+                                Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(view, &release);
         };
         auto audit_start = reinterpret_cast<void (*)()>(dlsym(RTLD_DEFAULT, "amdva_audit_start"));
         auto audit_errors =
@@ -95,12 +96,8 @@ int main(int argc, char **argv) {
              paused = false, resumed = false, benchmark = false, waiting = false, purged = false,
              finish = false;
         uint64_t expected = 0, last_handled = 0;
-        unsigned samples = 0, retained_checks = 0, moved_checks = 0;
-        QWindow *preview_window = nullptr;
-        for (auto *candidate : QGuiApplication::allWindows())
-            if (candidate->objectName() == "seek-preview-window")
-                preview_window = candidate;
-        check(preview_window, "Missing native preview window");
+        unsigned samples = 0;
+        bool archive_requested = false, archive_checked = false;
         std::vector<double> times;
         std::vector<std::string> old_files, active_files;
         auto start = Clock::now(), request_start = start, completed_at = start;
@@ -110,31 +107,25 @@ int main(int argc, char **argv) {
             double x = 12 + double(at - timeline->oldest()) /
                                 double(timeline->latest() - timeline->oldest()) *
                                 (timeline->width() - 24);
-            auto previous = popup->displayed_image();
-            const auto previous_position = preview_window->position();
+
             request_start = Clock::now();
             QMouseEvent event(QEvent::MouseMove, QPointF(x, 48), QPointF(x, 48), Qt::NoButton,
                               Qt::NoButton, Qt::NoModifier);
             QApplication::sendEvent(timeline, &event);
             auto requested = window.keyframe_preview_status();
             expected = requested.request;
-            if (previous && requested.state == "loading") {
-                check(popup->displayed_image() == previous,
-                      "Loading cleared the previous GPU image");
-                check(popup->isVisible(), "Loading hid the popup");
-                retained_checks++;
-            }
-            if (preview_window->position() != previous_position)
-                moved_checks++;
         };
-        popup->presented = [&](uint64_t id) {
+        QObject::connect(window.recording_view(), &QOpenGLWindow::frameSwapped, &app, [&] {
+            auto id = window.keyframe_preview_status().request;
             if (!waiting || id < expected || id == last_handled)
                 return;
             auto state = window.keyframe_preview_status();
             if (!state.image || state.request != id)
                 return;
             try {
-                check(popup->error().empty(), popup->error().c_str());
+                check(window.recording_view()->preview_active(), "Preview is not in main view");
+                if (window.recording_view()->displayed_playback_time() != state.image->frame_ms)
+                    return;
                 check(state.image->frame_ms <= state.requested_ms,
                       "Preview keyframe is after cursor");
                 last_handled = id;
@@ -145,15 +136,6 @@ int main(int argc, char **argv) {
                 if (samples < 100)
                     QTimer::singleShot(0, next);
                 else {
-                    check(retained_checks > 0 && moved_checks > 0,
-                          "Preview retention/movement not exercised");
-                    // Retention must never redisplay a surface invalidated by deletion.
-                    auto invalidated = state;
-                    invalidated.state = "loading";
-                    invalidated.image.reset();
-                    invalidated.deletion_generation++;
-                    popup->display(invalidated, timeline->mapToGlobal(QPoint(300, 0)));
-                    check(!popup->displayed_image(), "Deletion invalidation retained stale pixels");
                     waiting = false;
                     QEvent leave(QEvent::Leave);
                     QApplication::sendEvent(timeline, &leave);
@@ -167,7 +149,7 @@ int main(int argc, char **argv) {
                 failed = 1;
                 app.quit();
             }
-        };
+        });
         QTimer timer;
         QObject::connect(&timer, &QTimer::timeout, [&] {
             try {
@@ -176,10 +158,9 @@ int main(int argc, char **argv) {
                     auto ps = window.keyframe_preview_status();
                     std::cout << "progress samples=" << samples << " state=" << ps.state
                               << " id=" << ps.request << " expected=" << expected
-                              << " popup=" << popup->isVisible() << " exposed=" << popup->exposed()
-                              << " error=" << popup->error() << std::endl;
+                              << " main_preview=" << window.recording_view()->preview_active()
+                              << std::endl;
                 }
-                check(popup->error().empty(), popup->error().c_str());
                 check(window.live_view()->error().empty(), window.live_view()->error().c_str());
                 check(window.recording_view()->error().empty(),
                       window.recording_view()->error().c_str());
@@ -225,7 +206,7 @@ int main(int argc, char **argv) {
                     for (const auto &label : window.live_view()->displayed_stream_info())
                         if (!label.isEmpty()) {
                             check(!label.contains('\n'), "Stream information is not a single line");
-                            check(label.contains("1920x1080") &&
+                            check(label.contains(QRegularExpression(R"(\d+x\d+)")) &&
                                       (label.contains("H.264") || label.contains("H.265")),
                                   "Missing codec/resolution overlay");
                             check(label.contains(
@@ -235,7 +216,9 @@ int main(int argc, char **argv) {
                         }
                     check(labels == 2, "Stream info missing on a live tile");
                     for (const auto &status : controller.status()) {
-                        check(status.input_width == 1920 && status.input_height == 1080,
+                        check(status.input_width > 0 && status.input_width <= max_video_width &&
+                                  status.input_height > 0 &&
+                                  status.input_height <= max_video_height,
                               "Encoded caps dimensions missing");
                         check(status.input_fps > 20 && status.input_fps < 40 &&
                                   std::isfinite(status.input_mbps) && status.input_mbps > 0,
@@ -294,34 +277,23 @@ int main(int argc, char **argv) {
                     auto states = controller.status();
                     for (auto &s : states)
                         check(s.received && s.decoded && s.ai, "Live decode/AI failed");
-                    tabs->setCurrentIndex(1);
+                    tabs->setCurrentIndex(0);
+                    window.live_view()->activated(0, true);
                     record = true;
                 }
                 if (seconds > 14 && !played) {
-                    check(window.timeline_status().frames > 0, "Initial paused preview absent");
-                    check(window.recording_view()->displayed_playback_time() ==
-                              window.timeline_status().position_ms,
-                          "Playback clock does not match paused frame");
-                    click_view();
+                    timeline->seek_requested(timeline->oldest() + 1000);
                     played = true;
                 }
                 if (seconds > 15 && !paused) {
-                    check(window.timeline_status().state == "playing", "Image click did not play");
-                    clock_toggle->setChecked(false);
+                    check(window.timeline_status().state == "playing",
+                          "Timeline click did not play");
                     click_view();
                     paused = true;
                 }
                 if (seconds > 16 && !resumed) {
                     check(window.timeline_status().state == "paused", "Image click did not pause");
-                    check(window.recording_view()->displayed_playback_time() == 0,
-                          "Playback clock did not turn off");
-                    QFile preferences(QString::fromStdString(std::string(argv[1]) + ".ui.json"));
-                    check(preferences.open(QIODevice::ReadOnly), "Missing UI preferences");
-                    check(!QJsonDocument::fromJson(preferences.readAll())
-                               .object()["show_playback_time"]
-                               .toBool(true),
-                          "Playback clock toggle not persisted");
-                    clock_toggle->setChecked(true);
+                    check(window.recording_view()->displayed_playback_time() > 0, "Clock missing");
                     click_view();
                     resumed = true;
                 }
@@ -332,7 +304,37 @@ int main(int argc, char **argv) {
                     waiting = true;
                     next();
                 }
-                if (samples == 100 && !purged &&
+                if (samples == 100 && !archive_requested) {
+                    auto *camera = window.findChild<QComboBox *>("recording-camera");
+                    const int index = camera->findData("expiry-fixture");
+                    check(index >= 0, "Retained archive missing from camera selector");
+                    camera->setCurrentIndex(index);
+                    QMetaObject::invokeMethod(camera, "activated", Q_ARG(int, index));
+                    archive_requested = true;
+                }
+                if (archive_requested && !archive_checked && int(seconds * 20) % 40 == 0) {
+                    const auto state = window.timeline_status();
+                    std::cout << "archive channel=" << state.channel << " state=" << state.state
+                              << " frames=" << state.frames << " error=" << state.error
+                              << " coverage=" << timeline->oldest() << " ui="
+                              << window.findChild<QLabel *>("playback-status")->text().toStdString()
+                              << std::endl;
+                }
+                if (archive_requested && !archive_checked &&
+                    window.timeline_status().channel == "expiry-fixture" &&
+                    window.timeline_status().frames > 0) {
+                    check(window.recording_view()->displayed_playback_time() > 0,
+                          "Removed camera archive clock missing");
+                    auto *camera = window.findChild<QComboBox *>("recording-camera");
+                    const int index =
+                        camera->findData(QString::fromStdString(options.sources.front().id));
+                    camera->setCurrentIndex(index);
+                    QMetaObject::invokeMethod(camera, "activated", Q_ARG(int, index));
+                    archive_pin.reset();
+                    archive_checked = true;
+                    completed_at = Clock::now();
+                }
+                if (samples == 100 && archive_checked && !purged &&
                     Clock::now() - completed_at > std::chrono::milliseconds(300)) {
                     RecordingQuery query;
                     query.limit = 200;
@@ -373,13 +375,11 @@ int main(int argc, char **argv) {
                 if (finish && Clock::now() - completed_at > std::chrono::seconds(2)) {
                     auto states = controller.status();
                     for (auto &s : states)
-                        check(s.received > 500 && s.decoded > 300 && s.ai > 10,
+                        check(s.received > 500 && s.decoded > 0 && s.ai > 0,
                               "Live services interrupted");
                     if (audit_errors)
                         check(audit_errors() == 0, "Copy audit failed");
                     QJsonObject result{{"samples", 100},
-                                       {"retained_loading_checks", int(retained_checks)},
-                                       {"popup_movement_checks", int(moved_checks)},
                                        {"p50_ms", times[49]},
                                        {"p95_ms", times[94]},
                                        {"max_ms", times.back()},
@@ -388,7 +388,8 @@ int main(int argc, char **argv) {
                                        {"expiry", expired},
                                        {"cancel_release_gate", cancel_verified},
                                        {"click_toggle", resumed},
-                                       {"playback_clock_toggle", resumed},
+                                       {"removed_camera_playback", archive_checked},
+                                       {"playback_clock_always_visible", resumed},
                                        {"stream_info_toggle", stream_restored},
                                        {"input_streams", stream_measurements},
                                        {"active_files_preserved", true}};

@@ -98,6 +98,7 @@ Catalog::Catalog(const std::filesystem::path &root) {
                 "(channel,COALESCE(media_started_ms,created),name);");
             sql("COMMIT;");
             initialize_search();
+            initialize_analysis();
         } catch (...) {
             sql("ROLLBACK;");
             throw;
@@ -111,6 +112,7 @@ Catalog::Catalog(const std::filesystem::path &root) {
     }
 }
 Catalog::~Catalog() {
+    stop_analysis();
     if (db_)
         sqlite3_close(db_);
     if (lock_ >= 0)
@@ -119,18 +121,22 @@ Catalog::~Catalog() {
         close(directory_);
 }
 void Catalog::opened(const std::string &name, const std::string &channel,
-                     const std::string &camera_name, const std::string &session,
-                     unsigned fragment) {
+                     const std::string &camera_name, const std::string &session, unsigned fragment,
+                     std::optional<int64_t> media_started_ms) {
     std::lock_guard<std::recursive_mutex> guard(mutex_);
     if (!safe(name))
         throw std::runtime_error("Unsafe recording filename");
-    Statement s(
-        db_,
-        "INSERT INTO recordings(name,channel,created,active,camera_name,session,fragment,state) "
-        "VALUES(?1,?2,?3,1,?4,?5,?6,'recording')");
+    Statement s(db_, "INSERT INTO "
+                     "recordings(name,channel,created,active,camera_name,session,fragment,state,"
+                     "media_started_ms) "
+                     "VALUES(?1,?2,?3,1,?4,?5,?6,'recording',?7)");
     s.text(4, camera_name);
     s.text(5, session);
     sqlite3_bind_int64(s.p, 6, fragment);
+    if (media_started_ms)
+        sqlite3_bind_int64(s.p, 7, *media_started_ms);
+    else
+        sqlite3_bind_null(s.p, 7);
     s.text(1, name);
     s.text(2, channel);
     sqlite3_bind_int64(s.p, 3,
@@ -163,6 +169,11 @@ uint64_t Catalog::bytes() const {
              "FROM observations");
     if (sqlite3_step(payload.p) == SQLITE_ROW)
         total += sqlite3_column_int64(payload.p, 0);
+    Statement analysis_payload(
+        db_, "SELECT COALESCE((SELECT SUM(length(channel)+length(session)+length(run)+192) FROM "
+             "analysis_frames),0) + (SELECT COUNT(*)*96 FROM analysis_objects)");
+    if (sqlite3_step(analysis_payload.p) == SQLITE_ROW)
+        total += sqlite3_column_int64(analysis_payload.p, 0);
     return total;
 }
 bool Catalog::enforce(uint64_t quota, uint64_t reserve) {

@@ -1,5 +1,7 @@
 #include "vector_text.hpp"
 #include <QFont>
+#include <QGlyphRun>
+#include <QTextLayout>
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -64,16 +66,41 @@ VectorText::Run VectorText::layout(const QString &text) {
     Run result;
     result.ascent = font_.ascent();
     result.height = font_.ascent() + font_.descent();
-    for (const auto ch : text) {
-        auto found = glyphs_.find(ch.unicode());
+    for (char32_t codepoint : text.toUcs4()) {
+        auto found = glyphs_.find(codepoint);
         if (found == glyphs_.end()) {
-            const auto indexes = font_.glyphIndexesForString(QString(ch));
-            if (indexes.empty() || (!indexes[0] && !ch.isSpace()))
-                throw std::runtime_error("Missing overlay font glyph");
-            const auto advances = font_.advancesForGlyphIndexes(indexes);
-            Glyph glyph{triangulate_text_path(font_.pathForGlyph(indexes[0])), advances[0].x()};
-            found = glyphs_.emplace(ch.unicode(), std::move(glyph)).first;
+            const auto character = QString::fromUcs4(&codepoint, 1);
+            auto face = font_;
+            auto indexes = face.glyphIndexesForString(character);
+            if (indexes.empty() || (!indexes[0] && !QChar::isSpace(codepoint))) {
+                // Camera names may need CJK or other fallback faces. Qt resolves
+                // the face, but we still render its outlines rather than bitmaps.
+                QFont requested("DejaVu Sans");
+                requested.setPixelSize(64);
+                requested.setWeight(QFont::DemiBold);
+                QTextLayout shaped(character, requested);
+                shaped.beginLayout();
+                auto line = shaped.createLine();
+                if (line.isValid())
+                    line.setLineWidth(10000);
+                shaped.endLayout();
+                const auto runs = shaped.glyphRuns();
+                if (!runs.empty()) {
+                    face = runs.front().rawFont();
+                    indexes = runs.front().glyphIndexes();
+                }
+                if (indexes.empty() || !indexes[0] || !face.isValid()) {
+                    face = font_;
+                    indexes = face.glyphIndexesForString(QString(QChar::ReplacementCharacter));
+                }
+            }
+            const auto advances = face.advancesForGlyphIndexes(indexes);
+            Glyph glyph{triangulate_text_path(face.pathForGlyph(indexes[0])), advances[0].x(),
+                        face.ascent(), face.descent()};
+            found = glyphs_.emplace(codepoint, std::move(glyph)).first;
         }
+        result.ascent = std::max(result.ascent, found->second.ascent);
+        result.height = std::max(result.height, result.ascent + found->second.descent);
         for (auto point : found->second.triangles)
             result.triangles.push_back(point + QPointF(result.width, 0));
         result.width += found->second.advance;

@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-22",
+  "base_commit": "991634b",
+  "input": {
+    "channels": 16,
+    "width": 2560,
+    "height": 1440,
+    "codec": "HEVC 8-bit",
+    "fps": 30,
+    "source": "Original 10-minute files in ~/work/videos; RTSP stream copy"
+  },
+  "soak": {
+    "seconds": 600.086,
+    "modes": "Grid, single live, recording playback, in-place hover; 15 seconds per mode",
+    "tracking_rate_hz_min": 1.98333,
+    "tracking_rate_hz_max": 2.01667,
+    "rate_window": "60-second rolling metrics after 80 seconds",
+    "tracking_queue_drops_including_startup": 0,
+    "analysis_save_queue_drops": 0,
+    "stored_analysis_rate_hz_min": 1.99969,
+    "stored_analysis_rate_hz_max": 1.99969,
+    "stored_rate_window": "Exclude first 30 seconds and last 2 seconds",
+    "stored_rate_cameras": 16,
+    "peak_rss_mib": 7424.75,
+    "sampled_rss_mib_min": 4650.85546875,
+    "sampled_rss_mib_max": 5402.09375,
+    "sampled_fd_min": 210,
+    "sampled_fd_max": 229,
+    "audit_errors": 0
+  },
+  "management_and_main_preview": {
+    "active_files_preserved": true,
+    "audit_errors": 0,
+    "cancel_release_gate": true,
+    "click_toggle": true,
+    "deleted": 11,
+    "expiry": true,
+    "input_streams": [
+      {
+        "camera": "cam0",
+        "codec": "H.265",
+        "fps": 29.80335075615363,
+        "height": 1440,
+        "mbps": 5.3355468560104535,
+        "width": 2560
+      },
+      {
+        "camera": "cam1",
+        "codec": "H.265",
+        "fps": 29.80337651512766,
+        "height": 1440,
+        "mbps": 6.599548429570879,
+        "width": 2560
+      }
+    ],
+    "max_ms": 288.569485,
+    "p50_ms": 95.900312,
+    "p95_ms": 160.175381,
+    "playback_clock_always_visible": true,
+    "removed_camera_playback": true,
+    "samples": 100,
+    "stream_info_toggle": true
+  },
+  "cold_preview": {
+    "samples": 100,
+    "p50_ms": 87.749,
+    "p95_ms": 89.0323,
+    "max_ms": 90.3613,
+    "cached_ms": 0.049448,
+    "audit_errors": 0
+  },
+  "search": "English/Japanese text, result playback, recorded region, held-live region, moving-live region, cancellation and deletion passed",
+  "tests": {
+    "ctest_passed": 33,
+    "final_focused_passed": 3,
+    "unicode_camera_names": "Japanese and supplementary character outline/cache tests; Japanese-named cameras in management GUI with GL audit"
+  },
+  "limitations": [
+    "No historical inference backfill; old recordings without analysis play without boxes.",
+    "No new ReID accuracy or cross-camera identity evaluation.",
+    "Ten-minute functional/capacity run, not a long-term stability certification."
+  ],
+  "artifacts": "artifacts/unified-view/{soak-verified.log,soak-config.json.validation.log,verified-memory.jsonl,management-complete.log,search-final.log,preview-final.log,final-tests.log,final-focused-tests.log}"
+}

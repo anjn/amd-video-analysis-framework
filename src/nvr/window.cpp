@@ -102,6 +102,8 @@ Tiles::Tiles(Controller &c, Slot *playback)
     surface_format.setSamples(4);
     setFormat(surface_format);
     current_.fill(-1);
+    click_timer_ = new QTimer(this);
+    click_timer_->setSingleShot(true);
     auto *selection_timer = new QTimer(this);
     connect(selection_timer, &QTimer::timeout, this, [this] { poll_selection(); });
     selection_timer->start(20);
@@ -122,12 +124,15 @@ void Tiles::exposeEvent(QExposeEvent *event) {
     observe_visibility();
 }
 Tiles::~Tiles() {
+    if (analysis_query_.valid())
+        analysis_query_.wait();
     if (extracting_.valid())
         extracting_.wait();
     if (!context() || !gl_)
         return;
     makeCurrent();
     gl_->glFinish();
+    release_preview();
     for (unsigned i = 0; i < slot_count(); ++i) {
         auto &s = slot(i);
         std::lock_guard<std::mutex> lock(s.mutex);
@@ -389,7 +394,145 @@ void Tiles::draw_detection_overlay(const OverlayFrame &overlay, const QRectF &vi
     gl_->glDisable(GL_BLEND);
 }
 
+void Tiles::preview_image(bool enabled, const KeyframePreviewStatus &status) {
+    if (enabled && !preview_mode_)
+        click_timer_->stop();
+    preview_mode_ = enabled;
+    preview_pending_ = enabled ? status.image : nullptr;
+    preview_state_ = status.error.empty() ? status.state : status.error;
+    if (!enabled && context() && gl_) {
+        makeCurrent();
+        release_preview();
+        doneCurrent();
+    }
+    update();
+}
+void Tiles::release_preview() {
+    if (!preview_current_ && !preview_texture_.texture)
+        return;
+    gl_->glFinish();
+    if (preview_texture_.texture)
+        gl_->glDeleteTextures(1, &preview_texture_.texture);
+    if (preview_texture_.image != EGL_NO_IMAGE_KHR)
+        destroy_(egl_, preview_texture_.image);
+    preview_texture_ = {};
+    preview_current_.reset();
+}
+void Tiles::draw_recorded(const std::string &channel, const std::string &session, int64_t at,
+                          int64_t start, int64_t end, const QRectF &rect) {
+    auto &catalog = controller_.recording_catalog();
+    const auto revision = catalog.deletion_generation();
+    if (analysis_query_.valid() &&
+        analysis_query_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        try {
+            analysis_cache_ = analysis_query_.get();
+        } catch (const std::exception &) {
+            analysis_cache_ = {};
+        }
+    }
+    const bool valid = analysis_cache_.channel == channel && analysis_cache_.revision == revision &&
+                       at >= analysis_cache_.from && at <= analysis_cache_.to;
+    if (!analysis_query_.valid() && (!valid || at > analysis_cache_.to - 1000)) {
+        analysis_query_ = std::async(std::launch::async, [&catalog, channel, at, revision] {
+            AnalysisCache c{channel, at - 2000, at + 5000, revision, {}};
+            c.frames = catalog.analysis(channel, c.from, c.to);
+            return c;
+        });
+    }
+    if (!valid || at < start || at >= end)
+        return;
+    const RecordedAnalysis *chosen = nullptr;
+    for (const auto &f : analysis_cache_.frames)
+        if (f.session == session && f.time_ms >= start && f.time_ms <= at)
+            chosen = &f;
+    if (!chosen || at - chosen->time_ms >= chosen->valid_ms)
+        return;
+    OverlayFrame overlay{1, 1, {}, {}};
+    for (const auto &o : chosen->objects)
+        overlay.objects.push_back({o.box, "", o.person, {}});
+    displayed_analysis_objects_ = overlay.objects.size();
+    draw_detection_overlay(overlay, rect);
+}
+void Tiles::draw_preview() {
+    try {
+        if (preview_current_ != preview_pending_) {
+            release_preview();
+            preview_current_ = preview_pending_;
+            if (preview_current_) {
+                auto d = preview_current_->export_surface();
+                try {
+                    auto l = validate_layout(d);
+                    EGLint attrs[] = {EGL_WIDTH,
+                                      EGLint(preview_current_->width),
+                                      EGL_HEIGHT,
+                                      EGLint(preview_current_->height),
+                                      EGL_LINUX_DRM_FOURCC_EXT,
+                                      EGLint(d.layers[0].drm_format),
+                                      EGL_DMA_BUF_PLANE0_FD_EXT,
+                                      d.objects[0].fd,
+                                      EGL_DMA_BUF_PLANE0_OFFSET_EXT,
+                                      EGLint(l.y_offset),
+                                      EGL_DMA_BUF_PLANE0_PITCH_EXT,
+                                      EGLint(l.y_pitch),
+                                      EGL_NONE};
+                    preview_texture_.image =
+                        create_(egl_, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, attrs);
+                    if (preview_texture_.image == EGL_NO_IMAGE_KHR)
+                        throw std::runtime_error("Preview DMA-BUF import failed");
+                    gl_->glGenTextures(1, &preview_texture_.texture);
+                    gl_->glBindTexture(GL_TEXTURE_2D, preview_texture_.texture);
+                    target_(GL_TEXTURE_2D, preview_texture_.image);
+                    gl_->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                    gl_->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                    gl_->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                    gl_->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                } catch (...) {
+                    for (unsigned i = 0; i < d.num_objects; ++i)
+                        ::close(d.objects[i].fd);
+                    throw;
+                }
+                for (unsigned i = 0; i < d.num_objects; ++i)
+                    ::close(d.objects[i].fd);
+            }
+        }
+        if (!preview_current_) {
+            draw_text_overlay(qs("Preview · " + preview_state_), -1, 1, 2, 2);
+            return;
+        }
+        const auto &p = *preview_current_;
+        float w = 2, h = 2, aspect = float(p.width) / p.height,
+              available = float(width()) / height();
+        if (aspect > available)
+            h = w * available / aspect;
+        else
+            w = h * aspect / available;
+        float x = -w / 2, y = h / 2;
+        const float quad[] = {x, y, 0, 0, x + w, y, 1, 0, x, y - h, 0, 1, x + w, y - h, 1, 1};
+        gl_->glUseProgram(image_program_);
+        gl_->glActiveTexture(GL_TEXTURE0);
+        gl_->glBindTexture(GL_TEXTURE_2D, preview_texture_.texture);
+        gl_->glUniform1i(gl_->glGetUniformLocation(image_program_, "image"), 0);
+        vertices(quad, 4, 4);
+        gl_->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        QRectF rect((x + 1) * width() / 2, (1 - y) * height() / 2, w * width() / 2,
+                    h * height() / 2);
+        draw_recorded(p.channel, p.session, p.frame_ms, p.recording_start_ms, p.recording_end_ms,
+                      rect);
+        draw_text_overlay(qs(camera_name), x, y, w, h);
+        draw_text_overlay(
+            "Preview · " +
+                QDateTime::fromMSecsSinceEpoch(p.frame_ms).toString("yyyy-MM-dd HH:mm:ss"),
+            x, y, w, h, true);
+        displayed_playback_time_ = p.frame_ms;
+    } catch (const std::exception &e) {
+        preview_state_ = e.what();
+        release_preview();
+    }
+    gl_->glFlush();
+}
+
 void Tiles::paintGL() {
+    displayed_analysis_objects_ = 0;
     displayed_playback_time_ = 0;
     displayed_stream_info_.fill({});
     if (!playback_)
@@ -406,6 +549,10 @@ void Tiles::paintGL() {
     gl_->glClear(GL_COLOR_BUFFER_BIT);
     if (!error_.empty() || !image_program_)
         return;
+    if (preview_mode_) {
+        draw_preview();
+        return;
+    }
     const auto statuses = controller_.status();
     std::vector<int> active;
     if (playback_)
@@ -440,7 +587,7 @@ void Tiles::paintGL() {
                 }
             }
         }
-        if (playback_ && frozen_ && current_[i] >= 0)
+        if ((frozen_ || held_) && current_[i] >= 0)
             continue;
         if (s.channel.empty()) {
             release_current(i);
@@ -487,7 +634,7 @@ void Tiles::paintGL() {
         if (!playback_ && cell_count_ && s.channel != cells_[focus_ >= 0 ? unsigned(focus_) : tile])
             continue;
         const int image = current_[index];
-        if (image < 0 || ((!playback_ || !frozen_) &&
+        if (image < 0 || ((!frozen_ && !held_) &&
                           (s.channel.empty() || s.preview[image].generation != s.generation)))
             continue;
         auto &p = s.preview[image];
@@ -500,7 +647,7 @@ void Tiles::paintGL() {
             w = h * aspect / available;
         const float x = -1 + (tile % side) * cellw + (cellw - w) / 2,
                     y = 1 - (tile / side) * cellh - (cellh - h) / 2;
-        if (playback_)
+        if (playback_ || active.size() == 1)
             video_rect_ = QRectF((x + 1) * width() / 2, (1 - y) * height() / 2, w * width() / 2,
                                  h * height() / 2);
         const float u = float(p.width) / streaming::max_video_width,
@@ -542,12 +689,19 @@ void Tiles::paintGL() {
                         overlay.objects.push_back(
                             {box, box.class_id == 0 ? "Person" : "Object", 0, {}});
             }
+            if (frozen_ || held_)
+                overlay = held_overlay_[index];
+            else
+                held_overlay_[index] = overlay;
             if (overlay.width && overlay.height)
                 draw_detection_overlay(overlay,
                                        QRectF((x + 1) * width() / 2, (1 - y) * height() / 2,
                                               w * width() / 2, h * height() / 2));
         }
-        if (playback_ && dragging_) {
+        if (playback_)
+            draw_recorded(p.recording_channel, p.recording_session, p.wall_time_ms,
+                          p.recording_start_ms, p.recording_end_ms, video_rect_);
+        if (dragging_) {
             auto rect =
                 QRectF(selection_start_, selection_end_).normalized().intersected(video_rect_);
             float a = 2 * rect.left() / width() - 1, b = 1 - 2 * rect.top() / height(),
@@ -558,11 +712,21 @@ void Tiles::paintGL() {
             vertices(points, 4, 2);
             gl_->glDrawArrays(GL_LINE_LOOP, 0, 4);
         }
-        if (playback_ && playback_time_visible_ && p.wall_time_ms) {
+        if (playback_ && p.wall_time_ms) {
             draw_text_overlay(
                 QDateTime::fromMSecsSinceEpoch(p.wall_time_ms).toString("yyyy-MM-dd HH:mm:ss"), x,
-                y, w, h);
+                y, w, h, true);
             displayed_playback_time_ = p.wall_time_ms;
+        }
+        if (playback_ || active.size() == 1) {
+            std::string name = camera_name;
+            if (!playback_)
+                for (const auto &status : statuses)
+                    if (status.source.id == s.channel)
+                        name = status.source.name;
+            draw_text_overlay(qs(name), x, y, w, h);
+            if (!playback_)
+                draw_text_overlay(held_ ? "Live · Paused" : "Live", x, y, w, h, true);
         }
         if (!playback_ && stream_info_visible_) {
             const auto source =
@@ -579,13 +743,13 @@ void Tiles::paintGL() {
                                 .arg(codec, resolution)
                                 .arg(source->input_fps, 0, 'f', 1)
                                 .arg(source->input_mbps, 0, 'f', 1);
-                draw_text_overlay(text, x, y, w, h, true);
+                draw_text_overlay(text, x, y, w, active.size() == 1 ? h - .12f : h, true);
                 displayed_stream_info_[focus_ >= 0 ? unsigned(focus_) : tile] = text;
             }
         }
     }
     gl_->glFlush();
-    if (cell_count_ && !playback_) {
+    if (cell_count_ > 1 && focus_ < 0 && !playback_) {
         QPainter painter(this);
         const unsigned shown = focus_ >= 0 ? 1 : cell_count_;
         const unsigned side = unsigned(std::ceil(std::sqrt(shown)));
@@ -622,6 +786,10 @@ void install_shutdown_signals(QCoreApplication &app) {
 }
 
 void Tiles::layout(const std::array<std::string, 16> &cells, unsigned count, int focus) {
+    if (cells_ != cells || cell_count_ != count || focus_ != focus) {
+        cancel_selection();
+        held_ = false;
+    }
     cells_ = cells;
     cell_count_ = count;
     focus_ = focus;
@@ -643,10 +811,14 @@ unsigned Tiles::picked(const QPointF &p) const {
                         side * unsigned(std::max(0., p.y()) * side / std::max(1, height())));
 }
 void Tiles::cancel_selection() {
+    click_timer_->stop();
+    const bool was_selecting = frozen_;
     selection_cancelled_ = true;
     dragging_ = false;
     if (!extracting_.valid())
         frozen_ = false;
+    if (was_selecting && selection_cancelled)
+        selection_cancelled();
     update();
 }
 void Tiles::poll_selection() {
@@ -666,18 +838,24 @@ void Tiles::poll_selection() {
     update();
 }
 void Tiles::mousePressEvent(QMouseEvent *e) {
-    if (playback_ && region_selected && e->button() == Qt::LeftButton && current_[0] >= 0 &&
-        video_rect_.contains(e->position())) {
+    if (preview_mode_ || e->button() != Qt::LeftButton)
+        return;
+    selection_cancelled_ = false;
+    selection_slot_ = 0;
+    if (!playback_) {
+        for (const auto &st : controller_.status())
+            if (st.source.id == cells_[picked(e->position())] && st.slot >= 0)
+                selection_slot_ = unsigned(st.slot);
+    }
+    if ((playback_ || focus_ >= 0 || cell_count_ == 1) && region_selected &&
+        current_[selection_slot_] >= 0 && video_rect_.contains(e->position())) {
         if (extracting_.valid())
             return;
         frozen_ = true;
         dragging_ = false;
         selection_cancelled_ = false;
         selection_start_ = selection_end_ = e->position();
-        return;
     }
-    if (activated)
-        activated(picked(e->position()), false);
 }
 void Tiles::mouseMoveEvent(QMouseEvent *e) {
     if (!frozen_ || extracting_.valid())
@@ -692,12 +870,21 @@ void Tiles::mouseMoveEvent(QMouseEvent *e) {
     update();
 }
 void Tiles::mouseReleaseEvent(QMouseEvent *e) {
-    if (!frozen_ || extracting_.valid() || e->button() != Qt::LeftButton)
+    if (preview_mode_ || extracting_.valid() || e->button() != Qt::LeftButton)
         return;
+    if (selection_cancelled_) {
+        selection_cancelled_ = false;
+        return;
+    }
     if (!dragging_) {
         frozen_ = false;
-        if (activated)
-            activated(0, false);
+        const auto index = picked(e->position());
+        click_timer_->disconnect();
+        connect(click_timer_, &QTimer::timeout, this, [this, index] {
+            if (activated)
+                activated(index, false);
+        });
+        click_timer_->start(QGuiApplication::styleHints()->mouseDoubleClickInterval());
         return;
     }
     selection_end_ = e->position();
@@ -706,13 +893,13 @@ void Tiles::mouseReleaseEvent(QMouseEvent *e) {
         cancel_selection();
         return;
     }
-    auto &s = slot(0);
+    auto &s = slot(selection_slot_);
     std::lock_guard<std::mutex> lock(s.mutex);
-    if (current_[0] < 0) {
+    if (current_[selection_slot_] < 0) {
         cancel_selection();
         return;
     }
-    auto &p = s.preview[current_[0]];
+    auto &p = s.preview[current_[selection_slot_]];
     Detection box;
     box.x = (rect.x() - video_rect_.x()) / video_rect_.width() * p.width;
     box.y = (rect.y() - video_rect_.y()) / video_rect_.height() * p.height;
@@ -726,15 +913,20 @@ void Tiles::mouseReleaseEvent(QMouseEvent *e) {
     });
 }
 void Tiles::mouseDoubleClickEvent(QMouseEvent *e) {
+    click_timer_->stop();
+    cancel_selection();
+    if (e->button() != Qt::LeftButton)
+        return;
     if (activated)
         activated(picked(e->position()), true);
+    selection_cancelled_ = true;
 }
 void Tiles::keyPressEvent(QKeyEvent *e) {
     if (e->key() == Qt::Key_Escape && frozen_) {
         cancel_selection();
         return;
     }
-    if (e->key() == Qt::Key_Escape && focus_ >= 0 && activated)
+    if (e->key() == Qt::Key_Escape && (focus_ >= 0 || playback_ || cell_count_ == 1) && activated)
         activated(unsigned(focus_), true);
     else
         QOpenGLWindow::keyPressEvent(e);

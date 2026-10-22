@@ -11,8 +11,8 @@
 #include <QOpenGLExtraFunctions>
 #include <QOpenGLWindow>
 #include <QTableWidget>
+#include <QTimer>
 namespace amdva::nvr {
-class ThumbnailPopup;
 class Tiles final : public QOpenGLWindow {
   public:
     explicit Tiles(Controller &controller, Slot *playback = nullptr);
@@ -28,14 +28,21 @@ class Tiles final : public QOpenGLWindow {
     std::function<void(std::string)> selection_error;
     unsigned search_image_size{384}, search_device{};
     void cancel_selection();
+    void hold_live(bool hold) {
+        held_ = hold;
+        update();
+    }
+    bool live_held() const { return held_; }
+    void preview_image(bool enabled, const KeyframePreviewStatus &status = {});
+    bool preview_active() const { return preview_mode_; }
+    std::string camera_name;
+    std::function<void()> selection_cancelled;
+    size_t displayed_analysis_objects() const { return displayed_analysis_objects_; }
+
     bool selection_busy() const { return extracting_.valid(); }
     QRectF displayed_video_rect() const { return video_rect_; }
     std::string error() const { return error_; }
     uint64_t presented() const { return presented_; }
-    void playback_time_visible(bool enabled) {
-        playback_time_visible_ = enabled;
-        update();
-    }
     int64_t displayed_playback_time() const { return displayed_playback_time_; }
     void stream_info_visible(bool enabled) {
         stream_info_visible_ = enabled;
@@ -59,7 +66,28 @@ class Tiles final : public QOpenGLWindow {
         GLuint texture{};
         GLsync fence{};
     };
-    bool frozen_{}, dragging_{}, selection_cancelled_{};
+    bool frozen_{}, dragging_{}, selection_cancelled_{}, held_{};
+    unsigned selection_slot_{};
+    QTimer *click_timer_{};
+    bool preview_mode_{};
+    std::string preview_state_;
+    std::shared_ptr<const GpuPreviewImage> preview_pending_, preview_current_;
+    Texture preview_texture_;
+    void release_preview();
+    void draw_preview();
+    void draw_recorded(const std::string &, const std::string &, int64_t, int64_t, int64_t,
+                       const QRectF &);
+    struct AnalysisCache {
+        std::string channel;
+        int64_t from{}, to{};
+        uint64_t revision{};
+        std::vector<RecordedAnalysis> frames;
+    };
+    AnalysisCache analysis_cache_;
+    std::future<AnalysisCache> analysis_query_;
+    size_t displayed_analysis_objects_{};
+    std::array<OverlayFrame, 16> held_overlay_;
+
     QPointF selection_start_, selection_end_;
     QRectF video_rect_;
     std::future<streaming::SearchImage> extracting_;
@@ -72,7 +100,7 @@ class Tiles final : public QOpenGLWindow {
     unsigned cell_count_{};
     int focus_{-1};
     unsigned selected_{};
-    bool playback_time_visible_{true}, stream_info_visible_{true};
+    bool stream_info_visible_{true};
     VectorText overlay_font_;
     void draw_detection_overlay(const OverlayFrame &, const QRectF &);
     std::array<QString, 16> displayed_stream_info_{};
@@ -106,7 +134,6 @@ class Window final : public QMainWindow {
     ~Window() override;
     TimelinePlaybackStatus timeline_status() const;
     KeyframePreviewStatus keyframe_preview_status() const;
-    ThumbnailPopup *thumbnail_popup() const;
     Tiles *live_view() const { return tiles_; }
     Tiles *recording_view() const;
 

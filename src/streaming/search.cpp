@@ -470,6 +470,24 @@ struct SearchService::Impl {
                     frame.width = job.frame.width;
                     frame.height = job.frame.height;
                     frame.captured = job.frame.received;
+                    RecordedAnalysis recorded{job.channel,
+                                              job.frame.recording_session,
+                                              run_id,
+                                              job.frame.wall_time_ms,
+                                              std::min(2000u, 2000u / std::max(1u, runtime->fps())),
+                                              {}};
+                    for (size_t i = 0; i < detections.size(); ++i) {
+                        if (reid && !identities[i].confirmed)
+                            continue;
+                        auto b = detections[i].box;
+                        b.x /= job.frame.width;
+                        b.w /= job.frame.width;
+                        b.y /= job.frame.height;
+                        b.h /= job.frame.height;
+                        recorded.objects.push_back(
+                            {b, reid ? identities[i].person : 0, reid ? identities[i].track : 0});
+                    }
+                    catalog.enqueue_analysis(std::move(recorded), runtime);
                     std::lock_guard<std::mutex> lock(mutex);
                     for (size_t i = 0; i < detections.size(); ++i) {
                         const auto &identity = identities[i];

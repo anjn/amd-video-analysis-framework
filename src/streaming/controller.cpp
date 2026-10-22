@@ -109,7 +109,8 @@ struct Controller::Channel {
                 }
             }
         }
-        static gchar *location(GstElement *, guint fragment, gpointer data) {
+        static gchar *location(GstElement *, guint fragment, GstSample *first_sample,
+                               gpointer data) {
             auto &r = *static_cast<Recorder *>(data);
             const auto now = g_get_real_time();
             const auto name = std::to_string(now) + "-" + r.channel + "-" + r.session + "-" +
@@ -120,8 +121,19 @@ struct Controller::Channel {
                     std::lock_guard<std::mutex> l(r.mutex);
                     camera_name = r.camera_name;
                 }
+                std::optional<int64_t> media_start;
+                if (first_sample && r.wall_origin_ms >= 0) {
+                    auto *buffer = gst_sample_get_buffer(first_sample);
+                    auto *segment = gst_sample_get_segment(first_sample);
+                    auto pts = buffer ? GST_BUFFER_PTS(buffer) : GST_CLOCK_TIME_NONE;
+                    auto time = segment && GST_CLOCK_TIME_IS_VALID(pts)
+                                    ? gst_segment_to_stream_time(segment, GST_FORMAT_TIME, pts)
+                                    : pts;
+                    if (GST_CLOCK_TIME_IS_VALID(time))
+                        media_start = r.wall_origin_ms + time / GST_MSECOND;
+                }
                 r.owner->controller.catalog_->opened(name, r.channel, camera_name, r.session,
-                                                     fragment);
+                                                     fragment, media_start);
                 std::lock_guard<std::mutex> l(r.mutex);
                 r.files.push_back(name);
             } catch (...) {
@@ -243,7 +255,7 @@ struct Controller::Channel {
     std::mutex search_stamp_mutex;
     std::map<GstClockTime, SearchStamp> search_stamps;
     void stamp(GstClockTime decoded_pts, GstClockTime original_pts) {
-        if (!controller.search_ || !recording || recording->origin == GST_CLOCK_TIME_NONE ||
+        if (!recording || recording->origin == GST_CLOCK_TIME_NONE ||
             original_pts < recording->origin || !GST_CLOCK_TIME_IS_VALID(original_pts))
             return;
         std::lock_guard<std::mutex> lock(search_stamp_mutex);
@@ -705,7 +717,7 @@ struct Controller::Channel {
         auto *mux = gst_bin_get_by_name(GST_BIN(r->pipe), "segments");
         g_object_set(mux, "max-size-time",
                      guint64(controller.options_.segment_seconds) * GST_SECOND, nullptr);
-        g_signal_connect(mux, "format-location", G_CALLBACK(Recorder::location), r.get());
+        g_signal_connect(mux, "format-location-full", G_CALLBACK(Recorder::location), r.get());
         gst_object_unref(mux);
         if (gst_element_set_state(r->pipe, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
             throw std::runtime_error("Cannot start MKV recorder");
@@ -738,9 +750,10 @@ struct Controller::Channel {
             GST_CLOCK_TIME_IS_VALID(GST_BUFFER_DTS(b)) && GST_BUFFER_DTS(b) >= origin
                 ? GST_BUFFER_DTS(b) - origin
                 : GST_CLOCK_TIME_NONE;
-        if (input == decode_input && decode_timing) {
+        if (input == decode_input) {
             stamp(GST_BUFFER_PTS(b), pts);
-            decode_timing->submit(b);
+            if (decode_timing)
+                decode_timing->submit(b);
         }
         return gst_app_src_push_buffer(GST_APP_SRC(input), b) == GST_FLOW_OK;
     }
@@ -1693,6 +1706,23 @@ void Controller::gpu_loop() {
                 }
                 if (search_)
                     search_->submit(item.frame, item.channel, s.detections);
+                else {
+                    RecordedAnalysis recorded{
+                        item.channel,
+                        item.frame.recording_session,
+                        "yolo",
+                        item.frame.wall_time_ms,
+                        std::min(2000u, 2000u / std::max(1u, ai_runtime_->fps())),
+                        {}};
+                    for (auto b : s.detections) {
+                        b.x /= item.frame.width;
+                        b.w /= item.frame.width;
+                        b.y /= item.frame.height;
+                        b.h /= item.frame.height;
+                        recorded.objects.push_back({b, 0, 0});
+                    }
+                    catalog_->enqueue_analysis(std::move(recorded), ai_runtime_);
+                }
                 if (options_.search.enabled && !options_.search.reid_model.empty())
                     s.detections.erase(std::remove_if(s.detections.begin(), s.detections.end(),
                                                       [](const auto &b) { return b.score < .25f; }),

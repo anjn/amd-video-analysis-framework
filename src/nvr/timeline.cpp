@@ -134,6 +134,9 @@ void RecordingTimeline::mouseReleaseEvent(QMouseEvent *e) {
     if (e->button() != Qt::LeftButton || !dragging_)
         return;
     dragging_ = false;
+    // A committed seek must keep playing while the pointer rests here.
+    // Only another mouse move starts a new hover preview.
+    hovering_ = false;
     pointer_x_ = e->position().x();
     hover_ = time_at(pointer_x_);
     if (seek_requested)

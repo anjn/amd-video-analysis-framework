@@ -1,3 +1,4 @@
+#include "timeline.hpp"
 #include "window.hpp"
 #include <QApplication>
 #include <QComboBox>
@@ -52,14 +53,15 @@ int main(int argc, char **argv) {
                     window.live_view()->grabFramebuffer().save(
                         QString::fromStdString(std::string(argv[1]) + "-live.png"));
                     live = true;
-                    tabs->setCurrentIndex(1);
+                    tabs->setCurrentIndex(0);
                 }
                 if (seconds > 18 && !opened) {
                     if (camera && camera->count()) {
-                        auto *play = window.findChild<QPushButton *>("playback-play");
-                        if (!play)
-                            throw std::runtime_error("Missing timeline play control");
-                        play->click();
+                        auto *timeline = dynamic_cast<RecordingTimeline *>(
+                            window.findChild<QWidget *>("recording-timeline"));
+                        if (!timeline || !timeline->oldest())
+                            throw std::runtime_error("Missing recording coverage");
+                        timeline->seek_requested(timeline->oldest());
                         opened = true;
                     }
                 }

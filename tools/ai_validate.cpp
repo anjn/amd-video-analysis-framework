@@ -167,7 +167,7 @@ int main(int argc, char **argv) {
                         if (!found)
                             throw std::runtime_error("Missing inference: " + source.id);
                     }
-                    tabs->setCurrentIndex(4);
+                    tabs->setCurrentIndex(3);
                     QTimer::singleShot(1500, &app, [&] {
                         window.grab().save(QString::fromStdString(std::string(argv[3]) + ".png"));
                         app.quit();

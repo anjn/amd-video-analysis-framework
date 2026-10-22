@@ -253,8 +253,8 @@ struct PlaybackSession::Impl {
                     } else if (enabled) {
                         auto &out = *target;
                         std::lock_guard<std::mutex> l(out.mutex);
-                        if ((!external || out.generation == output_generation) && out.playback_until_ms &&
-                            GST_CLOCK_TIME_IS_VALID(frame_position) &&
+                        if ((!external || out.generation == output_generation) &&
+                            out.playback_until_ms && GST_CLOCK_TIME_IS_VALID(frame_position) &&
                             file->recording().started_ms + int64_t(frame_position / GST_MSECOND) >=
                                 out.playback_until_ms) {
                             held.reset();
@@ -273,6 +273,14 @@ struct PlaybackSession::Impl {
                                 GST_CLOCK_TIME_IS_VALID(frame_position)
                                     ? file->recording().started_ms + frame_position / GST_MSECOND
                                     : 0;
+                            it->recording_channel = file->recording().channel;
+                            it->recording_session = file->recording().session;
+                            it->recording_start_ms = file->recording().started_ms;
+                            it->recording_end_ms =
+                                file->recording().duration_ns < 0
+                                    ? INT64_MAX
+                                    : file->recording().started_ms +
+                                          file->recording().duration_ns / GST_MSECOND;
                             it->time = Clock::now();
                             it->state = 1;
                             rendered = true;
@@ -831,8 +839,9 @@ struct KeyframePreviewSession::Impl {
             info.height > int(max_video_height))
             throw std::runtime_error("Unsupported preview dimensions");
         // Keep the GPU image within the validated 6:1 VPE reduction range.
-        // The popup samples this texture into its 320x180 viewport.
-        const double scale = std::max(1. / 6., std::min({1., 320. / info.width, 180. / info.height}));
+        // The main view samples this bounded texture without CPU readback.
+        const double scale =
+            std::max(1. / 6., std::min({1., 1280. / info.width, 720. / info.height}));
         result->width = std::max(2u, 2 * unsigned(std::ceil(info.width * scale / 2)));
         result->height = std::max(2u, 2 * unsigned(std::ceil(info.height * scale / 2)));
         result->impl_->surface = result->impl_->va->create_bgra(result->width, result->height);
@@ -848,6 +857,11 @@ struct KeyframePreviewSession::Impl {
         if (!GST_CLOCK_TIME_IS_VALID(ns))
             throw std::runtime_error("Missing keyframe time");
         result->frame_ms = r.started_ms + ns / GST_MSECOND;
+        result->channel = r.channel;
+        result->session = r.session;
+        result->recording_start_ms = r.started_ms;
+        result->recording_end_ms =
+            r.duration_ns < 0 ? INT64_MAX : r.started_ms + r.duration_ns / GST_MSECOND;
         return result;
     }
     void publish(const Request &r, std::string state,
@@ -942,7 +956,7 @@ struct KeyframePreviewSession::Impl {
             cache.erase(same);
         }
         cache.push_front({record->name, covered_until, frame});
-        while (cache.size() > 32)
+        while (cache.size() > 8)
             cache.pop_back();
         publish(request, "ready", frame);
     }

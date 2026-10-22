@@ -1,7 +1,6 @@
 #include "ai_page.hpp"
 #include "amdva/streaming/playback.hpp"
 #include "search_page.hpp"
-#include "thumbnail.hpp"
 #include "timeline.hpp"
 #include "window.hpp"
 #include <QAbstractItemView>
@@ -26,6 +25,7 @@
 #include <QSaveFile>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QStackedWidget>
 #include <QTabWidget>
 #include <QTimer>
 #include <QUuid>
@@ -54,11 +54,62 @@ struct Window::Vms {
     QComboBox *layout{}, *assignment{}, *filter{};
     QLabel *tile_label{}, *storage{}, *play_status{}, *play_position{}, *timeline_info{};
     RecordingTimeline *timeline{};
-    QWidget *play_container{};
+    QWidget *play_container{}, *live_container{}, *timeline_panel{}, *manage_page{};
+    QStackedWidget *video_stack{};
+    bool recorded{}, hover_resume{}, selection_resume{}, search_resume{};
+    std::string viewing_camera;
+    QPushButton *back_live{};
+    bool single_view() const { return focus >= 0 || count == 1; }
+    Tiles *view() const { return recorded ? play_tiles : w.tiles_; }
+    void end_hover(bool restore = true) {
+        if (!preview_visible)
+            return;
+        preview_visible = false;
+        w.tiles_->preview_image(false);
+        play_tiles->preview_image(false);
+        preview->cancel();
+        if (restore && hover_resume && recorded)
+            player->play();
+        hover_resume = false;
+    }
+    void live() {
+        w.tiles_->cancel_selection();
+        play_tiles->cancel_selection();
+        end_hover(false);
+        recorded = false;
+        player->stop();
+        camera_changed = false;
+        camera_playing = false;
+        w.tiles_->hold_live(false);
+        video_stack->setCurrentWidget(live_container);
+    }
+    void toggle_play() {
+        if (deleting_ui)
+            return;
+        if (!recorded)
+            w.tiles_->hold_live(!w.tiles_->live_held());
+        else {
+            auto state = player->status().state;
+            if (state == "playing" || state == "waiting")
+                player->pause();
+            else
+                player->play();
+        }
+    }
+    void grid() {
+        live();
+        if (focus >= 0)
+            focus = -1;
+        else if (count == 1) {
+            count = 4;
+            layout->setCurrentIndex(layout->findData(4));
+        }
+        apply();
+    }
+
     Tiles *play_tiles{};
     std::unique_ptr<TimelinePlaybackSession> player;
     std::unique_ptr<KeyframePreviewSession> preview;
-    ThumbnailPopup *popup{};
     QSpinBox *retention{};
     QPushButton *erase{}, *cancel_erase{};
     QLabel *deletion_info{};
@@ -67,12 +118,11 @@ struct Window::Vms {
     std::shared_ptr<std::promise<void>> deletion_release;
     bool deleting_ui{}, preview_visible{};
     uint64_t deletion_operation{}, preview_request{};
-    QPoint preview_anchor;
     std::array<std::string, 16> cells{};
     unsigned count{4}, selected{};
     int focus{-1};
     bool ui_ready{}, dirty{}, query_pending{true};
-    bool show_playback_time{true}, show_stream_info{true};
+    bool show_stream_info{true};
     uint64_t revision{};
     int64_t cursor_ms{};
     bool camera_changed{true}, camera_playing{};
@@ -91,19 +141,16 @@ struct Window::Vms {
         query_pending = true;
     }
     void select_camera() {
-        preview_visible = false;
-        if (popup)
-            popup->clear();
-        if (preview)
-            preview->cancel();
         if (deleting_ui)
             return;
+        end_hover(false);
         play_tiles->cancel_selection();
-        const auto state = player->status();
-        if (!camera_changed)
-            camera_playing = state.state == "playing" || state.state == "waiting";
-        player->stop();
-        camera_changed = true;
+        w.tiles_->cancel_selection();
+        live();
+        cursor_ms = 0;
+        viewing_camera = filter->currentData().toString().toStdString();
+        play_tiles->camera_name = filter->currentText().toStdString();
+        w.tiles_->camera_name = play_tiles->camera_name;
         timeline->coverage({});
         request();
     }
@@ -117,7 +164,7 @@ struct Window::Vms {
         if (f.open(QIODevice::ReadOnly)) {
             auto document = QJsonDocument::fromJson(f.readAll());
             auto obj = document.object();
-            show_playback_time = obj["show_playback_time"].toBool(true);
+
             show_stream_info = obj["show_stream_info"].toBool(true);
             unsigned n = obj["layout"].toInt(4);
             if (n == 1 || n == 4 || n == 9 || n == 16)
@@ -126,9 +173,7 @@ struct Window::Vms {
             std::set<std::string> seen;
             for (int i = 0; i < std::min(16, int(array.size())); i++) {
                 auto id = array[i].toString().toStdString();
-                if (std::any_of(w.options_.sources.begin(), w.options_.sources.end(),
-                                [&](auto &s) { return s.id == id; }) &&
-                    seen.insert(id).second)
+                if (!id.empty() && seen.insert(id).second)
                     cells[i] = id;
             }
         } else {
@@ -153,7 +198,7 @@ struct Window::Vms {
         auto data = QJsonDocument(QJsonObject{{"version", 1},
                                               {"layout", int(count)},
                                               {"cells", array},
-                                              {"show_playback_time", show_playback_time},
+
                                               {"show_stream_info", show_stream_info}})
                         .toJson();
         if (f.write(data) != data.size() || !f.commit())
@@ -171,9 +216,25 @@ struct Window::Vms {
                 w.controller_.select(s.source.id, false);
         for (unsigned i = 0; i < count; i++)
             if (!cells[i].empty())
-                w.controller_.select(cells[i], true);
+                if (std::any_of(status.begin(), status.end(),
+                                [&](const auto &s) { return s.source.id == cells[i]; }))
+                    w.controller_.select(cells[i], true);
         w.tiles_->layout(cells, count, focus);
         w.tiles_->select_tile(selected);
+        if (timeline_panel) {
+            timeline_panel->setVisible(single_view());
+            if (single_view()) {
+                const auto id = cells[focus >= 0 ? unsigned(focus) : 0];
+                if (id != viewing_camera) {
+                    const auto index = filter->findData(qs(id));
+                    if (index >= 0 || id.empty()) {
+                        filter->setCurrentIndex(index);
+                        select_camera();
+                    }
+                }
+            } else if (recorded || preview_visible)
+                live();
+        }
         tile_label->setText(QString("Tile %1%2")
                                 .arg(selected + 1)
                                 .arg(focus >= 0 ? " · single view (Esc to return)" : ""));
@@ -239,8 +300,8 @@ struct Window::Vms {
         outer->addWidget(tabs, 1);
         storage = new QLabel;
         outer->addWidget(storage);
-        auto *live = new QWidget;
-        auto *live_layout = new QVBoxLayout(live);
+        auto *live_page = new QWidget;
+        auto *live_layout = new QVBoxLayout(live_page);
         auto *bar = new QHBoxLayout;
         layout = new QComboBox;
         layout->setObjectName("live-layout");
@@ -278,12 +339,17 @@ struct Window::Vms {
             dirty = true;
             w.tiles_->stream_info_visible(checked);
         });
-        split->addWidget(QWidget::createWindowContainer(w.tiles_));
+        video_stack = new QStackedWidget;
+        live_container = QWidget::createWindowContainer(w.tiles_);
+        video_stack->addWidget(live_container);
+        split->addWidget(video_stack);
         split->setStretchFactor(1, 1);
         live_layout->addWidget(split, 1);
-        tabs->addTab(live, "Live");
-        auto *record = new QWidget;
-        auto *rl = new QVBoxLayout(record);
+        tabs->addTab(live_page, "Live");
+        timeline_panel = new QWidget;
+        auto *rl = new QVBoxLayout(timeline_panel);
+        live_layout->addWidget(timeline_panel);
+        timeline_panel->hide();
         auto *filters = new QHBoxLayout;
         filter = new QComboBox;
         filter->setObjectName("recording-camera");
@@ -310,13 +376,13 @@ struct Window::Vms {
         management->addStretch();
         management->addWidget(erase);
         management->addWidget(cancel_erase);
-        rl->addLayout(management);
+
         deletion_info = new QLabel;
         deletion_info->setObjectName("recording-deletion-status");
-        rl->addWidget(deletion_info);
+
         preview = std::make_unique<KeyframePreviewSession>(w.controller_.display(),
                                                            w.controller_.recording_catalog());
-        popup = new ThumbnailPopup(&w);
+
         QObject::connect(apply_retention, &QPushButton::clicked, &w, [this] {
             const auto previous = w.options_.retention_minutes;
             try {
@@ -340,8 +406,7 @@ struct Window::Vms {
                                       QMessageBox::No) != QMessageBox::Yes)
                 return;
             deleting_ui = true;
-            preview_visible = false;
-            popup->clear();
+            end_hover(false);
             camera_changed = false;
             camera_playing = false;
             cursor_ms = 0;
@@ -350,6 +415,8 @@ struct Window::Vms {
             erase->setEnabled(false);
             cancel_erase->setEnabled(true);
             play_tiles->cancel_selection();
+            w.tiles_->cancel_selection();
+            live();
             releasing_search = search_page->release();
             releasing_player = player->stop_and_release();
             releasing_preview = preview->cancel();
@@ -367,63 +434,55 @@ struct Window::Vms {
         play_tiles = new Tiles(w.controller_, &player->slot());
         play_container = QWidget::createWindowContainer(play_tiles);
         play_container->setMinimumHeight(180);
-        rl->addWidget(play_container, 1);
+        video_stack->addWidget(play_container);
         timeline_info = new QLabel("Green: recorded · grey: no playable recording");
         rl->addWidget(timeline_info);
         timeline = new RecordingTimeline;
         rl->addWidget(timeline);
         auto *controls = new QHBoxLayout;
-        auto *play = new QPushButton("Play"), *pause = new QPushButton("Pause"),
-             *stop = new QPushButton("Stop");
-        play->setObjectName("playback-play");
-        pause->setObjectName("playback-pause");
-        stop->setObjectName("playback-stop");
+        back_live = new QPushButton("Back to Live");
+        back_live->setObjectName("playback-live");
+        controls->addWidget(back_live);
         play_position = new QLabel;
         play_position->setObjectName("playback-position");
         play_status = new QLabel;
         play_status->setObjectName("playback-status");
-        for (auto *button : {play, pause, stop})
-            controls->addWidget(button);
-        auto *time_toggle = new QCheckBox("Show playback time");
-        time_toggle->setObjectName("playback-show-time");
-        time_toggle->setChecked(show_playback_time);
-        play_tiles->playback_time_visible(show_playback_time);
-        QObject::connect(time_toggle, &QCheckBox::toggled, &w, [this](bool checked) {
-            show_playback_time = checked;
-            dirty = true;
-            play_tiles->playback_time_visible(checked);
-        });
-        controls->addWidget(time_toggle);
         controls->addWidget(play_position, 1);
         rl->addLayout(controls);
         rl->addWidget(play_status);
-        playback_controls = {filter, play, pause, stop, timeline};
-        play_tiles->activated = [this, play, pause](unsigned, bool twice) {
-            if (twice || deleting_ui)
-                return;
-            const auto state = player->status().state;
-            (state == "playing" || state == "waiting" ? pause : play)->click();
+        playback_controls = {filter, back_live, timeline};
+        QObject::connect(back_live, &QPushButton::clicked, &w, [this] { live(); });
+        play_tiles->activated = [this](unsigned, bool twice) {
+            if (twice)
+                grid();
+            else
+                toggle_play();
         };
-        timeline->preview_requested = [this](std::optional<int64_t> at, QPoint anchor) {
-            if (deleting_ui)
+        timeline->preview_requested = [this](std::optional<int64_t> at, QPoint) {
+            if (deleting_ui || !single_view())
                 return;
             if (!at) {
-                preview_visible = false;
-                popup->clear();
-                preview->cancel();
+                end_hover();
                 return;
             }
             auto id = filter->currentData().toString().toStdString();
             if (id.empty())
                 return;
-            preview_anchor = anchor;
+            if (!preview_visible) {
+                auto state = player->status().state;
+                hover_resume = recorded && (state == "playing" || state == "waiting");
+                if (recorded)
+                    player->pause();
+            }
             preview_visible = true;
             preview_request = preview->request(id, *at);
-            popup->display(preview->status(), preview_anchor);
+            view()->preview_image(true, preview->status());
         };
-        tabs->addTab(record, "Recordings");
         auto *manage = new QWidget;
+        manage_page = manage;
         auto *ml = new QVBoxLayout(manage);
+        ml->addLayout(management);
+        ml->addWidget(deletion_info);
         auto *buttons = new QHBoxLayout;
         auto *add = new QPushButton("Add camera"), *edit = new QPushButton("Edit camera"),
              *remove = new QPushButton("Remove camera");
@@ -463,20 +522,38 @@ struct Window::Vms {
                                 }),
                      "AI Statistics");
         if (w.controller_.search_service()) {
-            play_tiles->search_image_size = w.options_.search.image_size;
-            play_tiles->search_device = w.options_.search.device;
-            play_tiles->selection_started = [this] { player->pause(); };
-            play_tiles->region_selected = [this](streaming::SearchImage image) {
-                search_page->search_image(std::move(image));
-                tabs->setCurrentWidget(search_page);
-            };
-            play_tiles->selection_error = [this](std::string error) {
-                play_status->setText(QString::fromStdString(error));
-            };
+            for (auto *tiles : {play_tiles, w.tiles_}) {
+                tiles->search_image_size = w.options_.search.image_size;
+                tiles->search_device = w.options_.search.device;
+                tiles->selection_started = [this] {
+                    const auto state = player->status().state;
+                    selection_resume = recorded && (state == "playing" || state == "waiting");
+                    if (recorded)
+                        player->pause();
+                };
+                tiles->selection_cancelled = [this] {
+                    if (selection_resume && recorded)
+                        player->play();
+                    selection_resume = false;
+                };
+                tiles->region_selected = [this](streaming::SearchImage image) {
+                    search_resume = selection_resume;
+                    selection_resume = false;
+                    search_page->search_image(std::move(image));
+                    tabs->setCurrentWidget(search_page);
+                };
+                tiles->selection_error = [this](std::string error) {
+                    play_status->setText(qs(error));
+                    if (selection_resume && recorded)
+                        player->play();
+                    selection_resume = false;
+                };
+            }
         }
         QObject::connect(add, &QPushButton::clicked, &w, [this] { edit_camera(false); });
         QObject::connect(edit, &QPushButton::clicked, &w, [this] { edit_camera(true); });
-        QObject::connect(settings, &QPushButton::clicked, &w, [this] { tabs->setCurrentIndex(2); });
+        QObject::connect(settings, &QPushButton::clicked, &w,
+                         [this] { tabs->setCurrentWidget(manage_page); });
         QObject::connect(remove, &QPushButton::clicked, &w, [this] {
             int row = w.table_->currentRow();
             if (row < 0)
@@ -499,6 +576,7 @@ struct Window::Vms {
             count = layout->currentData().toUInt();
             selected = std::min(selected, count - 1);
             focus = -1;
+            live();
             dirty = true;
             apply();
         });
@@ -507,9 +585,17 @@ struct Window::Vms {
         QObject::connect(clear, &QPushButton::clicked, &w, [this] { assign(""); });
         w.tiles_->activated = [this](unsigned index, bool twice) {
             selected = std::min(index, count - 1);
-            if (twice)
-                focus = focus < 0 ? int(selected) : -1;
-            apply();
+            if (twice) {
+                if (single_view())
+                    grid();
+                else {
+                    focus = int(selected);
+                    apply();
+                }
+            } else if (single_view())
+                toggle_play();
+            else
+                apply();
             refresh_sources();
         };
         QObject::connect(single, &QPushButton::clicked, &w,
@@ -521,47 +607,38 @@ struct Window::Vms {
         QObject::connect(tabs, &QTabWidget::currentChanged, &w, [this](int index) {
             if (index != tabs->indexOf(search_page))
                 search_page->leave();
-            if (index != 1) {
-                play_tiles->cancel_selection();
+            if (index != 0) {
+                auto state = player->status().state;
+                search_resume |=
+                    hover_resume || (recorded && (state == "playing" || state == "waiting"));
+                end_hover(false);
                 player->pause();
-                preview_visible = false;
-                popup->clear();
-                preview->cancel();
-            }
-            if (index == 1)
+            } else {
+                if (search_resume && recorded)
+                    player->play();
+                search_resume = false;
                 request();
+            }
             apply();
         });
-        QObject::connect(filter, qOverload<int>(&QComboBox::activated), &w,
-                         [this] { select_camera(); });
-        QObject::connect(play, &QPushButton::clicked, &w, [this] {
-            camera_playing = true;
-            auto id = filter->currentData().toString().toStdString();
-            if (id.empty() || !timeline->oldest() || timeline->oldest() >= timeline->latest())
-                return;
-            auto state = player->status();
-            if (state.channel != id || state.state == "stopped" || state.state == "ended" ||
-                state.state == "error")
-                player->open(id, cursor_ms ? cursor_ms : timeline->oldest(), true, follows(id));
-            else
-                player->play();
-        });
-        QObject::connect(pause, &QPushButton::clicked, &w, [this] {
-            camera_playing = false;
-            player->pause();
-        });
-        QObject::connect(stop, &QPushButton::clicked, &w, [this] {
-            camera_changed = false;
-            camera_playing = false;
-            player->stop();
+        QObject::connect(filter, qOverload<int>(&QComboBox::activated), &w, [this] {
+            const auto id = filter->currentData().toString().toStdString();
+            selected = focus >= 0 ? unsigned(focus) : 0;
+            assign(id);
+            select_camera();
         });
         timeline->seek_requested = [this](int64_t at) {
             auto id = filter->currentData().toString().toStdString();
-            if (id.empty())
+            if (id.empty() || deleting_ui)
                 return;
+            end_hover(false);
+            w.tiles_->hold_live(false);
             cursor_ms = at;
-            bool play = player->status().state != "paused";
-            player->open(id, at, play, follows(id));
+            recorded = true;
+            camera_changed = false;
+            play_tiles->camera_name = filter->currentText().toStdString();
+            video_stack->setCurrentWidget(play_container);
+            player->open(id, at, true, follows(id));
         };
         auto *timer = new QTimer(&w);
         QObject::connect(timer, &QTimer::timeout, &w, [this] { tick(); });
@@ -573,9 +650,7 @@ struct Window::Vms {
             if (preview_visible) {
                 auto status = preview->status();
                 if (status.request == preview_request)
-                    popup->display(status, preview_anchor);
-                else
-                    popup->clear();
+                    view()->preview_image(true, status);
             }
         });
         paint->start(33);
@@ -629,6 +704,8 @@ struct Window::Vms {
                 auto result = query.get();
                 if (result.revision == revision) {
                     const auto chosen = filter->currentData();
+                    const auto desired = single_view() ? qs(cells[focus >= 0 ? unsigned(focus) : 0])
+                                                       : chosen.toString();
                     filter->clear();
                     std::set<std::string> added;
                     for (const auto &entry : source_names) {
@@ -638,15 +715,23 @@ struct Window::Vms {
                     for (const auto &entry : result.cameras)
                         if (added.insert(entry.first).second)
                             filter->addItem(qs(entry.second), qs(entry.first));
-                    auto index = filter->findData(chosen);
-                    filter->setCurrentIndex(index >= 0 ? index : (filter->count() ? 0 : -1));
+                    auto index = filter->findData(desired);
+                    filter->setCurrentIndex(
+                        index >= 0 ? index : (!single_view() && filter->count() ? 0 : -1));
                     if (filter->currentData() != chosen) {
                         select_camera();
                     } else {
                         timeline->now(QDateTime::currentMSecsSinceEpoch());
                         const auto oldest = result.coverage.oldest_ms;
                         timeline->coverage(std::move(result.coverage));
-                        if (camera_changed && oldest) {
+                        if (!recorded && oldest && single_view() && !viewing_camera.empty() &&
+                            !follows(viewing_camera)) {
+                            recorded = true;
+                            camera_changed = true;
+                            camera_playing = true;
+                            video_stack->setCurrentWidget(play_container);
+                        }
+                        if (recorded && camera_changed && oldest) {
                             if (!cursor_ms)
                                 cursor_ms = *oldest;
                             const auto id = filter->currentData().toString().toStdString();
@@ -715,21 +800,29 @@ struct Window::Vms {
                     request();
                 }
             }
+            back_live->setEnabled(!deleting_ui && follows(viewing_camera));
             auto state = player->status();
             if (!camera_changed &&
                 state.channel == filter->currentData().toString().toStdString() &&
                 state.state != "stopped")
                 cursor_ms = state.position_ms;
-            timeline->position(cursor_ms);
-            play_position->setText(cursor_ms ? QDateTime::fromMSecsSinceEpoch(cursor_ms).toString(
-                                                   "yyyy-MM-dd HH:mm:ss")
-                                             : QString{});
+            timeline->position(recorded ? cursor_ms : QDateTime::currentMSecsSinceEpoch());
+            play_position->setText(
+                recorded && cursor_ms
+                    ? QDateTime::fromMSecsSinceEpoch(cursor_ms).toString("yyyy-MM-dd HH:mm:ss")
+                    : QString("Live"));
             QString label = state.state == "waiting" ? "Waiting for the next finalized recording…"
                                                      : qs(state.state);
             if (!state.notice.empty())
                 label += " · " + qs(state.notice);
             if (!state.error.empty())
                 label += " · " + qs(state.error);
+            if (!recorded)
+                label = w.tiles_->live_held() ? "Live · Paused" : "Live";
+            if (preview_visible)
+                label = "Preview · " + qs(preview->status().state);
+            if (auto error = w.controller_.recording_catalog().analysis_error(); !error.empty())
+                label += " · Analysis save: " + qs(error);
             play_status->setText(label);
         } catch (const std::exception &e) {
             play_status->setText(qs(e.what()));
@@ -741,18 +834,12 @@ Window::Window(Controller &c, Options options, std::string config)
       vms_(std::make_unique<Vms>(*this)) {
     vms_->build();
 }
-ThumbnailPopup *Window::thumbnail_popup() const { return vms_->popup; }
 KeyframePreviewStatus Window::keyframe_preview_status() const { return vms_->preview->status(); }
 TimelinePlaybackStatus Window::timeline_status() const { return vms_->player->status(); }
 Tiles *Window::recording_view() const { return vms_->play_tiles; }
 Window::~Window() {
     if (vms_->query.valid())
         vms_->query.wait();
-    if (vms_->popup) {
-        vms_->popup->clear();
-        delete vms_->popup;
-        vms_->popup = nullptr;
-    }
     vms_->preview.reset();
     // GL users must release their surfaces before player/controller destruction.
     delete takeCentralWidget();

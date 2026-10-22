@@ -69,7 +69,8 @@ class GpuPreviewImage {
   public:
     ~GpuPreviewImage();
     unsigned width{}, height{};
-    int64_t frame_ms{};
+    int64_t frame_ms{}, recording_start_ms{}, recording_end_ms{};
+    std::string channel, session;
     // Caller owns/closes every object FD in the returned descriptor.
     VADRMPRIMESurfaceDescriptor export_surface() const;
 

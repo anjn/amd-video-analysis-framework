@@ -18,9 +18,9 @@ class VectorText {
   private:
     struct Glyph {
         std::vector<QPointF> triangles;
-        double advance{};
+        double advance{}, ascent{}, descent{};
     };
     QRawFont font_;
-    std::map<ushort, Glyph> glyphs_;
+    std::map<char32_t, Glyph> glyphs_;
 };
 } // namespace amdva::nvr
