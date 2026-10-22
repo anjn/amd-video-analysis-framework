@@ -58,10 +58,10 @@ int main(int argc, char **argv) {
               "Old controls remain");
         auto seek_click = [&](int64_t at) {
             const double x =
-                12. + double(at - timeline->oldest()) /
+                12. + double(timeline->latest() - at) /
                           std::max<int64_t>(1, timeline->latest() - timeline->oldest()) *
-                          (timeline->width() - 24);
-            QPointF point(x, 48);
+                          (timeline->height() - 24);
+            QPointF point(24, x);
             QMouseEvent press(QEvent::MouseButtonPress, point, point, Qt::LeftButton,
                               Qt::LeftButton, Qt::NoModifier);
             QMouseEvent release(QEvent::MouseButtonRelease, point, point, Qt::LeftButton,
@@ -152,6 +152,12 @@ int main(int argc, char **argv) {
                 } else if (stage == 1 && timeline->isVisible() && timeline->oldest() &&
                            elapsed - since > 2) {
                     check(window.live_view()->isExposed(), "Single live not exposed");
+                    check(!layout->isVisible() &&
+                              !window.findChild<QWidget *>("tile-camera-panel")->isVisible() &&
+                              !window.findChild<QWidget *>("recording-camera")->isVisible(),
+                          "Grid settings visible in single view");
+                    window.grab().save(
+                        QString::fromStdString(std::string(argv[1]) + ".single.png"));
                     click(window.live_view());
                     advance();
                 } else if (stage == 2 && window.live_view()->live_held()) {
@@ -160,11 +166,19 @@ int main(int argc, char **argv) {
                 } else if (stage == 3 && elapsed - since > 1) {
                     check(window.live_view()->presented() == held_frames,
                           "Live pause did not freeze frame");
+                    window.live_view()->grabFramebuffer().save(
+                        QString::fromStdString(std::string(argv[1]) + ".paused.png"));
                     timeline->preview_requested(timeline->oldest() + 2000, {});
                     advance();
                 } else if (stage == 4 && window.keyframe_preview_status().image &&
                            window.live_view()->displayed_playback_time() > 0) {
                     check(window.live_view()->preview_active(), "Hover not in main view");
+                    const auto previous = window.live_view()->displayed_playback_time();
+                    window.live_view()->preview_image(true, {});
+                    auto retained = window.live_view()->grabFramebuffer();
+                    check(!retained.isNull() &&
+                              window.live_view()->displayed_playback_time() == previous,
+                          "Loading preview discarded the preceding image");
                     timeline->preview_requested({}, {});
                     advance();
                 } else if (stage == 5 && elapsed - since > 1) {
@@ -222,9 +236,17 @@ int main(int argc, char **argv) {
                         cycle = phase;
                         if (phase % 4 == 0) {
                             back->click();
-                            layout->setCurrentIndex(layout->findData(16));
-                            QMetaObject::invokeMethod(layout, "activated",
-                                                      Q_ARG(int, layout->currentIndex()));
+                            QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+                            QApplication::sendEvent(window.live_view(), &escape);
+                        }
+                        if (phase % 4 == 0) {
+                            check(layout->isVisible() &&
+                                      window.findChild<QWidget *>("tile-camera-panel")->isVisible(),
+                                  "Grid panel not restored");
+                            check(
+                                window.findChild<QLabel *>("storage-status")->text().count('\n') ==
+                                    3,
+                                "Storage status must have four lines");
                         }
                         if (phase % 4 == 1)
                             window.live_view()->activated(0, true);

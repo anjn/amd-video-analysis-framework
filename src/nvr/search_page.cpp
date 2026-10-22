@@ -320,6 +320,8 @@ struct SearchPage::Impl {
                                       .arg(s.pending)
                                 : QString::fromStdString(s.state + ": " + s.error));
         auto p = player ? player->status() : TimelinePlaybackStatus{};
+        if (tiles)
+            tiles->paused(p.state == "paused" || p.state == "ended");
         if (interval_active) {
             if (p.position_ms >= end) {
                 player->pause();

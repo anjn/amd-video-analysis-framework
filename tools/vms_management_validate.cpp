@@ -104,12 +104,12 @@ int main(int argc, char **argv) {
         std::function<void()> next;
         next = [&] {
             auto at = timeline->oldest() + 1000 + int64_t(samples) * 60;
-            double x = 12 + double(at - timeline->oldest()) /
+            double x = 12 + double(timeline->latest() - at) /
                                 double(timeline->latest() - timeline->oldest()) *
-                                (timeline->width() - 24);
+                                (timeline->height() - 24);
 
             request_start = Clock::now();
-            QMouseEvent event(QEvent::MouseMove, QPointF(x, 48), QPointF(x, 48), Qt::NoButton,
+            QMouseEvent event(QEvent::MouseMove, QPointF(24, x), QPointF(24, x), Qt::NoButton,
                               Qt::NoButton, Qt::NoModifier);
             QApplication::sendEvent(timeline, &event);
             auto requested = window.keyframe_preview_status();
@@ -210,7 +210,7 @@ int main(int argc, char **argv) {
                                       (label.contains("H.264") || label.contains("H.265")),
                                   "Missing codec/resolution overlay");
                             check(label.contains(
-                                      QRegularExpression(R"(\d+\.\d fps\s+\d+\.\d Mbps$)")),
+                                      QRegularExpression(R"(\d+\.\d fps\s+\d+\.\d Mbps\s+decode (\d+\.\d ms|N/A)$)")),
                                   "Stream rates/unit formatting");
                             labels++;
                         }

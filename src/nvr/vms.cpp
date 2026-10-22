@@ -52,10 +52,11 @@ struct Window::Vms {
     SearchPage *search_page{};
     QListWidget *cameras{};
     QComboBox *layout{}, *assignment{}, *filter{};
-    QLabel *tile_label{}, *storage{}, *play_status{}, *play_position{}, *timeline_info{};
+    QLabel *tile_label{}, *storage{}, *play_status{};
     RecordingTimeline *timeline{};
     QWidget *play_container{}, *live_container{}, *timeline_panel{}, *manage_page{};
     QStackedWidget *video_stack{};
+    QWidget *settings_bar{}, *camera_panel{};
     bool recorded{}, hover_resume{}, selection_resume{}, search_resume{};
     std::string viewing_camera;
     QPushButton *back_live{};
@@ -223,6 +224,8 @@ struct Window::Vms {
         w.tiles_->select_tile(selected);
         if (timeline_panel) {
             timeline_panel->setVisible(single_view());
+            settings_bar->setVisible(!single_view());
+            camera_panel->setVisible(!single_view());
             if (single_view()) {
                 const auto id = cells[focus >= 0 ? unsigned(focus) : 0];
                 if (id != viewing_camera) {
@@ -299,10 +302,12 @@ struct Window::Vms {
         tabs->setObjectName("vms-tabs");
         outer->addWidget(tabs, 1);
         storage = new QLabel;
-        outer->addWidget(storage);
+        storage->setObjectName("storage-status");
         auto *live_page = new QWidget;
         auto *live_layout = new QVBoxLayout(live_page);
-        auto *bar = new QHBoxLayout;
+        settings_bar = new QWidget;
+        settings_bar->setObjectName("live-settings");
+        auto *bar = new QHBoxLayout(settings_bar);
         layout = new QComboBox;
         layout->setObjectName("live-layout");
         for (unsigned n : {1, 4, 9, 16})
@@ -326,12 +331,19 @@ struct Window::Vms {
         bar->addWidget(info_toggle);
         bar->addStretch();
         bar->addWidget(settings);
-        live_layout->addLayout(bar);
+        live_layout->addWidget(settings_bar);
         auto *split = new QSplitter;
         cameras = new QListWidget;
         cameras->setObjectName("live-cameras");
         cameras->setMaximumWidth(310);
-        split->addWidget(cameras);
+        camera_panel = new QWidget;
+        camera_panel->setObjectName("tile-camera-panel");
+        camera_panel->setMaximumWidth(310);
+        auto *camera_layout = new QVBoxLayout(camera_panel);
+        camera_layout->setContentsMargins(0, 0, 0, 0);
+        camera_layout->addWidget(cameras, 1);
+        camera_layout->addWidget(storage);
+        split->addWidget(camera_panel);
         w.tiles_ = new Tiles(w.controller_);
         w.tiles_->stream_info_visible(show_stream_info);
         QObject::connect(info_toggle, &QCheckBox::toggled, &w, [this](bool checked) {
@@ -348,14 +360,15 @@ struct Window::Vms {
         tabs->addTab(live_page, "Live");
         timeline_panel = new QWidget;
         auto *rl = new QVBoxLayout(timeline_panel);
-        live_layout->addWidget(timeline_panel);
+        timeline_panel->setMinimumWidth(165);
+        timeline_panel->setMaximumWidth(225);
+        split->insertWidget(1, timeline_panel);
+        split->setStretchFactor(2, 1);
         timeline_panel->hide();
-        auto *filters = new QHBoxLayout;
-        filter = new QComboBox;
+        // Internal camera selection follows the focused tile; it has no single-view control.
+        filter = new QComboBox(live_page);
         filter->setObjectName("recording-camera");
-        filters->addWidget(new QLabel("Camera"));
-        filters->addWidget(filter, 1);
-        rl->addLayout(filters);
+        filter->hide();
         auto *management = new QHBoxLayout;
         retention = new QSpinBox;
         retention->setObjectName("recording-retention");
@@ -435,20 +448,17 @@ struct Window::Vms {
         play_container = QWidget::createWindowContainer(play_tiles);
         play_container->setMinimumHeight(180);
         video_stack->addWidget(play_container);
-        timeline_info = new QLabel("Green: recorded · grey: no playable recording");
-        rl->addWidget(timeline_info);
         timeline = new RecordingTimeline;
-        rl->addWidget(timeline);
         auto *controls = new QHBoxLayout;
         back_live = new QPushButton("Back to Live");
         back_live->setObjectName("playback-live");
         controls->addWidget(back_live);
-        play_position = new QLabel;
-        play_position->setObjectName("playback-position");
         play_status = new QLabel;
         play_status->setObjectName("playback-status");
-        controls->addWidget(play_position, 1);
+        play_status->setWordWrap(true);
+        play_status->hide();
         rl->addLayout(controls);
+        rl->addWidget(timeline, 1);
         rl->addWidget(play_status);
         playback_controls = {filter, back_live, timeline};
         QObject::connect(back_live, &QPushButton::clicked, &w, [this] { live(); });
@@ -738,13 +748,8 @@ struct Window::Vms {
                             player->open(id, cursor_ms, camera_playing, follows(id));
                             camera_changed = false;
                         }
-                        timeline_info->setText(result.coverage.pending_durations
-                                                   ? "Some older recordings have unknown duration "
-                                                     "· green: recorded · grey: unavailable"
-                                                   : "Green: recorded · grey: no playable "
-                                                     "recording · gaps are skipped");
                     }
-                    storage->setText(QString("Recorded %1 · free %2 · quota %3 · reserved free %4")
+                    storage->setText(QString("Recorded %1\nFree %2\nQuota %3\nReserved free %4")
                                          .arg(size_text(result.storage.recorded_bytes),
                                               size_text(result.storage.available_bytes),
                                               size_text(w.options_.quota),
@@ -802,15 +807,13 @@ struct Window::Vms {
             }
             back_live->setEnabled(!deleting_ui && follows(viewing_camera));
             auto state = player->status();
+            play_tiles->paused((state.state == "paused" || state.state == "ended") &&
+                               !preview_visible);
             if (!camera_changed &&
                 state.channel == filter->currentData().toString().toStdString() &&
                 state.state != "stopped")
                 cursor_ms = state.position_ms;
             timeline->position(recorded ? cursor_ms : QDateTime::currentMSecsSinceEpoch());
-            play_position->setText(
-                recorded && cursor_ms
-                    ? QDateTime::fromMSecsSinceEpoch(cursor_ms).toString("yyyy-MM-dd HH:mm:ss")
-                    : QString("Live"));
             QString label = state.state == "waiting" ? "Waiting for the next finalized recording…"
                                                      : qs(state.state);
             if (!state.notice.empty())
@@ -818,14 +821,19 @@ struct Window::Vms {
             if (!state.error.empty())
                 label += " · " + qs(state.error);
             if (!recorded)
-                label = w.tiles_->live_held() ? "Live · Paused" : "Live";
-            if (preview_visible)
-                label = "Preview · " + qs(preview->status().state);
+                label.clear();
+            if (preview_visible) {
+                const auto preview_status = preview->status();
+                label = preview_status.error.empty() ? QString{} : qs(preview_status.error);
+            }
             if (auto error = w.controller_.recording_catalog().analysis_error(); !error.empty())
                 label += " · Analysis save: " + qs(error);
             play_status->setText(label);
+            play_status->setVisible(!label.isEmpty() && label != "playing" && label != "paused" &&
+                                    label != "stopped");
         } catch (const std::exception &e) {
             play_status->setText(qs(e.what()));
+            play_status->show();
         }
     }
 };
@@ -884,6 +892,10 @@ void Window::persist(bool force) {
 void Window::refresh() {
     const auto statuses = controller_.status();
     const auto timing_snapshots = controller_.telemetry();
+    tiles_->decode_latency.clear();
+    for (const auto &metrics : timing_snapshots)
+        if (metrics.enabled && metrics.latency[0][0].samples)
+            tiles_->decode_latency[metrics.source] = metrics.latency[0][0].mean_ms;
     updating_ = true;
     table_->setRowCount(int(statuses.size()));
     for (unsigned row = 0; row < statuses.size(); ++row) {

@@ -16,7 +16,10 @@ selected border remain visible over the grid.
 **Show stream info** toggles codec, received resolution, input frame rate and
 bitrate on every live image. It defaults to on and persists in `<config>.ui.json`.
 The lower-left overlay uses one line, for example
-`H.264 1920x1080 30.0 fps 4.2 Mbps`. Rates update approximately once per second from received
+`H.264 1920x1080 30.0 fps 4.2 Mbps  decode 12.3 ms`.
+Decode latency is the existing rolling mean from application input to decode output,
+not camera capture latency; unavailable telemetry displays `decode N/A`. Grid
+text uses a 14px target size, while single view uses 22px. Rates update approximately once per second from received
 parser-output compressed access units before queue drops, decoding and recording
 selection.
 Bitrate is encoded video payload in decimal Mbit/s, displayed to one decimal;
@@ -53,8 +56,8 @@ decode and recording session, then reconnect using the new URL. Removing a
 camera stops its reception and clears its mappings, without deleting history.
 
 The table retains connection, recording, analytics and telemetry details. The
-bottom bar displays catalogued recording bytes, current filesystem space, the
-configured quota and reserved free space. Recording schedules, per-camera
+grid camera sidebar displays catalogued recording bytes, current filesystem space,
+the configured quota and reserved free space on four lines below the camera list. Recording schedules, per-camera
 recording switches and export are not provided.
 
 On **Cameras**, **Retention (all cameras)** sets the history to keep in whole
@@ -83,8 +86,9 @@ files can cause a partial result; release them and repeat the operation.
 
 Single view on **Live** contains the recording timeline. Double-click a tile
 (or choose one view) to enter it; double-click or Esc returns to the grid.
-The camera dropdown includes removed cameras with retained recordings. The
-camera name uses the large GPU text overlay in single view; black title strips
+Single view hides the grid toolbar, camera list, camera selector and storage panel.
+Its vertical timeline is on the left, newest at the top, with **Back to Live** above. The timeline sidebar is 165–225px wide.
+There is no coverage legend or duplicate live status outside the image. The camera name uses the large GPU text overlay in single view; black title strips
 remain only in the grid. The timeline spans the oldest finalized recording to
 now, with green recorded intervals and grey gaps. Coverage refreshes each second.
 
@@ -96,8 +100,10 @@ recording and inference continue. Another click resumes the latest live frame.
 Playback at the archive tail waits for finalized segments instead of switching
 to live automatically. A camera change returns to that camera's live view.
 
-Frame datetime (`yyyy-MM-dd HH:mm:ss`) is always shown in the lower-left area;
-live uses `Live`, or `Live · Paused`, in the same place. The timestamp belongs
+Recording frame datetime (`yyyy-MM-dd HH:mm:ss`) is shown at the lower right;
+live uses bright green `Live`, or yellow `Live · Paused`, at the upper right.
+Paused video shows a translucent grey play triangle at its center, 20% of the
+displayed video height. The timestamp belongs
 to the displayed decoded frame, not a timer estimate. The old time visibility
 preference is ignored. Camera name and optional stream information use GPU text
 geometry, without video readback or glyph texture uploads.
@@ -107,7 +113,8 @@ actual frame time, labelled `Preview`. Recording playback pauses during hover
 and resumes its prior state on leaving; paused playback stays paused. Live
 returns to the newest frame, or its held frame if paused. Clicking the timeline
 commits a new playing position. There is no popup window. Loading, gaps and
-errors display a preview status instead of a stale image from another request.
+errors retain the preceding frame rather than clearing to black. The displayed
+preview timestamp continues to identify that retained frame until a new image arrives.
 
 One preview worker coalesces requests for 75ms and decodes a key unit at or
 before the requested position. VA/VPE produces a GPU image bounded to 1280×720;
@@ -179,7 +186,9 @@ They use the latest preceding analysis in the same recording/session, holding
 boxes for at most twice the analysis interval (capped at two seconds). Empty
 frames clear boxes; seeks and deletion invalidate cached results. There is no
 coordinate interpolation or cross-camera identity matching. Labels and colors
-match live person IDs, with confidence-only labels when ReID is disabled.
+match live person IDs. Only `#ID` is shown, with no confidence percentage;
+unassigned IDs and all grid labels are hidden. Colored borders use 40% opacity
+and their black outlines 20% opacity. ID text uses 60% opacity and its backing 30%.
 
 `Catalog::enqueue_analysis` sends records to a bounded 1,024-frame writer queue.
 Transactions save up to 64 frames at a time, flushing every 250ms. Overflow drops
@@ -263,6 +272,17 @@ consumers. Each standalone example owns its catalog exclusively; never point
 it at an active NVR's recording root.
 
 ## Validation
+
+The subsequent vertical-timeline/display refinement passed all 33 tests and a
+90-second 16-channel 1440p GUI check. Recorded analysis remained 1.998–2.015 Hz
+per camera, with no startup tracking drops or copy-audit violations. Checks
+include hidden single-view controls, four-line grid storage status, Esc return,
+paused-live rendering and retention of the preceding image while a preview loads.
+The management check passed 100 hover requests (p95 193 ms, maximum 286 ms),
+expiry/deletion and stream-information toggling. Search checks passed text search,
+inline playback, live/held-live/recorded region selection and deletion. Local logs
+and screenshots are under `artifacts/view-layout/`.
+
 
 The [unified-view validation record](../benchmarks/unified-view-2026-10-22.json)
 covers the 2026-10-22 implementation. Original 1440p HEVC videos ran on 16

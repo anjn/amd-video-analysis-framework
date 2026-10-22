@@ -11,7 +11,7 @@ int main(int argc, char **argv) {
     QApplication app(argc, argv);
     try {
         RecordingTimeline widget;
-        widget.resize(1000, 100);
+        widget.resize(240, 1000);
         constexpr int64_t start = 1800000000000LL, end = start + 90LL * 86400000;
         amdva::streaming::RecordingCoverage coverage;
         coverage.oldest_ms = start;
@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
         widget.now(end);
         widget.coverage(coverage);
         widget.position(start);
-        check(widget.time_at(0) == start && widget.time_at(1000) == end, "Edge clamp");
+        check(widget.time_at(0) == end && widget.time_at(1000) == start, "Edge clamp");
         check(widget.time_at(500) == start + (end - start) / 2, "64-bit whole-history mapping");
         unsigned requests = 0, previews = 0;
         widget.preview_requested = [&](std::optional<int64_t> at, QPoint) {
@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
         };
         auto event = [&](QEvent::Type type, double x, Qt::MouseButton button,
                          Qt::MouseButtons buttons) {
-            QMouseEvent e(type, QPointF(x, 48), QPointF(x, 48), button, buttons, Qt::NoModifier);
+            QMouseEvent e(type, QPointF(24, x), QPointF(24, x), button, buttons, Qt::NoModifier);
             QApplication::sendEvent(&widget, &e);
         };
         event(QEvent::MouseMove, 500, Qt::NoButton, Qt::NoButton);
@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
         event(QEvent::MouseMove, 500, Qt::NoButton, Qt::LeftButton);
         check(!requests, "Drag seeks before release");
         event(QEvent::MouseButtonRelease, 988, Qt::LeftButton, Qt::NoButton);
-        check(requests == 1 && selected == end, "Release commits timestamp");
+        check(requests == 1 && selected == start, "Release commits timestamp");
         auto before = previews;
         widget.now(end + 1000);
         widget.coverage(coverage);

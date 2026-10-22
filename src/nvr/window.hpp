@@ -12,6 +12,7 @@
 #include <QOpenGLWindow>
 #include <QTableWidget>
 #include <QTimer>
+#include <map>
 namespace amdva::nvr {
 class Tiles final : public QOpenGLWindow {
   public:
@@ -32,6 +33,11 @@ class Tiles final : public QOpenGLWindow {
         held_ = hold;
         update();
     }
+    void paused(bool value) {
+        paused_ = value;
+        update();
+    }
+    std::map<std::string, double> decode_latency;
     bool live_held() const { return held_; }
     void preview_image(bool enabled, const KeyframePreviewStatus &status = {});
     bool preview_active() const { return preview_mode_; }
@@ -69,7 +75,8 @@ class Tiles final : public QOpenGLWindow {
     bool frozen_{}, dragging_{}, selection_cancelled_{}, held_{};
     unsigned selection_slot_{};
     QTimer *click_timer_{};
-    bool preview_mode_{};
+    bool preview_mode_{}, paused_{};
+    void draw_pause(const QRectF &);
     std::string preview_state_;
     std::shared_ptr<const GpuPreviewImage> preview_pending_, preview_current_;
     Texture preview_texture_;
@@ -125,8 +132,8 @@ class Tiles final : public QOpenGLWindow {
     void observe_visibility();
     void vertices(const float *data, unsigned count, unsigned stride);
     void release_current(unsigned slot);
-    void draw_text_overlay(const QString &, float x, float y, float w, float h,
-                           bool bottom = false);
+    void draw_text_overlay(const QString &, float x, float y, float w, float h, bool bottom = false,
+                           bool right = false, QColor color = Qt::white, double size = 22);
 };
 class Window final : public QMainWindow {
   public:

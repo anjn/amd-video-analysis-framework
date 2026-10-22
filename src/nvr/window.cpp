@@ -259,8 +259,8 @@ void Tiles::release_current(unsigned slot) {
     s.preview[old].state = 3;
     current_[slot] = -1;
 }
-void Tiles::draw_text_overlay(const QString &text, float x, float y, float w, float h,
-                              bool bottom) {
+void Tiles::draw_text_overlay(const QString &text, float x, float y, float w, float h, bool bottom,
+                              bool align_right, QColor color, double size) {
     VectorText::Run run;
     try {
         run = overlay_font_.layout(text);
@@ -271,12 +271,12 @@ void Tiles::draw_text_overlay(const QString &text, float x, float y, float w, fl
     if (run.triangles.empty() || run.width <= 0 || run.height <= 0)
         return;
     const float available_width = width() * w / 2, available_height = height() * h / 2;
-    const double scale = std::max(0., std::min({22. / 64., (available_width - 16) / run.width,
+    const double scale = std::max(0., std::min({size / 64., (available_width - 16) / run.width,
                                                 (available_height - 16) / run.height}));
     if (scale <= 0)
         return;
     const float dx = 2.f / width(), dy = 2.f / height(), pad = 6;
-    const float left = x + 8 * dx;
+    const float left = align_right ? x + w - (run.width * scale + 8) * dx : x + 8 * dx;
     const float top = bottom ? y - h + (run.height * scale + 8) * dy : y - 8 * dy;
     const float baseline = top - run.ascent * scale * dy;
     std::vector<float> points;
@@ -297,7 +297,7 @@ void Tiles::draw_text_overlay(const QString &text, float x, float y, float w, fl
                                 left - pad * dx, bottom_edge,    right, bottom_edge};
     vertices(background, 4, 2);
     gl_->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    gl_->glUniform4f(pen, 1, 1, 1, 1);
+    gl_->glUniform4f(pen, color.redF(), color.greenF(), color.blueF(), 1);
     vertices(points.data(), points.size() / 2, 2);
     gl_->glDrawArrays(GL_TRIANGLES, 0, points.size() / 2);
     gl_->glDisable(GL_BLEND);
@@ -341,14 +341,15 @@ void Tiles::draw_detection_overlay(const OverlayFrame &overlay, const QRectF &vi
             fill({box.left() - thick / 2, box.top(), thick, box.height()});
             fill({box.right() - thick / 2, box.top(), thick, box.height()});
         };
-        gl_->glUniform4f(pen, 0, 0, 0, .85f);
+        gl_->glUniform4f(pen, 0, 0, 0, .2f);
         border(5);
-        gl_->glUniform4f(pen, color[0], color[1], color[2], 1);
+        gl_->glUniform4f(pen, color[0], color[1], color[2], .4f);
         border(3);
+        if ((!playback_ && cell_count_ > 1 && focus_ < 0) || !object.tracking_id)
+            continue;
         QString text;
         if (object.tracking_id)
-            text = QString("#%1 ").arg(object.tracking_id);
-        text += QString("%1%").arg(qRound(b.score * 100));
+            text = QString("#%1").arg(object.tracking_id);
         VectorText::Run run;
         try {
             run = overlay_font_.layout(text);
@@ -379,7 +380,7 @@ void Tiles::draw_detection_overlay(const OverlayFrame &overlay, const QRectF &vi
             label.translate(0, lh + 2);
         }
         labels.push_back(label);
-        gl_->glUniform4f(pen, 0, 0, 0, .45f);
+        gl_->glUniform4f(pen, 0, 0, 0, .3f);
         fill(label);
         std::vector<float> glyphs;
         for (const auto &point : run.triangles) {
@@ -387,10 +388,25 @@ void Tiles::draw_detection_overlay(const OverlayFrame &overlay, const QRectF &vi
             glyphs.push_back(1 -
                              2 * (label.top() + pad + (run.ascent + point.y()) * scale) / height());
         }
-        gl_->glUniform4f(pen, color[0], color[1], color[2], 1);
+        gl_->glUniform4f(pen, color[0], color[1], color[2], .6f);
         vertices(glyphs.data(), glyphs.size() / 2, 2);
         gl_->glDrawArrays(GL_TRIANGLES, 0, glyphs.size() / 2);
     }
+    gl_->glDisable(GL_BLEND);
+}
+
+void Tiles::draw_pause(const QRectF &rect) {
+    const float half = rect.height() * .1f;
+    const float cx = rect.center().x(), cy = rect.center().y();
+    const float points[] = {2 * (cx - half * .75f) / width() - 1, 1 - 2 * (cy - half) / height(),
+                            2 * (cx - half * .75f) / width() - 1, 1 - 2 * (cy + half) / height(),
+                            2 * (cx + half * .75f) / width() - 1, 1 - 2 * cy / height()};
+    gl_->glUseProgram(box_program_);
+    gl_->glEnable(GL_BLEND);
+    gl_->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    gl_->glUniform4f(gl_->glGetUniformLocation(box_program_, "pen"), .7f, .7f, .7f, .55f);
+    vertices(points, 3, 2);
+    gl_->glDrawArrays(GL_TRIANGLES, 0, 3);
     gl_->glDisable(GL_BLEND);
 }
 
@@ -455,7 +471,7 @@ void Tiles::draw_recorded(const std::string &channel, const std::string &session
 }
 void Tiles::draw_preview() {
     try {
-        if (preview_current_ != preview_pending_) {
+        if (preview_pending_ && preview_current_ != preview_pending_) {
             release_preview();
             preview_current_ = preview_pending_;
             if (preview_current_) {
@@ -522,7 +538,7 @@ void Tiles::draw_preview() {
         draw_text_overlay(
             "Preview · " +
                 QDateTime::fromMSecsSinceEpoch(p.frame_ms).toString("yyyy-MM-dd HH:mm:ss"),
-            x, y, w, h, true);
+            x, y, w, h, true, true);
         displayed_playback_time_ = p.frame_ms;
     } catch (const std::exception &e) {
         preview_state_ = e.what();
@@ -549,7 +565,7 @@ void Tiles::paintGL() {
     gl_->glClear(GL_COLOR_BUFFER_BIT);
     if (!error_.empty() || !image_program_)
         return;
-    if (preview_mode_) {
+    if (preview_mode_ && (preview_pending_ || preview_current_)) {
         draw_preview();
         return;
     }
@@ -587,7 +603,7 @@ void Tiles::paintGL() {
                 }
             }
         }
-        if ((frozen_ || held_) && current_[i] >= 0)
+        if ((frozen_ || held_ || preview_mode_) && current_[i] >= 0)
             continue;
         if (s.channel.empty()) {
             release_current(i);
@@ -689,7 +705,7 @@ void Tiles::paintGL() {
                         overlay.objects.push_back(
                             {box, box.class_id == 0 ? "Person" : "Object", 0, {}});
             }
-            if (frozen_ || held_)
+            if (frozen_ || held_ || preview_mode_)
                 overlay = held_overlay_[index];
             else
                 held_overlay_[index] = overlay;
@@ -715,7 +731,7 @@ void Tiles::paintGL() {
         if (playback_ && p.wall_time_ms) {
             draw_text_overlay(
                 QDateTime::fromMSecsSinceEpoch(p.wall_time_ms).toString("yyyy-MM-dd HH:mm:ss"), x,
-                y, w, h, true);
+                y, w, h, true, true);
             displayed_playback_time_ = p.wall_time_ms;
         }
         if (playback_ || active.size() == 1) {
@@ -726,7 +742,10 @@ void Tiles::paintGL() {
                         name = status.source.name;
             draw_text_overlay(qs(name), x, y, w, h);
             if (!playback_)
-                draw_text_overlay(held_ ? "Live · Paused" : "Live", x, y, w, h, true);
+                draw_text_overlay(held_ ? "Live · Paused" : "Live", x, y, w, h, false, true,
+                                  held_ ? QColor(255, 220, 70) : QColor(90, 255, 125));
+            if ((held_ || paused_) && !preview_mode_)
+                draw_pause(video_rect_);
         }
         if (!playback_ && stream_info_visible_) {
             const auto source =
@@ -743,7 +762,12 @@ void Tiles::paintGL() {
                                 .arg(codec, resolution)
                                 .arg(source->input_fps, 0, 'f', 1)
                                 .arg(source->input_mbps, 0, 'f', 1);
-                draw_text_overlay(text, x, y, w, active.size() == 1 ? h - .12f : h, true);
+                const auto latency = decode_latency.find(s.channel);
+                text += latency == decode_latency.end()
+                            ? "  decode N/A"
+                            : QString("  decode %1 ms").arg(latency->second, 0, 'f', 1);
+                draw_text_overlay(text, x, y, w, h, true, false, Qt::white,
+                                  active.size() == 1 ? 22 : 14);
                 displayed_stream_info_[focus_ >= 0 ? unsigned(focus_) : tile] = text;
             }
         }

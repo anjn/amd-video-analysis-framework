@@ -11,7 +11,7 @@ class RecordingTimeline final : public QWidget {
     void position(int64_t);
     int64_t oldest() const { return from_; }
     int64_t latest() const { return to_; }
-    int64_t time_at(double x) const;
+    int64_t time_at(double y) const;
     std::function<void(int64_t)> seek_requested;
     std::function<void(std::optional<int64_t>, QPoint)> preview_requested;
 
@@ -26,7 +26,7 @@ class RecordingTimeline final : public QWidget {
     amdva::streaming::RecordingCoverage coverage_;
     int64_t from_{}, to_{}, position_{}, hover_{};
     bool hovering_{}, dragging_{};
-    double pointer_x_{};
-    double x_at(int64_t) const;
+    double pointer_y_{};
+    double y_at(int64_t) const;
 };
 } // namespace amdva::nvr
