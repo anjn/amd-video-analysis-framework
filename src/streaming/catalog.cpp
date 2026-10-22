@@ -159,7 +159,8 @@ uint64_t Catalog::bytes() const {
             total += uint64_t(st.st_size);
     }
     Statement payload(
-        db_, "SELECT COALESCE(SUM(length(png)+length(embedding)+256),0) FROM observations");
+        db_, "SELECT COALESCE(SUM(length(png)+length(embedding)+COALESCE(length(reid),0)+256),0) "
+             "FROM observations");
     if (sqlite3_step(payload.p) == SQLITE_ROW)
         total += sqlite3_column_int64(payload.p, 0);
     return total;

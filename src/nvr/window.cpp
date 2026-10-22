@@ -1,6 +1,7 @@
 #include "window.hpp"
 #include "amdva/overlay.hpp"
 #include <QApplication>
+#include <QColor>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -297,6 +298,97 @@ void Tiles::draw_text_overlay(const QString &text, float x, float y, float w, fl
     gl_->glDisable(GL_BLEND);
 }
 
+void Tiles::draw_detection_overlay(const OverlayFrame &overlay, const QRectF &video) {
+    // Geometry uses logical display pixels, so grid size and device scaling never
+    // shrink text or depend on the GLES implementation's supported line widths.
+    gl_->glUseProgram(box_program_);
+    const auto pen = gl_->glGetUniformLocation(box_program_, "pen");
+    gl_->glEnable(GL_BLEND);
+    gl_->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    auto fill = [&](QRectF r) {
+        r = r.intersected(video);
+        if (r.isEmpty())
+            return;
+        float l = 2 * r.left() / width() - 1, t = 1 - 2 * r.top() / height();
+        float right = 2 * r.right() / width() - 1, b = 1 - 2 * r.bottom() / height();
+        float points[] = {l, t, right, t, l, b, right, b};
+        vertices(points, 4, 2);
+        gl_->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    };
+    std::vector<QRectF> labels;
+    for (const auto &object : overlay.objects) {
+        const auto &b = object.box;
+        auto box =
+            QRectF(video.left() + video.width() * b.x / overlay.width,
+                   video.top() + video.height() * b.y / overlay.height,
+                   video.width() * b.w / overlay.width, video.height() * b.h / overlay.height)
+                .intersected(video);
+        if (box.isEmpty())
+            continue;
+        const auto tint =
+            object.tracking_id
+                ? QColor::fromHsvF(std::fmod(object.tracking_id * .618033988749895, 1.), .65, 1.)
+                : QColor::fromRgbF(.85, .85, .85);
+        const float color[] = {float(tint.redF()), float(tint.greenF()), float(tint.blueF())};
+        auto border = [&](float thick) {
+            fill({box.left() - thick / 2, box.top() - thick / 2, box.width() + thick, thick});
+            fill({box.left() - thick / 2, box.bottom() - thick / 2, box.width() + thick, thick});
+            fill({box.left() - thick / 2, box.top(), thick, box.height()});
+            fill({box.right() - thick / 2, box.top(), thick, box.height()});
+        };
+        gl_->glUniform4f(pen, 0, 0, 0, .85f);
+        border(5);
+        gl_->glUniform4f(pen, color[0], color[1], color[2], 1);
+        border(3);
+        QString text;
+        if (object.tracking_id)
+            text = QString("#%1 ").arg(object.tracking_id);
+        text += QString("%1%").arg(qRound(b.score * 100));
+        VectorText::Run run;
+        try {
+            run = overlay_font_.layout(text);
+        } catch (const std::exception &e) {
+            error_ = e.what();
+            continue;
+        }
+        const double scale = 16. / 64., pad = 4;
+        // Keep the font size fixed; remove trailing characters on very small tiles.
+        while (run.width * scale + 2 * pad > video.width() && text.size() > 1) {
+            text.chop(1);
+            run = overlay_font_.layout(text);
+        }
+        double lw = run.width * scale + 2 * pad, lh = run.height * scale + 2 * pad;
+        if (lw > video.width() || lh > video.height())
+            continue;
+        double left = std::clamp(box.left(), video.left(), video.right() - lw);
+        double top = box.top() - lh - 3;
+        if (top < video.top())
+            top = box.top() + 3;
+        top = std::clamp(top, video.top(), video.bottom() - lh);
+        QRectF label(left, top, lw, lh);
+        for (unsigned attempt = 0; attempt < 8; ++attempt) {
+            bool collision = std::any_of(labels.begin(), labels.end(),
+                                         [&](const auto &r) { return r.intersects(label); });
+            if (!collision || label.bottom() + lh + 2 > video.bottom())
+                break;
+            label.translate(0, lh + 2);
+        }
+        labels.push_back(label);
+        gl_->glUniform4f(pen, 0, 0, 0, .45f);
+        fill(label);
+        std::vector<float> glyphs;
+        for (const auto &point : run.triangles) {
+            glyphs.push_back(2 * (label.left() + pad + point.x() * scale) / width() - 1);
+            glyphs.push_back(1 -
+                             2 * (label.top() + pad + (run.ascent + point.y()) * scale) / height());
+        }
+        gl_->glUniform4f(pen, color[0], color[1], color[2], 1);
+        vertices(glyphs.data(), glyphs.size() / 2, 2);
+        gl_->glDrawArrays(GL_TRIANGLES, 0, glyphs.size() / 2);
+    }
+    gl_->glDisable(GL_BLEND);
+}
+
 void Tiles::paintGL() {
     displayed_playback_time_ = 0;
     displayed_stream_info_.fill({});
@@ -422,30 +514,37 @@ void Tiles::paintGL() {
         p.timing.mark(TimingStage::Draw);
         if (p.timing.telemetry && !p.timing.frame.ns[unsigned(TimingStage::Swap)])
             pending_swap_.push_back({index, unsigned(image), p.timing});
-        if (Clock::now() - s.detected_at <= std::chrono::milliseconds(500) &&
-            p.original_width == s.detection_width && p.original_height == s.detection_height) {
-            gl_->glUseProgram(box_program_);
-            gl_->glUniform4f(gl_->glGetUniformLocation(box_program_, "pen"), .1f, 1.f, .2f, 1.f);
+        if (!playback_) {
             OverlayFrame overlay{s.detection_width, s.detection_height, {}, {}};
-            if (!s.tracked.empty())
-                for (const auto &tracked : s.tracked)
-                    overlay.objects.push_back({tracked.box, tracked.label, tracked.id, {}});
-            else
-                for (const auto &box : s.detections)
-                    overlay.objects.push_back({box, "", 0, {}});
-            const auto lines = make_overlay_lines(overlay, s.detection_width, s.detection_height);
-            std::vector<float> points;
-            points.reserve(lines.size() * 4);
-            for (const auto &line : lines) {
-                points.push_back(x + w * line.x0 / s.detection_width);
-                points.push_back(y - h * line.y0 / s.detection_height);
-                points.push_back(x + w * line.x1 / s.detection_width);
-                points.push_back(y - h * line.y1 / s.detection_height);
+            bool person_tracking = false;
+            if (auto *search = controller_.search_service()) {
+                const auto tracking = search->tracks(s.channel);
+                person_tracking = tracking.generation == p.generation &&
+                                  tracking.width == p.original_width &&
+                                  tracking.height == p.original_height && tracking.generation != 0;
+                if (person_tracking &&
+                    Clock::now() - tracking.captured <= std::chrono::seconds(1)) {
+                    overlay.width = tracking.width;
+                    overlay.height = tracking.height;
+                    for (const auto &object : tracking.objects)
+                        overlay.objects.push_back({object.box, "Person", object.person, {}});
+                }
             }
-            if (!points.empty()) {
-                vertices(points.data(), points.size() / 2, 2);
-                gl_->glDrawArrays(GL_LINES, 0, points.size() / 2);
+            if (!person_tracking &&
+                Clock::now() - s.detected_at <= std::chrono::milliseconds(500) &&
+                p.original_width == s.detection_width && p.original_height == s.detection_height) {
+                if (!s.tracked.empty())
+                    for (const auto &tracked : s.tracked)
+                        overlay.objects.push_back({tracked.box, tracked.label, tracked.id, {}});
+                else
+                    for (const auto &box : s.detections)
+                        overlay.objects.push_back(
+                            {box, box.class_id == 0 ? "Person" : "Object", 0, {}});
             }
+            if (overlay.width && overlay.height)
+                draw_detection_overlay(overlay,
+                                       QRectF((x + 1) * width() / 2, (1 - y) * height() / 2,
+                                              w * width() / 2, h * height() / 2));
         }
         if (playback_ && dragging_) {
             auto rect =

@@ -154,6 +154,11 @@ struct SearchPage::Impl {
                          time(g.from_ms), time(g.to_ms))
                     .arg(g.similarity, 0, 'f', 3)
                     .arg(g.images.size()));
+            if (!g.person_id.empty())
+                title->setText(
+                    "Person " +
+                    QString::fromStdString(g.person_id.substr(g.person_id.rfind('/') + 1)) + " · " +
+                    title->text());
             title->setTextFormat(Qt::PlainText);
             l->addWidget(title);
             auto *thumbs = new QHBoxLayout;
@@ -185,15 +190,35 @@ struct SearchPage::Impl {
                         return out;
                     });
                 });
+            auto *appearances = new QComboBox;
+            std::map<std::string, std::pair<int64_t, int64_t>> intervals;
+            for (const auto &im : g.images) {
+                auto key = im.track_id.empty() ? std::string("legacy") : im.track_id;
+                auto it = intervals.find(key);
+                if (it == intervals.end())
+                    intervals[key] = {im.time_ms, im.time_ms};
+                else {
+                    it->second.first = std::min(it->second.first, im.time_ms);
+                    it->second.second = std::max(it->second.second, im.time_ms);
+                }
+            }
+            for (const auto &[id, span] : intervals) {
+                appearances->addItem(time(span.first) + " – " + time(span.second),
+                                     QVariant::fromValue<qlonglong>(span.first));
+                appearances->setItemData(appearances->count() - 1,
+                                         QVariant::fromValue<qlonglong>(span.second),
+                                         Qt::UserRole + 1);
+            }
+            l->addWidget(appearances);
             auto *play = new QPushButton("Play nearby video");
             l->addWidget(play);
-            QObject::connect(play, &QPushButton::clicked, &page, [this, card, i] {
+            QObject::connect(play, &QPushButton::clicked, &page, [this, card, i, appearances] {
                 if (!player)
                     player = std::make_unique<TimelinePlaybackSession>(
                         controller.display(), controller.recording_catalog());
                 const auto &g = groups[i];
-                start = std::max<int64_t>(0, g.from_ms - 5000);
-                end = g.to_ms + 5000;
+                start = std::max<int64_t>(0, appearances->currentData().toLongLong() - 5000);
+                end = appearances->currentData(Qt::UserRole + 1).toLongLong() + 5000;
                 if (active_card != card) {
                     delete tiles;
                     tiles = nullptr;

@@ -1,7 +1,9 @@
 #pragma once
 #include "amdva/model.hpp"
 #include "amdva/runtime.hpp"
+#include "amdva/streaming/person_tracking.hpp"
 #include <array>
+#include <chrono>
 #include <functional>
 #include <future>
 #include <gst/va/gstvadisplay.h>
@@ -10,7 +12,7 @@ class Catalog;
 struct Frame;
 struct SearchOptions {
     bool enabled{};
-    std::string library{"libeg2.so"}, bundle;
+    std::string library{"libeg2.so"}, bundle, reid_model;
     unsigned device{}, image_size{384}, interval_ms{1000}, queue_limit{64};
 };
 struct SearchImage {
@@ -24,12 +26,15 @@ struct SearchObservation {
     std::vector<uint8_t> png;
     std::array<float, 768> embedding{};
     double similarity{};
+    std::string person_id, track_id;
+    ReIdFeature reid{};
 };
 struct SearchGroup {
     std::string channel, camera_name;
     int64_t from_ms{}, to_ms{};
     double similarity{};
     std::vector<SearchObservation> images;
+    std::string person_id;
 };
 struct SearchResult {
     uint64_t request{};
@@ -56,6 +61,16 @@ class SearchCropper {
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
+struct PersonTrackFrame {
+    struct Object {
+        Detection box{};
+        uint64_t person{};
+    };
+    uint64_t generation{};
+    unsigned width{}, height{};
+    std::chrono::steady_clock::time_point captured{};
+    std::vector<Object> objects;
+};
 class SearchService {
   public:
     SearchService(Catalog &, GstVaDisplay *, SearchOptions);
@@ -66,6 +81,7 @@ class SearchService {
     void cancel();
     SearchResult result() const;
     SearchStatus status() const;
+    PersonTrackFrame tracks(const std::string &channel) const;
     void shutdown();
     void wait_initialized();
 

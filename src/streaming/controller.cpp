@@ -467,6 +467,44 @@ struct Controller::Channel {
         background_slot = -1;
         state.background_active = false;
     }
+    bool continuous_search() const {
+        return controller.options_.search.enabled && !controller.options_.search.reid_model.empty();
+    }
+    void continuous_background(Sample &sample, bool key) {
+        if (background_slot < 0 && key) {
+            for (unsigned i = 0; i < controller.background_slots_.size(); ++i) {
+                auto &s = controller.background_slots_[i];
+                std::lock_guard<std::mutex> l(s.mutex);
+                if (!s.channel.empty())
+                    continue;
+                s.channel = state.source.id;
+                s.generation = state.generation;
+                s.latest = {};
+                s.detections.clear();
+                s.job_done = false;
+                s.last_ai = {};
+                background_slot = 16 + i;
+                state.background_active = true;
+                break;
+            }
+        }
+        if (background_slot < 0) {
+            state.background_state = "waiting for continuous AI capacity (4 hidden cameras)";
+            return;
+        }
+        try {
+            if (!decoder && key)
+                start_decoder(gst_sample_get_caps(sample.get()));
+            if (decoder && !push(decode_input, sample, decode_origin)) {
+                cancel_background();
+                state.background_state = "continuous decode backlog";
+            } else
+                state.background_state = "continuous person tracking";
+        } catch (const std::exception &e) {
+            cancel_background();
+            state.background_state = e.what();
+        }
+    }
     void poll_background() {
         if (background_slot < 0)
             return;
@@ -486,6 +524,13 @@ struct Controller::Channel {
                 state.background_capture_us = background_capture_us;
                 background_result_at = s.detected_at;
             }
+        }
+        if (continuous_search()) {
+            if (done) {
+                std::lock_guard<std::mutex> l(s.mutex);
+                s.job_done = false;
+            }
+            return;
         }
         if (done) {
             state.background_state = "waiting for keyframe";
@@ -820,8 +865,12 @@ struct Controller::Channel {
                 controller.options_.background_ai_enabled
                     ? keyframes.observe(gst_sample_get_buffer(sample.get()), codec.load())
                     : false;
-            if (state.slot < 0 && controller.options_.background_ai_enabled)
-                background(sample, independent);
+            if (state.slot < 0 && controller.options_.background_ai_enabled) {
+                if (continuous_search())
+                    continuous_background(sample, key);
+                else
+                    background(sample, independent);
+            }
             if (state.slot >= 0) {
                 try {
                     if (!decoder && key)
@@ -1388,6 +1437,8 @@ void Controller::gpu_loop() {
         configuration.size = options_.batch;
         configuration.timeout_ms = 0;
         const auto prefix = "nvr/" + std::to_string(reinterpret_cast<uintptr_t>(this));
+        if (options_.search.enabled && !options_.search.reid_model.empty())
+            configuration.confidence = .1f;
         configuration.instance_id = prefix + "/batch";
         auto batch = SharedBatchExecutor::acquire(configuration);
         const auto &info = batch->info();
@@ -1459,7 +1510,9 @@ void Controller::gpu_loop() {
                 const unsigned index = 16 + (background_cursor + i) % 4;
                 auto &s = ai_slot(index);
                 std::lock_guard<std::mutex> l(s.mutex);
-                if (!s.channel.empty() && s.latest.sample && !s.job_done) {
+                if (!s.channel.empty() && s.latest.sample &&
+                    (!s.job_done ||
+                     (options_.search.enabled && !options_.search.reid_model.empty()))) {
                     order.push_back(index);
                     break;
                 }
@@ -1486,8 +1539,11 @@ void Controller::gpu_loop() {
                     previous[index].reset();
                     continue;
                 }
-                if (s.job_done || s.latest.sample == previous[index] ||
-                    (index < 16 &&
+                if ((s.job_done &&
+                     !(options_.search.enabled && !options_.search.reid_model.empty())) ||
+                    s.latest.sample == previous[index] ||
+                    ((index < 16 ||
+                      (options_.search.enabled && !options_.search.reid_model.empty())) &&
                      std::chrono::duration<double>(now - s.last_ai).count() < 1.0 / rate))
                     continue;
                 const auto &f = s.latest;
@@ -1600,6 +1656,10 @@ void Controller::gpu_loop() {
                 }
                 if (search_)
                     search_->submit(item.frame, item.channel, s.detections);
+                if (options_.search.enabled && !options_.search.reid_model.empty())
+                    s.detections.erase(std::remove_if(s.detections.begin(), s.detections.end(),
+                                                      [](const auto &b) { return b.score < .25f; }),
+                                       s.detections.end());
                 s.detected_at = item.frame.received;
                 s.detection_width = item.frame.width;
                 s.detection_height = item.frame.height;

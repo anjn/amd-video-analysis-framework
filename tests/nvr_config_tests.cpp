@@ -40,15 +40,19 @@ int main(int argc, char **argv) {
                 "Search defaults");
         {
             auto value = base;
-            value["search"] =
-                QJsonObject{{"enabled", true}, {"bundle", "bundle"}, {"image_size", 384}};
+            value["search"] = QJsonObject{{"enabled", true},
+                                          {"bundle", "bundle"},
+                                          {"image_size", 384},
+                                          {"reid_model", "osnet.mxr"}};
             write(value);
             auto search = load_config(path);
             require(search.search.enabled && search.background_ai_enabled &&
                         search.search.bundle == (dir / "bundle"),
                     "Search config and hidden cameras");
             save_config(path, search);
-            require(load_config(path).search.bundle == search.search.bundle, "Search roundtrip");
+            require(load_config(path).search.bundle == search.search.bundle &&
+                        load_config(path).search.reid_model == (dir / "osnet.mxr"),
+                    "Search and ReID roundtrip");
             for (int size : {0, 31, 1025}) {
                 value["search"] = QJsonObject{{"image_size", size}};
                 write(value);

@@ -40,3 +40,13 @@ which links LibTorch/PyTorch (BSD-style and bundled component licenses) and ROCm
 The pinned source revision is recorded in `dependencies.lock.json`; retain its
 third-party notices when distributing that runtime. Google EmbeddingGemma 2
 weights and compiled bundles retain their own upstream model terms.
+
+### Optional OSNet person ReID
+
+OSNet model preparation uses `torchreid/models/osnet.py` from
+[KaiyangZhou/deep-person-reid](https://github.com/KaiyangZhou/deep-person-reid)
+(MIT). The external source revision and MSMT17-trained checkpoint hashes are
+recorded in `dependencies.lock.json`; neither source nor weights are bundled.
+The native person association code implements a fixed-camera adaptation of the
+[BoT-SORT algorithm](https://github.com/NirAharon/BoT-SORT) locally; upstream
+Python code is not included.

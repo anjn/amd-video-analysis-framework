@@ -1,4 +1,5 @@
 #pragma once
+#include "amdva/overlay.hpp"
 #include "amdva/streaming/playback.hpp"
 #include "controller.hpp"
 #include "vector_text.hpp"
@@ -73,6 +74,7 @@ class Tiles final : public QOpenGLWindow {
     unsigned selected_{};
     bool playback_time_visible_{true}, stream_info_visible_{true};
     VectorText overlay_font_;
+    void draw_detection_overlay(const OverlayFrame &, const QRectF &);
     std::array<QString, 16> displayed_stream_info_{};
     int64_t displayed_playback_time_{};
     unsigned picked(const QPointF &) const;

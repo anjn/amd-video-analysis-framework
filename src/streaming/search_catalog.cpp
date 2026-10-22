@@ -62,6 +62,19 @@ void Catalog::initialize_search() {
         "AND OLD.duration_ns>=0 AND "
         "time_ms<COALESCE(OLD.media_started_ms,OLD.created)+(OLD.duration_ns+999999)/1000000); "
         "END;");
+    for (const auto *column : {"person_id", "track_id", "reid"}) {
+        Query info(db_, "PRAGMA table_info(observations)");
+        bool found = false;
+        while (sqlite3_step(info.p) == SQLITE_ROW)
+            found |= str(info.p, 1) == column;
+        if (!found) {
+            std::string alter =
+                std::string("ALTER TABLE observations ADD COLUMN ") + column +
+                (std::string(column) == "reid" ? " BLOB" : " TEXT NOT NULL DEFAULT ''");
+            sql(alter.c_str());
+        }
+    }
+    sql("CREATE INDEX IF NOT EXISTS observations_person ON observations(model,channel,person_id);");
     reconcile_search();
 }
 void Catalog::reconcile_search() {
@@ -97,18 +110,29 @@ void Catalog::reconcile_search() {
 }
 bool Catalog::store_observation(const SearchObservation &o) {
     validate(o.embedding);
+    if (!o.person_id.empty()) {
+        double norm = 0;
+        for (float value : o.reid) {
+            if (!std::isfinite(value))
+                throw std::invalid_argument("Invalid ReID feature");
+            norm += value * value;
+        }
+        if (o.track_id.empty() || norm < .99 || norm > 1.01)
+            throw std::invalid_argument("Invalid person identity");
+    }
     if (o.png.empty() || o.png.size() > 4 * 1024 * 1024 || o.model.empty() || o.session.empty())
         throw std::invalid_argument("Invalid observation");
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     // A deleted/retired recording cannot be resurrected by an in-flight inference.
-    Query q(
-        db_,
-        "INSERT INTO observations(channel,session,time_ms,model,x,y,w,h,score,png,embedding) "
-        "SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11 WHERE EXISTS(SELECT 1 FROM recordings r WHERE "
-        "r.channel=?1 AND r.session=?2 AND ((r.active=1 AND "
-        "?3>=COALESCE(r.media_started_ms,r.created)) OR (r.state='finalized' AND "
-        "?3>=COALESCE(r.media_started_ms,r.created) AND "
-        "?3<COALESCE(r.media_started_ms,r.created)+(r.duration_ns+999999)/1000000)))");
+    Query q(db_, "INSERT INTO "
+                 "observations(channel,session,time_ms,model,x,y,w,h,score,png,embedding,person_id,"
+                 "track_id,reid) "
+                 "SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14 WHERE EXISTS(SELECT 1 FROM "
+                 "recordings r WHERE "
+                 "r.channel=?1 AND r.session=?2 AND ((r.active=1 AND "
+                 "?3>=COALESCE(r.media_started_ms,r.created)) OR (r.state='finalized' AND "
+                 "?3>=COALESCE(r.media_started_ms,r.created) AND "
+                 "?3<COALESCE(r.media_started_ms,r.created)+(r.duration_ns+999999)/1000000)))");
     q.text(1, o.channel);
     q.text(2, o.session);
     sqlite3_bind_int64(q.p, 3, o.time_ms);
@@ -120,6 +144,10 @@ bool Catalog::store_observation(const SearchObservation &o) {
     sqlite3_bind_double(q.p, 9, o.box.score);
     q.blob(10, o.png.data(), o.png.size());
     q.blob(11, o.embedding.data(), sizeof(o.embedding));
+    q.text(12, o.person_id);
+    q.text(13, o.track_id);
+    if (!o.person_id.empty())
+        q.blob(14, o.reid.data(), sizeof(o.reid));
     q.done();
     return sqlite3_changes(db_) != 0;
 }
@@ -130,7 +158,7 @@ std::vector<SearchObservation> Catalog::search(const std::array<float, 768> &v,
     reconcile_search();
     Query q(db_, "SELECT "
                  "o.id,o.channel,r.camera_name,o.time_ms,o.recording,1-vec_distance_cosine(o."
-                 "embedding,?1) AS similarity "
+                 "embedding,?1) AS similarity,o.person_id,o.track_id "
                  "FROM observations o JOIN recordings r ON r.name=o.recording WHERE o.model=?2 AND "
                  "r.state='finalized' "
                  "ORDER BY similarity DESC,o.id LIMIT 500");
@@ -146,6 +174,8 @@ std::vector<SearchObservation> Catalog::search(const std::array<float, 768> &v,
         o.time_ms = sqlite3_column_int64(q.p, 3);
         o.recording = str(q.p, 4);
         o.similarity = sqlite3_column_double(q.p, 5);
+        o.person_id = str(q.p, 6);
+        o.track_id = str(q.p, 7);
         // Match the catalog's no-symlink/missing-file checks without pinning every hit.
         struct stat st {};
         if (fstatat(directory_, o.recording.c_str(), &st, AT_SYMLINK_NOFOLLOW) != 0 ||

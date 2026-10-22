@@ -65,6 +65,10 @@ int main(int argc, char **argv) {
                     throw std::runtime_error("Validation timed out");
                 if (stage == 0 && tick >= 75 && state.stored >= 6 &&
                     controller.recordings().size() >= 2) {
+                    if (qEnvironmentVariableIsSet("AMDVA_VALIDATE_CAPTURE"))
+                        window.live_view()->grabFramebuffer().save(QString::fromStdString(
+                            (std::filesystem::path(argv[1]).parent_path() / "person-overlay.png")
+                                .string()));
                     tabs->setCurrentIndex(3);
                     input->setText("a person wearing a purple skirt");
                     submit->click();
@@ -76,6 +80,19 @@ int main(int argc, char **argv) {
                     if (r.request && !r.groups.empty()) {
                         std::cout << "English groups=" << r.groups.size()
                                   << " best=" << r.groups.front().similarity << std::endl;
+                        if (!options.search.reid_model.empty()) {
+                            for (const auto &g : r.groups) {
+                                if (g.person_id.empty())
+                                    throw std::runtime_error("Missing person ID");
+                                for (const auto &im : g.images)
+                                    if (im.person_id != g.person_id || im.channel != g.channel ||
+                                        im.track_id.empty())
+                                        throw std::runtime_error("Mixed person identities");
+                            }
+                            std::cout << "PASS: person cards contain a single camera/person and "
+                                         "tracklet IDs"
+                                      << std::endl;
+                        }
                         observation_id = r.groups.front().images.front().id;
                         auto png = controller.recording_catalog().observation_image(observation_id);
                         QFile picture(QString::fromStdString(

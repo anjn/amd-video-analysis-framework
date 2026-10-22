@@ -134,6 +134,14 @@ Options load_config(const std::string &path) {
             *field.second = unsigned(v);
         }
     }
+    if (json_object_has_member(root, "search")) {
+        auto *search = required_object(root, "search");
+        if (json_object_has_member(search, "reid_model")) {
+            std::string value = required_string(search, "reid_model");
+            if (!value.empty())
+                o.search.reid_model = (dir / value).lexically_normal().string();
+        }
+    }
     if (o.search.image_size < 32 || o.search.image_size > 1024 || o.search.device > 15 ||
         o.search.interval_ms < 100 || !o.search.queue_limit || o.search.queue_limit > 1024 ||
         (o.search.enabled && o.search.bundle.empty()))
@@ -241,6 +249,7 @@ void save_config(const std::string &path, const Options &o) {
     json_object_set_boolean_member(search, "enabled", o.search.enabled);
     json_object_set_string_member(search, "library", o.search.library.c_str());
     json_object_set_string_member(search, "bundle", o.search.bundle.c_str());
+    json_object_set_string_member(search, "reid_model", o.search.reid_model.c_str());
     json_object_set_int_member(search, "device", o.search.device);
     json_object_set_int_member(search, "image_size", o.search.image_size);
     json_object_set_int_member(search, "interval_ms", o.search.interval_ms);

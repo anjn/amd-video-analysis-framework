@@ -1,6 +1,7 @@
 #include "amdva/streaming/search.hpp"
 #include "../model_json.hpp"
 #include "amdva/streaming/controller.hpp"
+#include "reid.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -8,6 +9,7 @@
 #include <fstream>
 #include <gst/va/gstva.h>
 #include <png.h>
+#include <random>
 #include <sstream>
 extern "C" void amdva_audit_search_begin(const void *, size_t, int) __attribute__((weak));
 extern "C" void amdva_audit_search_end() __attribute__((weak));
@@ -48,14 +50,18 @@ std::vector<uint8_t> search_letterbox(const SearchImage &im, unsigned size) {
 }
 std::vector<SearchGroup> group_search_results(std::vector<SearchObservation> hits) {
     std::sort(hits.begin(), hits.end(), [](const auto &a, const auto &b) {
-        return std::tie(a.channel, a.time_ms, a.id) < std::tie(b.channel, b.time_ms, b.id);
+        return std::tie(a.channel, a.person_id, a.time_ms, a.id) <
+               std::tie(b.channel, b.person_id, b.time_ms, b.id);
     });
     std::vector<SearchGroup> groups;
     for (auto &o : hits) {
         if (groups.empty() || groups.back().channel != o.channel ||
-            o.time_ms - groups.back().to_ms > 10000 || o.time_ms - groups.back().from_ms > 60000)
+            groups.back().person_id != o.person_id ||
+            (o.person_id.empty() && (o.time_ms - groups.back().to_ms > 10000 ||
+                                     o.time_ms - groups.back().from_ms > 60000)))
             groups.push_back({o.channel, o.camera_name, o.time_ms, o.time_ms, o.similarity, {}});
         auto &g = groups.back();
+        g.person_id = o.person_id;
         g.to_ms = o.time_ms;
         g.similarity = std::max(g.similarity, o.similarity);
         g.images.push_back(std::move(o));
@@ -231,6 +237,10 @@ std::string fingerprint(const SearchOptions &o) {
         s << f.rdbuf();
         input += s.str();
     };
+    if (!o.reid_model.empty()) {
+        input += "osnet-person-v1/";
+        append(o.reid_model);
+    }
     append(root / "index.json");
     auto *profiles = required_array(index.object(), "profiles");
     for (unsigned i = 0; i < json_array_get_length(profiles); ++i) {
@@ -252,10 +262,21 @@ struct SearchService::Impl {
     std::condition_variable cv;
     std::thread worker;
     bool stopping{};
+    std::map<std::string, std::unique_ptr<PersonTracker>> trackers;
+    std::map<std::string, int64_t> last_saved;
+    std::map<std::string, std::string> tracker_sessions;
+    std::map<std::string, PersonTrackFrame> track_frames;
+    std::string run_id =
+        std::to_string(std::random_device{}()) + "-" +
+        std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
     struct Job {
         Frame frame;
         std::string channel;
         std::vector<Detection> boxes;
+        std::vector<SearchImage> images;
+        std::vector<ReIdFeature> features;
+        std::vector<PersonIdentity> identities;
+        bool prepared{};
     };
     std::deque<Job> jobs;
     std::map<std::string, Clock::time_point> admitted;
@@ -296,6 +317,11 @@ struct SearchService::Impl {
             Embedder model(options);
             SearchCropper cropper(display, options.image_size, options.device);
             auto key = fingerprint(options);
+            std::unique_ptr<ReIdModel> reid;
+            if (!options.reid_model.empty()) {
+                reid = std::make_unique<ReIdModel>(options.reid_model, options.device);
+                reid->encode({1, 1, {128, 128, 128}});
+            }
             // Validate both profiles before accepting collection work.
             SearchImage warm{1, 1, {0, 0, 0}};
             model.encode(&warm, "", options.image_size);
@@ -321,6 +347,7 @@ struct SearchService::Impl {
                         jobs.pop_front();
                     }
                 }
+                const auto job_crops = job.boxes.size();
                 try {
                     auto started = Clock::now();
                     if (request.id) {
@@ -334,30 +361,101 @@ struct SearchService::Impl {
                     } else {
                         // One crop per scheduling turn; a pending user query runs before the next
                         // crop.
+                        if (reid && !job.prepared) {
+                            std::vector<PersonDetection> detections;
+                            for (auto box : job.boxes) {
+                                auto im = cropper.crop(
+                                    gst_va_buffer_get_surface(
+                                        gst_sample_get_buffer(job.frame.sample.get())),
+                                    job.frame.width, job.frame.height,
+                                    search_crop(box, job.frame.width, job.frame.height));
+                                auto feature = reid->encode(im);
+                                detections.push_back({box, feature});
+                                job.images.push_back(std::move(im));
+                                job.features.push_back(feature);
+                            }
+                            auto &tracker = trackers[job.channel];
+                            if (tracker_sessions[job.channel] != job.frame.recording_session) {
+                                tracker.reset();
+                                tracker_sessions[job.channel] = job.frame.recording_session;
+                            }
+                            for (auto it = last_saved.begin(); it != last_saved.end();) {
+                                if (job.frame.wall_time_ms - it->second > 60000)
+                                    it = last_saved.erase(it);
+                                else
+                                    ++it;
+                            }
+                            if (!tracker)
+                                tracker = std::make_unique<PersonTracker>();
+                            job.identities = tracker->update(job.frame.wall_time_ms, detections);
+                            PersonTrackFrame tracking;
+                            tracking.generation = job.frame.generation;
+                            tracking.width = job.frame.width;
+                            tracking.height = job.frame.height;
+                            tracking.captured = job.frame.received;
+                            for (size_t i = 0; i < job.identities.size(); ++i)
+                                if (job.identities[i].confirmed)
+                                    tracking.objects.push_back(
+                                        {job.boxes[i], job.identities[i].person});
+                            {
+                                std::lock_guard<std::mutex> lock(mutex);
+                                track_frames[job.channel] = std::move(tracking);
+                            }
+                            job.prepared = true;
+                        }
+                        if (job.boxes.empty())
+                            continue;
                         auto box = job.boxes.front();
                         job.boxes.erase(job.boxes.begin());
                         auto b = search_crop(box, job.frame.width, job.frame.height, .1f);
-                        auto im = cropper.crop(gst_va_buffer_get_surface(
-                                                   gst_sample_get_buffer(job.frame.sample.get())),
-                                               job.frame.width, job.frame.height, b);
+                        SearchImage im;
+                        PersonIdentity identity;
+                        ReIdFeature feature{};
+                        if (reid) {
+                            im = std::move(job.images.front());
+                            job.images.erase(job.images.begin());
+                            identity = job.identities.front();
+                            job.identities.erase(job.identities.begin());
+                            feature = job.features.front();
+                            job.features.erase(job.features.begin());
+                        } else
+                            im = cropper.crop(gst_va_buffer_get_surface(
+                                                  gst_sample_get_buffer(job.frame.sample.get())),
+                                              job.frame.width, job.frame.height, b);
                         SearchObservation o;
                         o.channel = job.channel;
                         o.session = job.frame.recording_session;
                         o.time_ms = job.frame.wall_time_ms;
                         o.box = b;
                         o.model = key;
-                        o.embedding = model.encode(&im, "", options.image_size);
-                        o.png = png_encode(im);
-                        bool stored = catalog.store_observation(o);
+                        std::string identity_prefix =
+                            run_id + "/" + job.channel + "/" + job.frame.recording_session + "/";
+                        if (reid && identity.confirmed) {
+                            o.person_id = identity_prefix + std::to_string(identity.person);
+                            o.track_id = identity_prefix + std::to_string(identity.track);
+                            o.reid = feature;
+                            o.box = box;
+                        }
+                        bool eligible =
+                            !reid || (identity.confirmed && box.score >= .5f &&
+                                      o.time_ms - last_saved[o.person_id] >= options.interval_ms);
+                        bool stored = false;
+                        if (eligible) {
+                            o.embedding = model.encode(&im, "", options.image_size);
+                            o.png = png_encode(im);
+                            stored = catalog.store_observation(o);
+                            if (stored && reid)
+                                last_saved[o.person_id] = o.time_ms;
+                        }
                         std::lock_guard<std::mutex> l(mutex);
                         if (stored)
                             status.stored++;
-                        else
+                        else if (eligible)
                             status.dropped++;
                         if (status.pending)
                             status.pending--;
                         if (!stopping && !job.boxes.empty())
-                            jobs.push_back(std::move(job));
+                            jobs.push_front(std::move(job));
                     }
                     std::lock_guard<std::mutex> l(mutex);
                     status.error.clear();
@@ -370,7 +468,7 @@ struct SearchService::Impl {
                         if (request.id == serial)
                             result = {request.id, e.what(), {}};
                     } else {
-                        auto n = job.boxes.size() + 1;
+                        auto n = job_crops;
                         status.dropped += n;
                         status.pending = status.pending > n ? status.pending - n : 0;
                     }
@@ -403,13 +501,14 @@ void SearchService::submit(const Frame &f, const std::string &channel,
     if (p.stopping || p.status.state != "ready" || !f.wall_time_ms || f.recording_session.empty())
         return;
     auto now = Clock::now();
-    if (now - p.admitted[channel] < std::chrono::milliseconds(p.options.interval_ms))
+    if (now - p.admitted[channel] <
+        std::chrono::milliseconds(p.options.reid_model.empty() ? p.options.interval_ms : 200))
         return;
     std::vector<Detection> people;
     for (auto b : boxes)
         if (b.class_id == 0 && b.w > 0 && b.h > 0)
             people.push_back(b);
-    if (people.empty())
+    if (people.empty() && p.options.reid_model.empty())
         return;
     p.admitted[channel] = now;
     if (p.jobs.size() >= 3 || p.status.pending + people.size() > p.options.queue_limit) {
@@ -466,5 +565,10 @@ SearchResult SearchService::result() const {
 SearchStatus SearchService::status() const {
     std::lock_guard<std::mutex> l(impl_->mutex);
     return impl_->status;
+}
+PersonTrackFrame SearchService::tracks(const std::string &channel) const {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    auto it = impl_->track_frames.find(channel);
+    return it == impl_->track_frames.end() ? PersonTrackFrame{} : it->second;
 }
 } // namespace amdva::streaming

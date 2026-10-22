@@ -604,5 +604,14 @@
     "repository": "https://github.com/anjn/embeddinggemma2-rocm",
     "commit": "351303e293e11bafe4aa09f8303ba8b4d294d128",
     "integration": "optional native C ABI, prepared bundles remain external"
+  },
+  "person_reid": {
+    "architecture": "osnet_x1_0",
+    "source": "https://github.com/KaiyangZhou/deep-person-reid",
+    "commit": "f8cd150fdf77e8d9e1ed143b7f308c2c609ded50",
+    "osnet_py_sha256": "c7c1c29187d6330f859c91da229271531920464c7011aec13842a086b2263cae",
+    "weights_url": "https://huggingface.co/kaiyangzhou/osnet/resolve/a5c5cc037c24235cda3b21085b93ad77c9616224/osnet_x1_0_msmt17_combineall_256x128_amsgrad_ep150_stp60_lr0.0015_b64_fb10_softmax_labelsmooth_flip_jitter.pth",
+    "weights_sha256": "48df972f72887b95cf3b43b3a07c3a7d2398381aea0f9cae64a7ef11d512b727",
+    "integration": "external MSMT17 checkpoint; native MIGraphX; fixed-camera BoT-SORT-style association and conservative tracklet reconnection"
   }
 }

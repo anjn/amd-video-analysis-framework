@@ -7,8 +7,8 @@ thumbnails and a selector for every matched image. **Play nearby video** plays
 that scene inside the card, with pause and seek controls. Only one card plays
 at a time; leaving Search releases playback.
 
-The initial collection policy samples at most one detected frame per second
-from each visible camera. Hidden cameras use the existing background keyframe
+Without ReID configured, the collection policy samples at most one detected frame per second
+from each visible camera. In that mode, hidden cameras use the existing background keyframe
 AI interval (five seconds by default). Enabling search also enables background
 AI. Every person detected in an admitted frame is a candidate. Work is bounded
 by 64 pending crops and four source frames, including the frame being processed;
@@ -162,3 +162,102 @@ skirt visible in those museum scenes. Collection from visible and hidden
 cameras, inline playback, recording-region search, cancellation and recording
 deletion were exercised. This short integration test does not establish
 long-duration throughput or large-archive search performance.
+
+## Person tracking and ReID
+
+Set `search.reid_model` to a compiled OSNet x1.0 MSMT17 checkpoint to enable
+person cards. An empty/omitted path retains the original time-based grouping.
+The example configuration uses `../artifacts/reid-model/osnet-x1-msmt17.mxr`.
+A configured model that cannot load fails the search service visibly; it does
+not silently switch to a different identity algorithm. Reception and recording
+continue.
+
+The native fixed-camera tracker implements BoT-SORT-style high/low confidence
+association, rectangular Hungarian assignment, timestamp-based center/size
+Kalman motion prediction and smoothed OSNet appearance features. It is a local
+C++ implementation adapted to sampled inference, not the upstream Python
+tracker or its benchmark configuration. Camera-motion compensation is disabled;
+PTZ/moving cameras require additional work. When ReID is enabled, the live overlay uses confirmed person-search IDs,
+including low-confidence detections that remain associated with those people.
+Without ReID, the existing imageless tracker supplies live IDs.
+
+Detection uses confidence 0.1 for association (legacy detection metadata retains
+0.25). High-confidence association starts at 0.5, new tracks at 0.6. Two matched
+observations confirm a person. Motion association retains tracks for two
+seconds; low-score recovery is limited to one second. A lost confirmed track
+can reconnect within thirty seconds if its cosine similarity is at least 0.85,
+its candidate margin is at least 0.05 in both directions, and displacement is
+within three person heights. Reconnection starts a new tracklet while retaining
+the person ID. Ambiguous matches create separate identities. These conservative
+initial thresholds require site-specific evaluation; similar clothes and heavy
+occlusion can still cause mistakes.
+
+Person tracking accepts up to five detected frames per second per camera;
+actual frequency depends on detection and embedding load. Semantic image saves
+remain limited to `search.interval_ms` per person (default one second). The
+bounded queue drops excess collection and exposes its counter. Frame timestamps,
+not assumed frame numbers, drive motion and expiry. With ReID enabled, both stored and ReID crops use the tight person box rather
+than the legacy ten-percent margin. ReID uses bounded RGB crops,
+bilinear resize to 256×128, ImageNet RGB normalization and L2-normalized
+512-dimensional features. These features are separate from the 768-dimensional
+EmbeddingGemma vectors used for text and region queries.
+
+With ReID enabled, hidden cameras retain continuous hardware decoding and
+inference instead of five-second keyframe snapshots. There are four dedicated
+hidden-camera slots in this demo, in addition to sixteen display slots. Further
+hidden cameras report `waiting for continuous AI capacity` and continue
+recording. Selecting a camera frees its hidden slot. GPU/decoder capacity should
+be measured before increasing these limits.
+
+Search results aggregate by camera and person ID. A card offers a selector for
+its matched tracklet intervals, avoiding playback through an entire absence.
+Text and arbitrary-region queries continue to use EmbeddingGemma similarity;
+ReID determines which saved images belong to the same person. A region query
+is not a guaranteed same-person lookup, especially if it contains multiple
+people. IDs do not cross cameras, receiver recording sessions or application
+restarts. The database migration adds person/tracklet IDs and ReID features;
+existing observations remain intact. The embedding namespace includes the ReID
+model bytes and preprocessing version, so incompatible histories cannot mix.
+Old time-grouped history is available when using its original configuration.
+
+### Prepare and verify OSNet
+
+Download the source revision and weight URL in `dependencies.lock.json`'s
+`person_reid` entry and verify the listed SHA-256 values. The weights must be
+MSMT17 ReID-trained, not the ImageNet-only checkpoint. Model preparation uses
+the existing `.deps/model-export` Python environment; production inference is
+native C++/MIGraphX and does not import Python.
+
+```bash
+source scripts/env.sh
+export PATH="$PWD/build/src/gst:$PATH"
+.deps/model-export/bin/python scripts/export_reid_model.py \
+  --source /path/to/torchreid/models/osnet.py \
+  --weights /path/to/osnet-msmt17.pth --output artifacts/reid-model
+build/src/streaming/amdva-reid-validate \
+  artifacts/reid-model/osnet-x1-msmt17.mxr \
+  artifacts/reid-model/reference.rgb artifacts/reid-model/reference.f32
+```
+
+The export script rejects incompatible non-classifier parameters and records
+hashes and preprocessing. The native validator compares the normalized feature
+against PyTorch's FP32 reference (cosine >= 0.999) and reports latency. On this
+gfx1150 test host, FP16 inference produced cosine 0.99972, median 2.05 ms and
+p95 2.32 ms for a single prepared crop. This excludes video cropping, YOLO and
+EmbeddingGemma. The search contract tests cover detection order, low-score
+recovery, tentative tracks, short reappearance, ambiguity, stale timestamps,
+expiry, identity grouping and persistence. M01/M02 integration also exercises
+hidden-camera collection, fractional display scaling, playback, region search,
+copy audit and deletion. These checks do not establish labeled-dataset IDF1 or
+cross-camera identity accuracy.
+
+
+Live person overlays use three logical-pixel colored borders with a black halo,
+fixed 16-pixel vector text, and a black label panel at 45% opacity. Both border and text use a
+stable hue derived from the person ID; labels show only the ID and
+current detection confidence (for example, `#2 23%`). Confirmed low-score associations (0.1–0.5) remain
+visible. Low-score detections alone do not create new people. Tracking snapshots
+expire after one second and are rejected across decoder generations or changed
+image dimensions. The validation tool can capture this overlay with
+`AMDVA_VALIDATE_CAPTURE=1`; framebuffer readback is only used by that optional
+validation capture, never by the normal live renderer.
