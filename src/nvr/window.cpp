@@ -865,6 +865,16 @@ void Tiles::mousePressEvent(QMouseEvent *e) {
     if (preview_mode_ || e->button() != Qt::LeftButton)
         return;
     selection_cancelled_ = false;
+    // Grid selection is immediate; only single-view play/pause must wait to
+    // distinguish a click from a double-click.
+    if (!playback_ && focus_ < 0 && cell_count_ > 1) {
+        click_timer_->stop();
+        const auto index = picked(e->position());
+        select_tile(index);
+        if (activated)
+            activated(index, false);
+        return;
+    }
     selection_slot_ = 0;
     if (!playback_) {
         for (const auto &st : controller_.status())
@@ -900,6 +910,8 @@ void Tiles::mouseReleaseEvent(QMouseEvent *e) {
         selection_cancelled_ = false;
         return;
     }
+    if (!playback_ && focus_ < 0 && cell_count_ > 1)
+        return;
     if (!dragging_) {
         frozen_ = false;
         const auto index = picked(e->position());

@@ -1,6 +1,7 @@
 #include "window.hpp"
 #include <QApplication>
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -32,8 +33,8 @@ int main(int argc, char **argv) {
         window.resize(1280, 900);
         window.show();
         auto *tabs = window.findChild<QTabWidget *>("vms-tabs");
-        if (!window.findChild<QComboBox *>("ai-frequency") ||
-            !window.findChild<QComboBox *>("embedding-interval"))
+        if (!window.findChild<QDoubleSpinBox *>("ai-frequency") ||
+            !window.findChild<QDoubleSpinBox *>("embedding-interval"))
             throw std::runtime_error("Missing AI controls");
         std::ofstream log(argv[3]);
         if (!log)
@@ -41,11 +42,10 @@ int main(int argc, char **argv) {
         int seconds = std::stoi(argv[2]);
         if (seconds < 30)
             throw std::runtime_error("Duration must be >=30 sec");
-        auto change = [&](const char *name, unsigned value) {
-            auto *combo = window.findChild<QComboBox *>(name);
-            combo->setCurrentIndex(combo->findData(value));
-            QMetaObject::invokeMethod(combo, "activated", Qt::DirectConnection,
-                                      Q_ARG(int, combo->currentIndex()));
+        auto change = [&](const char *name, double value) {
+            auto *spin = window.findChild<QDoubleSpinBox *>(name);
+            spin->setValue(value);
+            QMetaObject::invokeMethod(spin, "editingFinished", Qt::DirectConnection);
         };
         bool controls_checked = false;
         auto start = Clock::now();
@@ -59,14 +59,31 @@ int main(int argc, char **argv) {
                 if (!controls_checked) {
                     if (!controller.status_ready())
                         return;
-                    change("ai-frequency", 5);
-                    change("embedding-interval", 60000);
+                    change("ai-frequency", 1.3);
+                    change("embedding-interval", .7);
                     auto saved = load_config(argv[1]);
-                    if (controller.ai_runtime()->fps() != 5 || saved.ai_fps != 5 ||
-                        saved.search.interval_ms != 60000)
+                    if (controller.ai_runtime()->fps() != 1.3 || saved.ai_fps != 1.3 ||
+                        saved.search.interval_ms != 700)
                         throw std::runtime_error("AI controls did not persist");
                     change("ai-frequency", options.ai_fps);
-                    change("embedding-interval", std::max(5000u, options.search.interval_ms));
+                    change("embedding-interval", options.search.interval_ms / 1000.);
+                    if (!options.search.mobileclip_bundle.empty() &&
+                        !options.search.ryzen_ai_venv.empty()) {
+                        auto *model = window.findChild<QComboBox *>("embedding-model");
+                        if (!model || model->count() != 3)
+                            throw std::runtime_error("Missing model selector");
+                        const auto original = model->currentIndex();
+                        for (int i : {0, 1, 2, original}) {
+                            model->setCurrentIndex(i);
+                            QMetaObject::invokeMethod(model, "activated", Qt::DirectConnection,
+                                                      Q_ARG(int, i));
+                            const auto selected = load_config(argv[1]).search;
+                            if (selected.embedding_model !=
+                                    (i == 0 ? "embeddinggemma2" : "mobileclip2-s2") ||
+                                selected.mobileclip_backend != (i == 2 ? "npu" : "gpu"))
+                                throw std::runtime_error("Embedding selection not persisted");
+                        }
+                    }
                     controls_checked = true;
                 }
                 auto elapsed =

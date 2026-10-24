@@ -1,5 +1,6 @@
 #include "ai_page.hpp"
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QFile>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -11,30 +12,58 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <cmath>
 namespace amdva::nvr {
 AiPage::AiPage(Controller &controller, const Options &options,
-               std::function<void(unsigned, unsigned)> changed, QWidget *parent)
+               std::function<void(double, unsigned)> changed,
+               std::function<bool(const std::string &, const std::string &)> model_changed,
+               QWidget *parent)
     : QWidget(parent) {
     setObjectName("ai-statistics");
     auto *layout = new QVBoxLayout(this);
     auto *form = new QFormLayout;
-    auto *fps = new QComboBox;
+    auto *fps = new QDoubleSpinBox;
     fps->setObjectName("ai-frequency");
-    for (unsigned n : {1u, 2u, 5u})
-        fps->addItem(QString("%1 / sec / camera").arg(n), n);
-    fps->setCurrentIndex(fps->findData(options.ai_fps));
-    auto *interval = new QComboBox;
+    fps->setRange(.1, 10);
+    fps->setDecimals(1);
+    fps->setSingleStep(.1);
+    fps->setSuffix(" Hz / camera");
+    fps->setValue(options.ai_fps);
+    auto *interval = new QDoubleSpinBox;
     interval->setObjectName("embedding-interval");
-    for (unsigned n : {5u, 10u, 15u, 30u, 60u})
-        interval->addItem(QString("%1 sec / person").arg(n), n * 1000);
-    int idx = interval->findData(std::clamp(options.search.interval_ms, 5000u, 60000u));
-    if (idx < 0) {
-        interval->addItem(QString("%1 sec / person")
-                              .arg(std::clamp(options.search.interval_ms, 5000u, 60000u) / 1000.),
-                          std::clamp(options.search.interval_ms, 5000u, 60000u));
-        idx = interval->count() - 1;
-    }
-    interval->setCurrentIndex(idx);
+    interval->setRange(.1, 60);
+    interval->setDecimals(1);
+    interval->setSingleStep(.1);
+    interval->setSuffix(" sec / person");
+    interval->setValue(options.search.interval_ms / 1000.);
+    auto *model = new QComboBox;
+    model->setObjectName("embedding-model");
+    model->setEnabled(false);
+    model->addItem("EmbeddingGemma 2 (GPU)", "embeddinggemma2");
+    model->addItem("MobileCLIP2-S2 (GPU FP16)", "gpu");
+    model->addItem("MobileCLIP2-S2 (NPU BF16)", "npu");
+    const int active_model = options.search.embedding_model == "embeddinggemma2" ? 0
+                             : options.search.mobileclip_backend == "npu"        ? 2
+                                                                                 : 1;
+    model->setCurrentIndex(active_model);
+    form->addRow("Embedding model (next startup)", model);
+    auto *restart = new QLabel;
+    restart->setWordWrap(true);
+    form->addRow(restart);
+    connect(
+        model, qOverload<int>(&QComboBox::activated), this,
+        [model, restart, active_model, model_changed, previous = active_model](int index) mutable {
+            const std::string name = index == 0 ? "embeddinggemma2" : "mobileclip2-s2";
+            const std::string backend = index == 2 ? "npu" : "gpu";
+            if (!model_changed(name, backend)) {
+                model->setCurrentIndex(previous);
+                return;
+            }
+            previous = index;
+            restart->setText(index == active_model
+                                 ? ""
+                                 : "Saved. Restart the application to change the embedding model.");
+        });
     form->addRow("Detection / tracking", fps);
     form->addRow("Requested embedding interval", interval);
     fps->setEnabled(false);
@@ -72,6 +101,22 @@ AiPage::AiPage(Controller &controller, const Options &options,
             .arg(options.search.embedding_batch)
             .arg(precision(options.model))
             .arg(precision(options.search.reid_model)));
+    if (options.search.embedding_model == "mobileclip2-s2") {
+        const auto text = models->text();
+        const auto begin = text.indexOf("Embedding:");
+        const auto end = text.indexOf("\nCompleted", begin);
+        models->setText(
+            text.left(begin) +
+            QString("Embedding: MobileCLIP2-S2 · %1 · 512D · 256×256 · image batch %2 · CPU text "
+                    "encoder")
+                .arg(options.search.mobileclip_backend == "npu" ? "NPU BF16" : "GPU FP16")
+                .arg(options.search.mobileclip_backend == "npu" ? 1
+                                                                : options.search.embedding_batch) +
+            text.mid(end));
+    } else {
+        models->setText(
+            models->text().replace("Embedding:", "Embedding: EmbeddingGemma 2 · GPU · 768D ·"));
+    }
     models->setWordWrap(true);
     layout->addWidget(models);
     auto *camera = new QTableWidget(0, 5);
@@ -97,14 +142,15 @@ AiPage::AiPage(Controller &controller, const Options &options,
     camera->verticalHeader()->setDefaultSectionSize(24);
     layout->addWidget(table, 1);
     auto change = [fps, interval, changed] {
-        changed(fps->currentData().toUInt(), interval->currentData().toUInt());
+        changed(fps->value(), unsigned(std::lround(interval->value() * 1000)));
     };
-    connect(fps, qOverload<int>(&QComboBox::activated), this, [change](int) { change(); });
-    connect(interval, qOverload<int>(&QComboBox::activated), this, [change](int) { change(); });
+    connect(fps, &QDoubleSpinBox::editingFinished, this, change);
+    connect(interval, &QDoubleSpinBox::editingFinished, this, change);
     auto *timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, [&, state, table, camera, detail, fps, interval] {
+    connect(timer, &QTimer::timeout, this, [&, state, table, camera, detail, fps, interval, model] {
         const bool ready = controller.status_ready() && controller.fatal().empty();
         fps->setEnabled(ready);
+        model->setEnabled(ready);
         interval->setEnabled(ready);
         if (!isVisible())
             return;

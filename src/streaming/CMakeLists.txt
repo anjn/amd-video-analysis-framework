@@ -79,3 +79,11 @@ if(BUILD_TESTING)
   target_link_libraries(recorded-analysis-tests PRIVATE amdva_streaming)
   add_test(NAME recorded-analysis-contract COMMAND recorded-analysis-tests)
 endif()
+
+# Native worker intentionally links neither HIP nor the streaming SDK: NPU owns
+# its runtime in a clean process, isolated from the NVR's GPU initialization.
+add_executable(amdva-mobileclip-worker mobileclip_worker.cpp)
+target_link_libraries(amdva-mobileclip-worker PRIVATE ${CMAKE_DL_LIBS})
+install(TARGETS amdva-mobileclip-worker RUNTIME DESTINATION bin)
+target_compile_definitions(amdva_streaming PRIVATE AMDVA_MOBILECLIP_WORKER="$<TARGET_FILE:amdva-mobileclip-worker>")
+add_dependencies(amdva_streaming amdva-mobileclip-worker)

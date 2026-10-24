@@ -6,16 +6,17 @@ logical batch size, pending work and cumulative drops. The summary combines
 cameras; the detail selector exposes individual cameras. The camera table
 shows detection/tracking update rates, confirmed people and tracking-frame age.
 
-Detection/tracking can be changed to 1, 2 or 5 Hz per camera. Embedding requests
-can be changed to 5, 10, 15, 30 or 60 seconds per person. Changes take effect
+Detection/tracking can be changed from 0.1 to 10 Hz per camera in 0.1 Hz steps.
+Embedding intervals can be changed from 0.1 to 60 seconds per person in
+0.1-second steps. Press Enter or leave the field to apply the edit; changes take effect
 immediately and are saved to the current configuration. The effective embedding
 interval is also shown because it can be longer than the requested interval.
 
 ## Execution policy
 
 YOLO and person crop/ReID work share the highest priority, followed by user
-queries, then background image embedding. GPU sections are serialized with
-FIFO ordering within a priority. An already-running inference is not preempted.
+queries, then background image embedding. Inference sections, including
+MobileCLIP worker calls, are serialized with FIFO ordering within a priority. An already-running inference is not preempted.
 After each background embedding batch, the scheduler waits four times that
 batch's execution duration before allowing another. This caps collection's
 scheduled inference duty at approximately 20%; it is not a GPU-utilization cap
@@ -88,8 +89,9 @@ These fields supplement the library, bundle and model paths in the normal NVR
 configuration. `image_size` bounds the stored crop and ReID source; embedding
 gets a separate smaller, aspect-preserving input with black padding and no
 upscaling. Both embedding dimensions must be set together. Leaving both zero
-preserves the legacy square preprocessing namespace. Legacy collection
-intervals below five seconds load but are clamped to five seconds at runtime.
+preserves the legacy square preprocessing namespace. Collection
+intervals down to 100 ms are honored as requested targets. Adaptive intervals are
+rounded up in 100 ms increments, still constrained by the 20% collection budget.
 Changing preprocessing or ReID weights selects a different search namespace;
 old observations remain in the catalog and can be queried with their original
 configuration. There is no automatic backfill.

@@ -37,9 +37,9 @@ class AiRuntime {
     void queue(const std::string &stage, const std::string &camera, unsigned pending,
                uint64_t drops = 0);
     std::vector<AiMetric> snapshot() const;
-    void configure(unsigned fps, unsigned interval_ms);
+    void configure(double fps, unsigned interval_ms);
     bool embedding_ready() const;
-    unsigned fps() const;
+    double fps() const;
     unsigned interval_ms() const;
     void effective_interval(unsigned ms);
     unsigned effective_interval() const;
@@ -59,7 +59,8 @@ class AiRuntime {
     mutable std::mutex mutex_;
     std::map<std::pair<std::string, std::string>, Row> rows_;
     Clock::time_point started_ = Clock::now();
-    unsigned fps_{2}, interval_{5000}, effective_{5000};
+    double fps_{2};
+    unsigned interval_{5000}, effective_{5000};
     mutable std::mutex gate_;
     std::condition_variable cv_;
     unsigned waiting_[3]{};

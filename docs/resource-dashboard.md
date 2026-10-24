@@ -244,3 +244,8 @@ recording search and hardware playback passed; all NVR fragments finalized and
 passed media inspection. Active-client timed server shutdown completed without
 GStreamer criticals. A dashboard-only build linked neither Qt nor MIGraphX, and
 an installed CMake SDK client used `AMDVA::amdva_monitor` successfully.
+
+The DRAM history is stacked: amber Read starts at zero and green Write sits above
+it. The top edge shows Read + Write, matching the numeric GB/s value. Its vertical
+scale follows the combined peak over the displayed history (20 GB/s increments,
+minimum 20 GB/s). Missing read or write samples leave a gap in both areas.

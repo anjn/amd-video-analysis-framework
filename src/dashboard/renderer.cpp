@@ -385,21 +385,24 @@ struct Renderer::Impl {
             quad(x, y, used, 20, c);
     }
     void graph(const std::deque<ResourceSample> &h, float x, float y, float w, float ht,
-               Value ResourceSample::*field, Color c, double max) {
+               Value ResourceSample::*field, Color c, double max, bool stacked_dram = false) {
         if (h.empty())
             return;
         bool have = false;
-        float px{}, py{};
+        float px{}, py{}, pb{};
         int64_t pt{};
         const auto end = h.back().monotonic_ns;
         for (const auto &s : h) {
             const auto v = s.*field;
-            if (!v) {
+            if (!v || (stacked_dram && (!s.dram_read_gbs || !s.dram_write_gbs))) {
                 have = false;
                 continue;
             }
+            const double base = stacked_dram && field == &ResourceSample::dram_write_gbs
+                                    ? *s.dram_read_gbs : 0.;
+            const float bottom = y + ht * (1.f - float(std::clamp(base / max, 0., 1.)));
             const float tx = x + w * (1.f - float(end - s.monotonic_ns) / 60e9f),
-                        ty = y + ht * (1.f - float(std::clamp(*v / max, 0., 1.)));
+                        ty = y + ht * (1.f - float(std::clamp((base + *v) / max, 0., 1.)));
             if (tx < x) {
                 have = false;
                 continue;
@@ -407,8 +410,8 @@ struct Renderer::Impl {
             if (have && s.monotonic_ns - pt < 250000000) {
                 Color fill = c;
                 fill.a = .25f;
-                triangle(px, py, tx, ty, px, y + ht, fill);
-                triangle(tx, ty, tx, y + ht, px, y + ht, fill);
+                triangle(px, py, tx, ty, px, pb, fill);
+                triangle(tx, ty, tx, bottom, px, pb, fill);
                 const float dx = tx - px, dy = ty - py, len = std::hypot(dx, dy);
                 if (len > 0) {
                     const float ox = -dy / len * 1.75f, oy = dx / len * 1.75f;
@@ -418,6 +421,7 @@ struct Renderer::Impl {
             }
             px = tx;
             py = ty;
+            pb = bottom;
             pt = s.monotonic_ns;
             have = true;
         }
@@ -440,10 +444,8 @@ struct Renderer::Impl {
             dram = *s.dram_read_gbs + *s.dram_write_gbs;
         double peak = 0;
         for (const auto &v : history) {
-            if (v.dram_read_gbs)
-                peak = std::max(peak, *v.dram_read_gbs);
-            if (v.dram_write_gbs)
-                peak = std::max(peak, *v.dram_write_gbs);
+            if (v.dram_read_gbs && v.dram_write_gbs)
+                peak = std::max(peak, *v.dram_read_gbs + *v.dram_write_gbs);
         }
         const double axis = std::max(20., std::ceil(peak / 20) * 20);
         for (unsigned i = 0; i < 3; i++) {
@@ -468,8 +470,8 @@ struct Renderer::Impl {
                       i == 0 ? &ResourceSample::cpu_pct : &ResourceSample::gpu_pct,
                       i == 0 ? cyan : purple, 100);
             else {
-                graph(history, x + 26, 352, 548, 260, &ResourceSample::dram_read_gbs, amber, axis);
-                graph(history, x + 26, 352, 548, 260, &ResourceSample::dram_write_gbs, green, axis);
+                graph(history, x + 26, 352, 548, 260, &ResourceSample::dram_read_gbs, amber, axis, true);
+                graph(history, x + 26, 352, 548, 260, &ResourceSample::dram_write_gbs, green, axis, true);
             }
         }
         panel(40, 658, 910, 372);

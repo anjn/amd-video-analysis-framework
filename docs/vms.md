@@ -7,7 +7,8 @@ services in `amdva_streaming`.
 
 ## Live monitoring
 
-Choose 1, 4, 9 or 16 views. Click a tile, then choose its camera in the toolbar,
+Choose 1, 4, 9 or 16 views. A tile is selected immediately on mouse press,
+without waiting for double-click detection. Click a tile, then choose its camera in the toolbar,
 or double-click a camera in the left list. **Clear tile** removes that mapping.
 Assigning a camera already used elsewhere exchanges the two tiles. Empty and
 disconnected tiles keep their position. Camera titles, connection states and the
@@ -49,6 +50,14 @@ and the UI sidecar have separate ownership; headless users need no UI fields.
 There is one saved arrangement, rather than multiple named views.
 
 ## Camera management and storage
+
+Each `amdva-nvr CONFIG.json` launch deletes the previous catalogued recordings
+in that configuration's recording root, together with their search images,
+embeddings and saved analysis, before starting camera reception. Interrupted
+recordings from a previous run are included. The existing exclusive catalog lock
+prevents clearing a root used by another process; deletion failures abort startup.
+The catalog database and unrelated files are retained. This startup policy belongs
+to the desktop executable; SDK catalog/controller users do not clear history automatically.
 
 **Cameras** provides add, edit and remove actions. Name changes preserve the
 connection and source ID. URL changes retire only that camera's current receive,

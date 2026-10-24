@@ -519,18 +519,48 @@ struct Window::Vms {
         tabs->addTab(manage, "Cameras");
         search_page = new SearchPage(w.controller_);
         tabs->addTab(search_page, "Search");
-        tabs->addTab(new AiPage(w.controller_, w.options_,
-                                [this](unsigned fps, unsigned interval) {
-                                    w.controller_.ai_frequency(fps, interval);
-                                    w.options_.ai_fps = fps;
-                                    w.options_.search.interval_ms = interval;
-                                    try {
-                                        w.persist(true);
-                                    } catch (const std::exception &e) {
-                                        QMessageBox::warning(&w, "AI settings", qs(e.what()));
-                                    }
-                                }),
-                     "AI Statistics");
+        tabs->addTab(
+            new AiPage(
+                w.controller_, w.options_,
+                [this](double fps, unsigned interval) {
+                    w.controller_.ai_frequency(fps, interval);
+                    w.options_.ai_fps = fps;
+                    w.options_.search.interval_ms = interval;
+                    try {
+                        w.persist(true);
+                    } catch (const std::exception &e) {
+                        QMessageBox::warning(&w, "AI settings", qs(e.what()));
+                    }
+                },
+                [this](const std::string &model, const std::string &backend) {
+                    const auto previous = w.options_.search;
+                    try {
+                        const auto &s = w.options_.search;
+                        const auto bundle =
+                            model == "embeddinggemma2" ? s.bundle : s.mobileclip_bundle;
+                        if (bundle.empty() || !std::filesystem::is_directory(bundle))
+                            throw std::runtime_error(
+                                "Configure the selected model bundle before switching");
+                        if (model == "mobileclip2-s2" &&
+                            (s.device != 0 || (s.embedding_batch != 1 && s.embedding_batch != 4)))
+                            throw std::runtime_error(
+                                "MobileCLIP requires device 0 and batch 1 or 4");
+                        if (model == "mobileclip2-s2" && backend == "npu" &&
+                            !std::filesystem::exists(std::filesystem::path(s.ryzen_ai_venv) /
+                                                     "bin/activate"))
+                            throw std::runtime_error(
+                                "Configure search.ryzen_ai_venv before selecting NPU");
+                        w.options_.search.embedding_model = model;
+                        w.options_.search.mobileclip_backend = backend;
+                        w.persist(true);
+                        return true;
+                    } catch (const std::exception &e) {
+                        w.options_.search = previous;
+                        QMessageBox::warning(&w, "Embedding model", qs(e.what()));
+                        return false;
+                    }
+                }),
+            "AI Statistics");
         if (w.controller_.search_service()) {
             for (auto *tiles : {play_tiles, w.tiles_}) {
                 tiles->search_image_size = w.options_.search.image_size;

@@ -919,7 +919,7 @@ struct Controller::Channel {
     }
 };
 Controller::Controller(Options options) : options_(std::move(options)) {
-    ai_runtime_->configure(options_.ai_fps, std::clamp(options_.search.interval_ms, 5000u, 60000u));
+    ai_runtime_->configure(options_.ai_fps, options_.search.interval_ms);
     if (options_.search.enabled)
         options_.background_ai_enabled = true;
     if (options_.batch != 1 && options_.batch != 2 && options_.batch != 4 && options_.batch != 8 &&
@@ -1712,7 +1712,7 @@ void Controller::gpu_loop() {
                         item.frame.recording_session,
                         "yolo",
                         item.frame.wall_time_ms,
-                        std::min(2000u, 2000u / std::max(1u, ai_runtime_->fps())),
+                        unsigned(std::min(2000., 2000. / ai_runtime_->fps())),
                         {}};
                     for (auto b : s.detections) {
                         b.x /= item.frame.width;
@@ -1859,7 +1859,7 @@ void Controller::update_source(Source source) {
 } // namespace amdva::streaming
 
 namespace amdva::streaming {
-void Controller::ai_frequency(unsigned fps, unsigned interval) {
+void Controller::ai_frequency(double fps, unsigned interval) {
     ai_runtime_->configure(fps, interval);
 }
 } // namespace amdva::streaming

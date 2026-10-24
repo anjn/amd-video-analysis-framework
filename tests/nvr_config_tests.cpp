@@ -61,6 +61,21 @@ int main(int argc, char **argv) {
                         tuned.search.embedding_height == 192 && tuned.search.embedding_batch == 4 &&
                         tuned.search.interval_ms == 15000 && tuned.search.min_person_height == .12,
                     "AI tuning roundtrip");
+            tuned.ai_fps = .3;
+            tuned.search.interval_ms = 700;
+            tuned.search.embedding_model = "mobileclip2-s2";
+            tuned.search.mobileclip_library = "/tmp/libmobileclip2.so";
+            tuned.search.mobileclip_bundle = "/tmp/mobileclip-bundle";
+            tuned.search.mobileclip_backend = "npu";
+            tuned.search.ryzen_ai_venv = "/tmp/ryzen-venv";
+            save_config(path, tuned);
+            auto mobile = load_config(path);
+            require(mobile.ai_fps == .3 && mobile.search.interval_ms == 700 &&
+                        mobile.search.embedding_model == "mobileclip2-s2" &&
+                        mobile.search.mobileclip_backend == "npu" &&
+                        mobile.search.mobileclip_bundle == "/tmp/mobileclip-bundle" &&
+                        mobile.search.ryzen_ai_venv == "/tmp/ryzen-venv",
+                    "MobileCLIP and fine frequency roundtrip");
             require(load_config(path).search.bundle == search.search.bundle &&
                         load_config(path).search.reid_model == (dir / "osnet.mxr"),
                     "Search and ReID roundtrip");
@@ -126,10 +141,14 @@ int main(int argc, char **argv) {
                  {"reserve_gib", -1},
                  {"segment_seconds", 0.5},
                  {"batch_size", 3},
-                 {"ai_fps", 3},
-                 {"ai_fps", 1.5},
+                 {"ai_fps", 0},
+                 {"ai_fps", 10.1},
                  {"search", QJsonObject{{"embedding_width", 108}}},
                  {"search", QJsonObject{{"embedding_batch", 9}}},
+                 {"search", QJsonObject{{"embedding_model", "unknown"}}},
+                 {"search", QJsonObject{{"mobileclip_backend", "cpu"}}},
+                 {"search",
+                  QJsonObject{{"embedding_model", "mobileclip2-s2"}, {"embedding_batch", 2}}},
                  {"search", QJsonObject{{"min_person_height", 1.1}}},
                  {"sources", "bad"},
                  {"tracking_enabled", "true"},

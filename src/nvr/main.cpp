@@ -18,6 +18,17 @@ int main(int argc, char **argv) {
     amdva::nvr::install_shutdown_signals(app);
     try {
         auto options = amdva::nvr::load_config(config);
+        // Clear the previous run before any camera starts recording. Catalog owns
+        // the exclusive root lock and removes dependent search/analysis records.
+        {
+            amdva::streaming::Catalog catalog(options.recording_root);
+            auto deletion = catalog.begin_delete();
+            while (!deletion.done())
+                catalog.delete_batch(deletion);
+            if (deletion.failed || deletion.protected_files)
+                throw std::runtime_error("Cannot clear previous recordings at startup");
+            std::cout << "Cleared previous recordings: " << deletion.deleted << std::endl;
+        }
         amdva::nvr::Controller controller(options);
         amdva::nvr::Window window(controller, options, config);
         window.show();

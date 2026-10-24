@@ -115,6 +115,21 @@ int main() {
             require(r[0].person_id == o.person_id && r[0].track_id == o.track_id,
                     "Identity persistence");
             require(c.search(o.embedding, "other").empty(), "Model isolation");
+            for (const auto &model : {"mobileclip-gpu", "mobileclip-npu"}) {
+                auto mobile = o;
+                mobile.model = model;
+                mobile.person_id = model;
+                mobile.embedding.fill(0);
+                mobile.embedding[0] = .6f;
+                mobile.embedding[511] = .8f;
+                require(c.store_observation(mobile),
+                        "512D observation stored in zero-extended envelope");
+                auto found = c.search(mobile.embedding, model);
+                require(found.size() == 1 && found[0].person_id == model &&
+                            std::abs(found[0].similarity - 1) < 1e-6,
+                        "MobileCLIP backend isolation and zero-extension cosine");
+            }
+            require(c.search(o.embedding, "test").size() == 1, "Embedding spaces never mix");
             auto pin = c.open_recording("one.mkv");
             auto job = c.begin_delete();
             c.delete_batch(job);

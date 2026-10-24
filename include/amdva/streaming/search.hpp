@@ -14,6 +14,9 @@ struct Frame;
 struct SearchOptions {
     bool enabled{};
     std::string library{"libeg2.so"}, bundle, reid_model;
+    std::string embedding_model{"embeddinggemma2"};
+    std::string mobileclip_library{"libmobileclip2.so"}, mobileclip_bundle;
+    std::string mobileclip_backend{"gpu"}, mobileclip_worker, ryzen_ai_venv;
     unsigned device{}, image_size{384}, interval_ms{5000}, queue_limit{128};
     unsigned embedding_width{}, embedding_height{}, embedding_batch{1};
     double min_person_height{.1};
@@ -27,6 +30,7 @@ struct SearchObservation {
     std::string channel, session, camera_name, recording, model;
     Detection box;
     std::vector<uint8_t> png;
+    // MobileCLIP2 uses the first 512 elements; the storage tail is zero. Model keys isolate spaces.
     std::array<float, 768> embedding{};
     double similarity{};
     std::string person_id, track_id;

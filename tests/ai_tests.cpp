@@ -18,11 +18,15 @@ int main() {
                 "Requested interval is a lower bound");
         bool invalid = false;
         try {
-            r.configure(3, 5000);
+            r.configure(0, 5000);
         } catch (const std::invalid_argument &) {
             invalid = true;
         }
         require(invalid && r.fps() == 5, "Invalid configuration is atomic");
+        r.configure(.3, 700);
+        r.effective_interval(800);
+        require(r.fps() == .3 && r.interval_ms() == 700 && r.effective_interval() == 800,
+                "Fractional Hz and subsecond intervals");
         r.record("inference", "cam0", 2, 3, 4);
         r.record("inference", "cam0", 4, 5, 2);
         r.record("inference", "cam0", std::numeric_limits<double>::quiet_NaN());

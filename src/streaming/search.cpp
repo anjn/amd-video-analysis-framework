@@ -1,6 +1,7 @@
 #include "amdva/streaming/search.hpp"
 #include "../model_json.hpp"
 #include "amdva/streaming/controller.hpp"
+#include "mobileclip_client.hpp"
 #include "reid.hpp"
 #include <algorithm>
 #include <cmath>
@@ -176,6 +177,7 @@ struct EmbeddingScope {
     }
 };
 struct Embedder {
+    std::unique_ptr<MobileClipClient> mobileclip;
     void *library{}, *context{};
     using Create = int (*)(const char *, int, void **, char *, size_t);
     using Destroy = void (*)(void *);
@@ -194,6 +196,10 @@ struct Embedder {
     }
     explicit Embedder(const SearchOptions &o) {
         EmbeddingScope scope;
+        if (o.embedding_model == "mobileclip2-s2") {
+            mobileclip = std::make_unique<MobileClipClient>(o);
+            return;
+        }
         library = dlopen(o.library.c_str(), RTLD_NOW | RTLD_LOCAL);
         if (!library)
             throw std::runtime_error(std::string("Cannot load libeg2: ") + dlerror());
@@ -220,6 +226,8 @@ struct Embedder {
     std::vector<std::array<float, 768>> encode_batch(const std::vector<SearchImage> &source,
                                                      const SearchOptions &o) {
         EmbeddingScope scope;
+        if (mobileclip)
+            return mobileclip->images(source);
         const unsigned w = o.embedding_width ? o.embedding_width : o.image_size,
                        h = o.embedding_height ? o.embedding_height : o.image_size;
         if (source.empty())
@@ -270,6 +278,8 @@ struct Embedder {
     }
     std::array<float, 768> encode(const SearchImage *im, const std::string &text, unsigned size) {
         EmbeddingScope scope;
+        if (mobileclip)
+            return im ? mobileclip->images({*im}).front() : mobileclip->text(text);
         std::array<float, 768> out{};
         char error[4096]{};
         int rc;
@@ -288,12 +298,15 @@ struct Embedder {
     }
 };
 std::string fingerprint(const SearchOptions &o) {
-    const auto root = std::filesystem::path(o.bundle);
-    Parser index((root / "index.json").string());
+    const bool mobileclip = o.embedding_model == "mobileclip2-s2";
+    const auto root = std::filesystem::path(mobileclip ? o.mobileclip_bundle : o.bundle);
     std::string input = "rgb-square-black-v1/" + std::to_string(o.image_size) + "/70/";
     if (o.embedding_width)
         input += "portrait-v1/" + std::to_string(o.embedding_width) + "x" +
                  std::to_string(o.embedding_height) + "/";
+    if (mobileclip)
+        input = "mobileclip2-s2/512-zero-tail-v1/letterbox-bilinear-256/" + o.mobileclip_backend +
+                "/crop-limit/" + std::to_string(o.image_size) + "/";
     auto append = [&](const std::filesystem::path &path) {
         std::ifstream f(path);
         if (!f)
@@ -306,11 +319,18 @@ std::string fingerprint(const SearchOptions &o) {
         input += "osnet-person-v1/";
         append(o.reid_model);
     }
-    append(root / "index.json");
-    auto *profiles = required_array(index.object(), "profiles");
-    for (unsigned i = 0; i < json_array_get_length(profiles); ++i) {
-        auto *profile = json_array_get_object_element(profiles, i);
-        append(root / required_string(profile, "path") / "bundle.json");
+    if (mobileclip) {
+        // GPU FP16 and NPU BF16 also have distinct vector spaces.
+        append(root / "manifest.json");
+        append(root / (o.mobileclip_backend + ".json"));
+    } else {
+        Parser index((root / "index.json").string());
+        append(root / "index.json");
+        auto *profiles = required_array(index.object(), "profiles");
+        for (unsigned i = 0; i < json_array_get_length(profiles); ++i) {
+            auto *profile = json_array_get_object_element(profiles, i);
+            append(root / required_string(profile, "path") / "bundle.json");
+        }
     }
     // Bundle manifests identify the model revision, compiled profiles and weight hashes.
     auto *hash = g_compute_checksum_for_string(G_CHECKSUM_SHA256, input.c_str(), input.size());
@@ -474,7 +494,7 @@ struct SearchService::Impl {
                                               job.frame.recording_session,
                                               run_id,
                                               job.frame.wall_time_ms,
-                                              std::min(2000u, 2000u / std::max(1u, runtime->fps())),
+                                              unsigned(std::min(2000., 2000. / runtime->fps())),
                                               {}};
                     for (size_t i = 0; i < detections.size(); ++i) {
                         if (reid && !identities[i].confirmed)
@@ -536,6 +556,8 @@ struct SearchService::Impl {
     }
     void run() {
         try {
+            if (options.embedding_model == "mobileclip2-s2" && options.mobileclip_backend == "npu")
+                options.embedding_batch = 1;
             hip_check(hipSetDevice(options.device), "Search GPU");
             Embedder model(options);
             key = fingerprint(options);
@@ -582,14 +604,10 @@ struct SearchService::Impl {
                                 ++it;
                             }
                         }
-                        unsigned effective = requested;
                         const double required = active * image_ms / .2;
-                        for (unsigned step : {5000u, 10000u, 15000u, 30000u, 60000u})
-                            if (step >= requested) {
-                                effective = step;
-                                if (step >= required)
-                                    break;
-                            }
+                        const unsigned effective = std::max(
+                            requested,
+                            unsigned(std::clamp(std::ceil(required / 100.) * 100., 100., 60000.)));
                         runtime->effective_interval(effective);
                         std::vector<std::pair<std::string, Clock::time_point>> eligible;
                         for (auto &[id, p] : pending)
@@ -602,7 +620,8 @@ struct SearchService::Impl {
                         if (runtime->embedding_ready() &&
                             (eligible.size() >= options.embedding_batch ||
                              (!eligible.empty() &&
-                              now - eligible.front().second >= std::chrono::seconds(1))))
+                              now - eligible.front().second >=
+                                  std::chrono::milliseconds(std::min(1000u, requested)))))
                             for (auto &e : eligible) {
                                 if (batch.size() >= options.embedding_batch)
                                     break;

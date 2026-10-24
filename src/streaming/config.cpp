@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <filesystem>
 #include <set>
+#include <tuple>
 #include <unistd.h>
 namespace amdva::streaming {
 std::string validated_uri(std::string uri) {
@@ -64,9 +65,9 @@ Options load_config(const std::string &path) {
         throw std::runtime_error("Invalid storage, segment or background interval");
     o.batch = unsigned(batch);
     const auto fps = number("ai_fps", 2);
-    if (fps != 1 && fps != 2 && fps != 5)
-        throw std::runtime_error("ai_fps must be 1, 2 or 5");
-    o.ai_fps = unsigned(fps);
+    if (!std::isfinite(fps) || fps < .1 || fps > 10)
+        throw std::runtime_error("ai_fps must be between 0.1 and 10");
+    o.ai_fps = fps;
     auto retention = number("retention_minutes", 60);
     if (retention < 0 || retention > 2147483647 || retention != std::floor(retention))
         throw std::runtime_error("Invalid retention_minutes");
@@ -113,15 +114,22 @@ Options load_config(const std::string &path) {
                 throw std::runtime_error("Expected boolean search.enabled");
             o.search.enabled = json_object_get_boolean_member(search, "enabled");
         }
-        for (const auto *key : {"library", "bundle"})
+        if (json_object_has_member(search, "embedding_model"))
+            o.search.embedding_model = required_string(search, "embedding_model");
+        if (json_object_has_member(search, "mobileclip_backend"))
+            o.search.mobileclip_backend = required_string(search, "mobileclip_backend");
+        for (auto [key, target, is_bundle] :
+             {std::tuple{"library", &o.search.library, false},
+              std::tuple{"bundle", &o.search.bundle, true},
+              std::tuple{"mobileclip_library", &o.search.mobileclip_library, false},
+              std::tuple{"mobileclip_bundle", &o.search.mobileclip_bundle, true},
+              std::tuple{"mobileclip_worker", &o.search.mobileclip_worker, true},
+              std::tuple{"ryzen_ai_venv", &o.search.ryzen_ai_venv, true}})
             if (json_object_has_member(search, key)) {
                 std::string value = required_string(search, key);
-                if (std::string(key) == "bundle")
-                    o.search.bundle = (dir / value).lexically_normal().string();
-                else
-                    o.search.library = value.find('/') == std::string::npos
-                                           ? value
-                                           : (dir / value).lexically_normal().string();
+                *target = value.empty() || (!is_bundle && value.find('/') == std::string::npos)
+                              ? value
+                              : (dir / value).lexically_normal().string();
             }
         for (auto field : {std::pair<const char *, unsigned *>{"image_size", &o.search.image_size},
                            {"device", &o.search.device},
@@ -159,6 +167,18 @@ Options load_config(const std::string &path) {
             o.search.min_person_height = json_node_get_double(n);
         }
     }
+    if (o.search.embedding_model != "embeddinggemma2" &&
+        o.search.embedding_model != "mobileclip2-s2")
+        throw std::runtime_error("Unknown embedding model");
+    if (o.search.mobileclip_backend != "gpu" && o.search.mobileclip_backend != "npu")
+        throw std::runtime_error("MobileCLIP backend must be gpu or npu");
+    if (o.search.enabled && o.search.embedding_model == "mobileclip2-s2" &&
+        o.search.mobileclip_backend == "npu" && o.search.ryzen_ai_venv.empty())
+        throw std::runtime_error("MobileCLIP NPU requires ryzen_ai_venv");
+    const bool mobileclip = o.search.embedding_model == "mobileclip2-s2";
+    if (mobileclip &&
+        (o.search.device != 0 || (o.search.embedding_batch != 1 && o.search.embedding_batch != 4)))
+        throw std::runtime_error("MobileCLIP2 GPU requires device 0 and batch 1 or 4");
     if (!std::isfinite(o.search.min_person_height) || o.search.min_person_height < 0 ||
         o.search.min_person_height > 1 ||
         (o.search.embedding_width == 0) != (o.search.embedding_height == 0) ||
@@ -169,7 +189,8 @@ Options load_config(const std::string &path) {
         throw std::runtime_error("Invalid embedding layout");
     if (o.search.image_size < 32 || o.search.image_size > 1024 || o.search.device > 15 ||
         o.search.interval_ms < 100 || !o.search.queue_limit || o.search.queue_limit > 1024 ||
-        (o.search.enabled && o.search.bundle.empty()))
+        (o.search.enabled &&
+         (mobileclip ? o.search.mobileclip_bundle.empty() : o.search.bundle.empty())))
         throw std::runtime_error("Invalid search configuration");
     if (o.search.enabled)
         o.background_ai_enabled = true;
@@ -262,7 +283,7 @@ void save_config(const std::string &path, const Options &o) {
     json_object_set_boolean_member(timing, "enabled", o.telemetry.enabled);
     json_object_set_int_member(timing, "stall_ms", o.telemetry.stall_ms);
     json_object_set_object_member(root, "telemetry", timing);
-    json_object_set_int_member(root, "ai_fps", o.ai_fps);
+    json_object_set_double_member(root, "ai_fps", o.ai_fps);
     json_object_set_int_member(root, "batch_size", o.batch);
     json_object_set_int_member(root, "segment_seconds", o.segment_seconds);
     json_object_set_int_member(root, "retention_minutes", o.retention_minutes);
@@ -273,6 +294,14 @@ void save_config(const std::string &path, const Options &o) {
     json_object_set_double_member(root, "reserve_gib", double(o.reserve) / (1ull << 30));
     auto *search = json_object_new();
     json_object_set_boolean_member(search, "enabled", o.search.enabled);
+    json_object_set_string_member(search, "mobileclip_backend",
+                                  o.search.mobileclip_backend.c_str());
+    json_object_set_string_member(search, "mobileclip_worker", o.search.mobileclip_worker.c_str());
+    json_object_set_string_member(search, "ryzen_ai_venv", o.search.ryzen_ai_venv.c_str());
+    json_object_set_string_member(search, "embedding_model", o.search.embedding_model.c_str());
+    json_object_set_string_member(search, "mobileclip_library",
+                                  o.search.mobileclip_library.c_str());
+    json_object_set_string_member(search, "mobileclip_bundle", o.search.mobileclip_bundle.c_str());
     json_object_set_string_member(search, "library", o.search.library.c_str());
     json_object_set_string_member(search, "bundle", o.search.bundle.c_str());
     json_object_set_string_member(search, "reid_model", o.search.reid_model.c_str());

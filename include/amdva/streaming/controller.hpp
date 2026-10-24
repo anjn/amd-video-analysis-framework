@@ -32,7 +32,7 @@ struct Source {
 };
 struct Options {
     std::string model, single_model, model_info, recording_root{"recordings"};
-    unsigned ai_fps{2};
+    double ai_fps{2};
     unsigned batch{4}, segment_seconds{60}, retention_minutes{60};
     bool background_ai_enabled{};
     bool tracking_enabled{true};
@@ -145,7 +145,7 @@ class Controller {
     void presentation_active(bool);
     SearchService *search_service() { return search_.get(); }
     std::shared_ptr<AiRuntime> ai_runtime() const { return ai_runtime_; }
-    void ai_frequency(unsigned fps, unsigned embedding_interval_ms);
+    void ai_frequency(double fps, unsigned embedding_interval_ms);
     void shutdown();
 
   private:

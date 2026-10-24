@@ -14,6 +14,52 @@ embedding every five seconds per person and slows down under load. See
 model selection, bounded queues, priorities and benchmark commands. This is
 sampled, best-effort indexing; existing recordings are not backfilled.
 
+## Choosing the embedding model
+
+In **AI Statistics**, choose **EmbeddingGemma 2 (GPU)**, **MobileCLIP2-S2
+(GPU FP16)** or **MobileCLIP2-S2 (NPU BF16)**. The selection is saved for the
+next application startup; the currently running model and its search results
+stay active until then. The desktop's existing startup policy clears old
+recordings and their search data. No history is re-embedded on selection.
+
+MobileCLIP2 uses the native API added to `embeddinggemma2-rocm`. Prepare its
+bundle using that repository's `docs/mobileclip2.md`, including the backend
+profiles to be used. Configure these additional fields alongside the existing
+EmbeddingGemma `library` and `bundle`, so both models remain selectable:
+
+```json
+"embedding_model": "mobileclip2-s2",
+"mobileclip_backend": "gpu",
+"mobileclip_library": "/path/to/embeddinggemma2-rocm/build-mc2/libmobileclip2.so",
+"mobileclip_bundle": "/path/to/embeddinggemma2-rocm/artifacts/mobileclip2-api",
+"ryzen_ai_venv": "/home/amd/work/rai/rai19-venv"
+```
+
+`embedding_model` defaults to `embeddinggemma2`; `mobileclip_backend` is `gpu`
+or `npu`. MobileCLIP2 runs in the installed `amdva-mobileclip-worker` process,
+which can be overridden with `mobileclip_worker`. NPU workers source
+`/opt/xilinx/xrt/setup.sh` and the configured venv's `bin/activate`, isolating
+Ryzen AI and its NPU handles from the NVR's HIP initialization. The NPU worker replaces the inherited library path with the ROCm and Ryzen AI
+paths so EmbeddingGemma/PyTorch libraries cannot shadow NPU dependencies. GPU
+workers inherit the launch environment. The worker uses the native C API, not Python
+inference, and shuts down with the parent. A backend error is reported in
+Search; there is no silent GPU/CPU fallback.
+
+Both MobileCLIP backends letterbox bounded person/region crops to 256×256 using
+the library's preprocessing. GPU accepts batch 1 or 4 (partial collections pad
+to 4); NPU uses batch 1. The configured `embedding_batch` remains the GPU
+preference. Text uses MobileCLIP's CPU encoder and 77-token tokenizer without
+the EmbeddingGemma prompt. EmbeddingGemma retains its portrait profiles.
+
+MobileCLIP returns 512D vectors. They are zero-extended to the existing 768-float
+storage envelope, preserving cosine similarity without a catalog migration.
+Model manifests, backend and crop limit identify a separate search space;
+EmbeddingGemma, MobileCLIP GPU and MobileCLIP NPU are never compared together.
+GPU FP16 and NPU BF16 results can differ; Japanese retrieval accuracy also
+differs between the model families. ReID features remain independent.
+SDK consumers must rebuild for the extended `SearchOptions` and floating-point
+`Options::ai_fps` / AI frequency interfaces.
+
 ## Native runtime setup
 
 Use the EmbeddingGemma 2 ROCm revision pinned in `dependencies.lock.json`:
@@ -190,7 +236,7 @@ the person ID. Ambiguous matches create separate identities. These conservative
 initial thresholds require site-specific evaluation; similar clothes and heavy
 occlusion can still cause mistakes.
 
-Detection and tracking run at `ai_fps` (1, 2 or 5; default 2) per camera.
+Detection and tracking run at `ai_fps` (0.1–10 Hz; default 2) per camera.
 Frame timestamps, not assumed frame numbers, drive motion and expiry. The
 tracking worker replaces queued frames with the latest frame for that camera;
 the semantic worker separately keeps the latest crop for each person. A
@@ -211,7 +257,7 @@ retains the legacy keyframe interval.
 
 Search results aggregate by camera and person ID. A card offers a selector for
 its matched tracklet intervals, avoiding playback through an entire absence.
-Text and arbitrary-region queries continue to use EmbeddingGemma similarity;
+Text and arbitrary-region queries use the selected embedding model;
 ReID determines which saved images belong to the same person. A region query
 is not a guaranteed same-person lookup, especially if it contains multiple
 people. IDs do not cross cameras, receiver recording sessions or application
@@ -261,3 +307,14 @@ expire after one second and are rejected across decoder generations or changed
 image dimensions. The validation tool can capture this overlay with
 `AMDVA_VALIDATE_CAPTURE=1`; framebuffer readback is only used by that optional
 validation capture, never by the normal live renderer.
+
+## MobileCLIP integration checks (2026-10-24)
+
+The native worker passed GPU and NPU image batches 1/3/4 (including padding or
+splitting), English/Japanese text calls and normalized 512D output checks.
+With two 1440p RTSP inputs, all three embedding selections passed live collection,
+text queries, inline recording playback, live/paused-live/recorded region search
+and deletion. This checks functionality, not retrieval accuracy or 16-camera throughput.
+The UI validation exercised 1.3 Hz / 0.7 s targets, persisted all three model
+selections and restored the initial model without changing the running encoder.
+Local logs are in `artifacts/mobileclip-switch/`.

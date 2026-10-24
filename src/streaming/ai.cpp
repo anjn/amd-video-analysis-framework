@@ -35,8 +35,8 @@ AiRuntime::Lease::~Lease() {
     o.busy_ = false;
     o.cv_.notify_all();
 }
-void AiRuntime::configure(unsigned fps, unsigned interval) {
-    if ((fps != 1 && fps != 2 && fps != 5) || interval < 5000 || interval > 60000)
+void AiRuntime::configure(double fps, unsigned interval) {
+    if ((!std::isfinite(fps) || fps < .1 || fps > 10) || interval < 100 || interval > 60000)
         throw std::invalid_argument("Invalid AI frequency");
     std::lock_guard<std::mutex> lock(mutex_);
     fps_ = fps;
@@ -47,7 +47,7 @@ bool AiRuntime::embedding_ready() const {
     std::lock_guard<std::mutex> l(gate_);
     return !busy_ && !waiting_[Tracking] && !waiting_[Query] && Clock::now() >= low_due_;
 }
-unsigned AiRuntime::fps() const {
+double AiRuntime::fps() const {
     std::lock_guard<std::mutex> l(mutex_);
     return fps_;
 }
