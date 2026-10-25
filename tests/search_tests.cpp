@@ -1,3 +1,4 @@
+#include "../src/streaming/mobileclip_batch.hpp"
 #include "amdva/streaming/catalog.hpp"
 #include <cmath>
 #include <fstream>
@@ -13,6 +14,23 @@ int main() {
     auto root =
         std::filesystem::temp_directory_path() / ("amdva-search-" + std::to_string(getpid()));
     try {
+        for (unsigned capacity : {1u, 4u}) {
+            for (unsigned count = 2; count <= capacity + 1; ++count) {
+                const auto gpu = mobileclip_gpu_count(count, capacity, false);
+                require(gpu > 0 && gpu <= capacity && count - gpu == 1,
+                        "Combined batch covers each crop once with both devices");
+            }
+            require(mobileclip_gpu_count(1, capacity, false) == 1 &&
+                        mobileclip_gpu_count(1, capacity, true) == 0,
+                    "Single-image collections alternate devices");
+            bool rejected = false;
+            try {
+                mobileclip_gpu_count(capacity + 2, capacity, false);
+            } catch (const std::invalid_argument &) {
+                rejected = true;
+            }
+            require(rejected, "Combined batch remains bounded");
+        }
         PersonTracker tracker;
         PersonDetection red{{10, 10, 40, 100, .9f, 0}, {}}, blue{{100, 10, 40, 100, .9f, 0}, {}};
         red.feature[0] = 1;

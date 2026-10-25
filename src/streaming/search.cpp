@@ -1,6 +1,7 @@
 #include "amdva/streaming/search.hpp"
 #include "../model_json.hpp"
 #include "amdva/streaming/controller.hpp"
+#include "mobileclip_batch.hpp"
 #include "mobileclip_client.hpp"
 #include "reid.hpp"
 #include <algorithm>
@@ -11,6 +12,7 @@
 #include <gst/va/gstva.h>
 #include <png.h>
 #include <random>
+#include <set>
 #include <sstream>
 extern "C" void amdva_audit_search_begin(const void *, size_t, int) __attribute__((weak));
 extern "C" void amdva_audit_search_end() __attribute__((weak));
@@ -177,7 +179,21 @@ struct EmbeddingScope {
     }
 };
 struct Embedder {
-    std::unique_ptr<MobileClipClient> mobileclip;
+    std::unique_ptr<MobileClipClient> mobileclip, secondary;
+    bool combined{}, next_single_npu{};
+    unsigned gpu_capacity{};
+    size_t last_gpu_count{};
+    std::shared_ptr<AiRuntime> metrics;
+    std::vector<std::array<float, 768>>
+    mobile_images(MobileClipClient &client, const std::vector<SearchImage> &source, bool npu) {
+        const auto start = Clock::now();
+        auto result = client.images(source);
+        if (metrics)
+            metrics->record(npu ? "Image embedding NPU" : "Image embedding GPU", "",
+                            std::chrono::duration<double, std::milli>(Clock::now() - start).count(),
+                            0, source.size());
+        return result;
+    }
     void *library{}, *context{};
     using Create = int (*)(const char *, int, void **, char *, size_t);
     using Destroy = void (*)(void *);
@@ -197,7 +213,16 @@ struct Embedder {
     explicit Embedder(const SearchOptions &o) {
         EmbeddingScope scope;
         if (o.embedding_model == "mobileclip2-s2") {
-            mobileclip = std::make_unique<MobileClipClient>(o);
+            combined = o.mobileclip_backend == "gpu+npu";
+            gpu_capacity = o.embedding_batch;
+            if (combined) {
+                auto backend = o;
+                backend.mobileclip_backend = "npu";
+                secondary = std::make_unique<MobileClipClient>(backend);
+                backend.mobileclip_backend = "gpu";
+                mobileclip = std::make_unique<MobileClipClient>(backend);
+            } else
+                mobileclip = std::make_unique<MobileClipClient>(o);
             return;
         }
         library = dlopen(o.library.c_str(), RTLD_NOW | RTLD_LOCAL);
@@ -226,8 +251,28 @@ struct Embedder {
     std::vector<std::array<float, 768>> encode_batch(const std::vector<SearchImage> &source,
                                                      const SearchOptions &o) {
         EmbeddingScope scope;
+        if (combined) {
+            last_gpu_count = mobileclip_gpu_count(source.size(), gpu_capacity, next_single_npu);
+            if (source.size() == 1)
+                next_single_npu = !next_single_npu;
+            std::vector<SearchImage> gpu(source.begin(), source.begin() + last_gpu_count);
+            std::vector<SearchImage> npu(source.begin() + last_gpu_count, source.end());
+            std::future<std::vector<std::array<float, 768>>> pending_npu;
+            if (!npu.empty())
+                pending_npu = std::async(std::launch::async, [this, &npu] {
+                    return mobile_images(*secondary, npu, true);
+                });
+            std::vector<std::array<float, 768>> out;
+            if (!gpu.empty())
+                out = mobile_images(*mobileclip, gpu, false);
+            if (pending_npu.valid()) {
+                auto next = pending_npu.get();
+                out.insert(out.end(), next.begin(), next.end());
+            }
+            return out;
+        }
         if (mobileclip)
-            return mobileclip->images(source);
+            return mobile_images(*mobileclip, source, o.mobileclip_backend == "npu");
         const unsigned w = o.embedding_width ? o.embedding_width : o.image_size,
                        h = o.embedding_height ? o.embedding_height : o.image_size;
         if (source.empty())
@@ -275,6 +320,20 @@ struct Embedder {
             throw std::runtime_error(error);
         out.resize(source.size());
         return out;
+    }
+    std::pair<std::array<float, 768>, std::array<float, 768>>
+    combined_query(const SearchImage *image, const std::string &text) {
+        if (!image) {
+            // Text is the same CPU FP32 encoder for both image backends.
+            auto query = mobileclip->text(text);
+            return {query, query};
+        }
+        const std::vector<SearchImage> input{*image};
+        auto npu = std::async(std::launch::async, [this, &input] {
+            return mobile_images(*secondary, input, true).front();
+        });
+        auto gpu = mobile_images(*mobileclip, input, false).front();
+        return {gpu, npu.get()};
     }
     std::array<float, 768> encode(const SearchImage *im, const std::string &text, unsigned size) {
         EmbeddingScope scope;
@@ -379,6 +438,11 @@ struct SearchService::Impl {
     Impl(Catalog &c, GstVaDisplay *d, SearchOptions o, std::shared_ptr<AiRuntime> r)
         : catalog(c), display(d), options(std::move(o)),
           runtime(r ? r : std::make_shared<AiRuntime>()) {
+        if (!r) {
+            runtime->configure(runtime->fps(), options.interval_ms);
+            runtime->mobileclip_budget(options.mobileclip_gpu_budget_percent,
+                                      options.mobileclip_npu_budget_percent);
+        }
         gst_object_ref(display);
         status.state = "loading";
         worker = std::thread([this] { run(); });
@@ -554,13 +618,251 @@ struct SearchService::Impl {
             fail(e);
         }
     }
+    // Independent device jobs: NPU never owns the GPU gate, and finishing one
+    // device immediately permits another job on that device (no paired barrier).
+    void run_mobileclip(Embedder &model, const std::string &npu_key) {
+        struct Completion {
+            std::vector<std::pair<std::string, Pending>> items;
+            std::vector<std::array<float, 768>> embeddings;
+            std::string error;
+            Clock::time_point finished{};
+            double ms{};
+        };
+        const bool enabled[] = {options.mobileclip_backend != "npu",
+                                options.mobileclip_backend != "gpu"};
+        auto client = [&](unsigned device) -> MobileClipClient & {
+            return device == 1 && model.combined ? *model.secondary : *model.mobileclip;
+        };
+        std::array<std::future<Completion>, 2> running;
+        std::array<Clock::time_point, 2> last_end{};
+        std::array<double, 2> last_ms{};
+        std::set<std::string> in_flight;
+        auto ready = [](auto &future) {
+            return future.valid() &&
+                   future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+        };
+        for (;;) {
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                if (stopping)
+                    return; // Futures drain before the model/worker processes are destroyed.
+            }
+            for (unsigned device = 0; device < 2; ++device) {
+                if (!ready(running[device]))
+                    continue;
+                auto done = running[device].get();
+                last_end[device] = done.finished;
+                last_ms[device] = done.ms;
+                for (size_t i = 0; i < done.items.size(); ++i) {
+                    auto &[id, item] = done.items[i];
+                    bool stored = false;
+                    std::string error = done.error;
+                    if (error.empty()) {
+                        try {
+                            item.observation.embedding = done.embeddings.at(i);
+                            item.observation.model = device == 1 && model.combined ? npu_key : key;
+                            auto start = Clock::now();
+                            item.observation.png = png_encode(item.image);
+                            stored = catalog.store_observation(item.observation);
+                            runtime->record("PNG + DB save", item.observation.channel,
+                                            elapsed(start));
+                        } catch (const std::exception &e) {
+                            error = e.what();
+                        }
+                    }
+                    std::lock_guard<std::mutex> lock(mutex);
+                    in_flight.erase(id);
+                    if (stored) {
+                        ++status.stored;
+                        last_saved[id] = item.observation.time_ms;
+                    } else
+                        ++status.dropped;
+                    if (!error.empty())
+                        status.error = error;
+                    status.inference_ms = done.ms;
+                }
+                runtime->queue(device ? "Embedding NPU in flight" : "Embedding GPU in flight", "",
+                               0);
+            }
+            Request request;
+            bool query_pending;
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                query_pending = query.id != 0;
+                if (query_pending && !running[0].valid() && !running[1].valid()) {
+                    request = std::move(query);
+                    query = {};
+                }
+            }
+            // Drain at most one already-admitted batch per device before a user query.
+            if (request.id) {
+                try {
+                    const auto start = Clock::now();
+                    std::array<float, 768> gpu{}, npu{};
+                    if (request.image.rgb.empty()) {
+                        // CPU text encoder does not consume the GPU gate.
+                        gpu = model.mobileclip->text(request.text);
+                        npu = gpu;
+                    } else {
+                        const std::vector<SearchImage> input{request.image};
+                        std::future<std::vector<std::array<float, 768>>> npu_query;
+                        if (enabled[1])
+                            npu_query = std::async(std::launch::async, [&] {
+                                return model.mobile_images(client(1), input, true);
+                            });
+                        if (enabled[0]) {
+                            auto lease = runtime->acquire(AiRuntime::Query);
+                            gpu = model.mobile_images(client(0), input, false).front();
+                        }
+                        if (npu_query.valid())
+                            npu = npu_query.get().front();
+                    }
+                    runtime->record(request.image.rgb.empty() ? "Text query" : "Image query", "",
+                                    elapsed(start));
+                    auto search_start = Clock::now();
+                    auto hits = catalog.search(enabled[0] ? gpu : npu, key);
+                    if (model.combined) {
+                        auto more = catalog.search(npu, npu_key);
+                        hits.insert(hits.end(), std::make_move_iterator(more.begin()),
+                                    std::make_move_iterator(more.end()));
+                    }
+                    auto groups = group_search_results(std::move(hits));
+                    runtime->record("Vector search", "", elapsed(search_start));
+                    std::lock_guard<std::mutex> lock(mutex);
+                    if (request.id == serial) {
+                        result = {request.id, {}, std::move(groups)};
+                        status.error.clear();
+                    }
+                } catch (const std::exception &e) {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    status.error = e.what();
+                    if (request.id == serial)
+                        result = {request.id, e.what(), {}};
+                }
+            }
+            const auto requested = runtime->interval_ms();
+            runtime->effective_interval(requested);
+            const auto budgets = runtime->mobileclip_budget();
+            // Prefer free NPU capacity, leaving GPU time available for tracking.
+            for (unsigned device : {1u, 0u}) {
+                if (query_pending || !enabled[device] || running[device].valid())
+                    continue;
+                const unsigned budget = device ? budgets.second : budgets.first;
+                const double idle_ms = last_ms[device] * (100. - budget) / budget;
+                if (std::chrono::duration<double, std::milli>(Clock::now() - last_end[device])
+                        .count() < idle_ms)
+                    continue;
+                if (!device && !runtime->embedding_ready(true))
+                    continue;
+                std::vector<std::pair<std::string, Pending>> items;
+                {
+                    std::lock_guard<std::mutex> lock(mutex);
+                    if (stopping || query.id)
+                        break;
+                    std::vector<std::pair<std::string, Clock::time_point>> eligible;
+                    for (const auto &[id, candidate] : pending) {
+                        const auto saved = last_saved.find(id);
+                        if (Clock::now() - candidate.updated <= std::chrono::seconds(30) &&
+                            !in_flight.count(id) &&
+                            (saved == last_saved.end() ||
+                             candidate.observation.time_ms - saved->second >= requested))
+                            eligible.emplace_back(id, candidate.queued);
+                    }
+                    std::sort(eligible.begin(), eligible.end(),
+                              [](const auto &a, const auto &b) { return a.second < b.second; });
+                    const unsigned capacity = device ? 1 : model.gpu_capacity;
+                    for (const auto &[id, queued] : eligible) {
+                        if (items.size() == capacity)
+                            break;
+                        in_flight.insert(id);
+                        items.emplace_back(id, std::move(pending.at(id)));
+                        pending.erase(id);
+                    }
+                }
+                if (items.empty())
+                    continue;
+                runtime->queue(device ? "Embedding NPU in flight" : "Embedding GPU in flight", "",
+                               items.size());
+                running[device] =
+                    std::async(std::launch::async, [&, device, items = std::move(items)]() mutable {
+                        Completion done;
+                        done.items = std::move(items);
+                        auto start = Clock::now();
+                        try {
+                            std::vector<SearchImage> images;
+                            for (const auto &item : done.items)
+                                images.push_back(item.second.image);
+                            if (device) {
+                                start = Clock::now();
+                                done.embeddings = model.mobile_images(client(device), images, true);
+                            } else {
+                                auto lease = runtime->acquire(AiRuntime::MobileClip);
+                                start = Clock::now();
+                                done.embeddings =
+                                    model.mobile_images(client(device), images, false);
+                            }
+                            done.ms = elapsed(start);
+                            runtime->record("Image embedding", "", done.ms,
+                                            std::chrono::duration<double, std::milli>(
+                                                start - done.items.front().second.queued)
+                                                .count(),
+                                            done.items.size());
+                        } catch (const std::exception &e) {
+                            done.error = e.what();
+                            done.ms = elapsed(start);
+                        }
+                        done.finished = Clock::now();
+                        cv.notify_all();
+                        return done;
+                    });
+            }
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                const auto now = Clock::now();
+                for (auto it = pending.begin(); it != pending.end();) {
+                    const auto saved = last_saved.find(it->first);
+                    const auto age = now - it->second.updated;
+                    const bool redundant =
+                        age > std::chrono::seconds(5) && saved != last_saved.end() &&
+                        it->second.observation.time_ms - saved->second < requested;
+                    if (age > std::chrono::seconds(30) || redundant) {
+                        it = pending.erase(it);
+                        if (!redundant) {
+                            ++status.dropped;
+                            runtime->queue("Embedding queue", "", pending.size(), 1);
+                        }
+                    } else
+                        ++it;
+                }
+                for (auto it = last_saved.begin(); it != last_saved.end();)
+                    if (!in_flight.count(it->first) &&
+                        g_get_real_time() / 1000 - it->second > 120000)
+                        it = last_saved.erase(it);
+                    else
+                        ++it;
+                status.pending = pending.size();
+                runtime->queue("Embedding queue", "", pending.size());
+                cv.wait_for(lock, std::chrono::milliseconds(10));
+            }
+        }
+    }
     void run() {
         try {
             if (options.embedding_model == "mobileclip2-s2" && options.mobileclip_backend == "npu")
                 options.embedding_batch = 1;
             hip_check(hipSetDevice(options.device), "Search GPU");
             Embedder model(options);
-            key = fingerprint(options);
+            std::string npu_key;
+            if (model.combined) {
+                auto backend = options;
+                backend.mobileclip_backend = "gpu";
+                key = fingerprint(backend);
+                backend.mobileclip_backend = "npu";
+                npu_key = fingerprint(backend);
+                // One concurrent batch contains the GPU capacity plus one NPU image.
+                ++options.embedding_batch;
+            } else
+                key = fingerprint(options);
             SearchImage warm{1, 1, {0, 0, 0}};
             // Warm the fixed image execution profile before accepting cameras.
             model.encode_batch(std::vector<SearchImage>(options.embedding_batch, warm), options);
@@ -568,7 +870,12 @@ struct SearchService::Impl {
             auto warm_started = Clock::now();
             model.encode_batch(std::vector<SearchImage>(options.embedding_batch, warm), options);
             double image_ms = elapsed(warm_started) / options.embedding_batch;
+            model.metrics = runtime;
             tracking_worker = std::thread([this] { track(); });
+            if (model.mobileclip) {
+                run_mobileclip(model, npu_key);
+                return;
+            }
             for (;;) {
                 Request request;
                 std::vector<Pending> batch;
@@ -642,22 +949,35 @@ struct SearchService::Impl {
                     continue;
                 try {
                     if (request.id) {
-                        std::array<float, 768> embedding;
+                        std::array<float, 768> embedding, npu_embedding;
                         auto wait = Clock::now();
                         {
                             auto lease = runtime->acquire(AiRuntime::Query);
                             auto t = Clock::now();
-                            embedding =
-                                request.image.rgb.empty()
-                                    ? model.encode(nullptr, request.text, options.image_size)
-                                    : model.encode_batch({request.image}, options).front();
+                            if (model.combined) {
+                                auto queries = model.combined_query(
+                                    request.image.rgb.empty() ? nullptr : &request.image,
+                                    request.text);
+                                embedding = queries.first;
+                                npu_embedding = queries.second;
+                            } else
+                                embedding =
+                                    request.image.rgb.empty()
+                                        ? model.encode(nullptr, request.text, options.image_size)
+                                        : model.encode_batch({request.image}, options).front();
                             runtime->record(
                                 request.image.rgb.empty() ? "Text query" : "Image query", "",
                                 elapsed(t),
                                 std::chrono::duration<double, std::milli>(t - wait).count());
                         }
                         auto t = Clock::now();
-                        auto groups = group_search_results(catalog.search(embedding, key));
+                        auto hits = catalog.search(embedding, key);
+                        if (model.combined) {
+                            auto npu_hits = catalog.search(npu_embedding, npu_key);
+                            hits.insert(hits.end(), std::make_move_iterator(npu_hits.begin()),
+                                        std::make_move_iterator(npu_hits.end()));
+                        }
+                        auto groups = group_search_results(std::move(hits));
                         runtime->record("Vector search", "", elapsed(t));
                         std::lock_guard<std::mutex> l(mutex);
                         if (request.id == serial) {
@@ -686,6 +1006,8 @@ struct SearchService::Impl {
                         for (size_t i = 0; i < batch.size(); ++i) {
                             auto &p = batch[i];
                             p.observation.embedding = embeddings[i];
+                            if (model.combined)
+                                p.observation.model = i < model.last_gpu_count ? key : npu_key;
                             auto t = Clock::now();
                             p.observation.png = png_encode(images[i]);
                             bool stored = catalog.store_observation(p.observation);

@@ -131,13 +131,16 @@ Options load_config(const std::string &path) {
                               ? value
                               : (dir / value).lexically_normal().string();
             }
-        for (auto field : {std::pair<const char *, unsigned *>{"image_size", &o.search.image_size},
-                           {"device", &o.search.device},
-                           {"interval_ms", &o.search.interval_ms},
-                           {"queue_limit", &o.search.queue_limit},
-                           {"embedding_width", &o.search.embedding_width},
-                           {"embedding_height", &o.search.embedding_height},
-                           {"embedding_batch", &o.search.embedding_batch}}) {
+        for (auto field :
+             {std::pair<const char *, unsigned *>{"image_size", &o.search.image_size},
+              {"device", &o.search.device},
+              {"interval_ms", &o.search.interval_ms},
+              {"queue_limit", &o.search.queue_limit},
+              {"embedding_width", &o.search.embedding_width},
+              {"embedding_height", &o.search.embedding_height},
+              {"embedding_batch", &o.search.embedding_batch},
+              {"mobileclip_gpu_budget_percent", &o.search.mobileclip_gpu_budget_percent},
+              {"mobileclip_npu_budget_percent", &o.search.mobileclip_npu_budget_percent}}) {
             if (!json_object_has_member(search, field.first))
                 continue;
             auto *n = json_object_get_member(search, field.first);
@@ -170,11 +173,15 @@ Options load_config(const std::string &path) {
     if (o.search.embedding_model != "embeddinggemma2" &&
         o.search.embedding_model != "mobileclip2-s2")
         throw std::runtime_error("Unknown embedding model");
-    if (o.search.mobileclip_backend != "gpu" && o.search.mobileclip_backend != "npu")
-        throw std::runtime_error("MobileCLIP backend must be gpu or npu");
+    if (o.search.mobileclip_backend != "gpu" && o.search.mobileclip_backend != "npu" &&
+        o.search.mobileclip_backend != "gpu+npu")
+        throw std::runtime_error("MobileCLIP backend must be gpu, npu or gpu+npu");
     if (o.search.enabled && o.search.embedding_model == "mobileclip2-s2" &&
-        o.search.mobileclip_backend == "npu" && o.search.ryzen_ai_venv.empty())
+        o.search.mobileclip_backend != "gpu" && o.search.ryzen_ai_venv.empty())
         throw std::runtime_error("MobileCLIP NPU requires ryzen_ai_venv");
+    if (!o.search.mobileclip_gpu_budget_percent || o.search.mobileclip_gpu_budget_percent > 100 ||
+        !o.search.mobileclip_npu_budget_percent || o.search.mobileclip_npu_budget_percent > 100)
+        throw std::runtime_error("MobileCLIP budgets must be 1 to 100 percent");
     const bool mobileclip = o.search.embedding_model == "mobileclip2-s2";
     if (mobileclip &&
         (o.search.device != 0 || (o.search.embedding_batch != 1 && o.search.embedding_batch != 4)))
@@ -312,6 +319,10 @@ void save_config(const std::string &path, const Options &o) {
     json_object_set_int_member(search, "embedding_width", o.search.embedding_width);
     json_object_set_int_member(search, "embedding_height", o.search.embedding_height);
     json_object_set_int_member(search, "embedding_batch", o.search.embedding_batch);
+    json_object_set_int_member(search, "mobileclip_gpu_budget_percent",
+                               o.search.mobileclip_gpu_budget_percent);
+    json_object_set_int_member(search, "mobileclip_npu_budget_percent",
+                               o.search.mobileclip_npu_budget_percent);
     json_object_set_double_member(search, "min_person_height", o.search.min_person_height);
     json_object_set_object_member(root, "search", search);
     auto *output = json_object_new();

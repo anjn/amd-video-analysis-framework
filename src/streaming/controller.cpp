@@ -920,6 +920,8 @@ struct Controller::Channel {
 };
 Controller::Controller(Options options) : options_(std::move(options)) {
     ai_runtime_->configure(options_.ai_fps, options_.search.interval_ms);
+    ai_runtime_->mobileclip_budget(options_.search.mobileclip_gpu_budget_percent,
+                                   options_.search.mobileclip_npu_budget_percent);
     if (options_.search.enabled)
         options_.background_ai_enabled = true;
     if (options_.batch != 1 && options_.batch != 2 && options_.batch != 4 && options_.batch != 8 &&

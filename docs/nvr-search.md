@@ -17,7 +17,7 @@ sampled, best-effort indexing; existing recordings are not backfilled.
 ## Choosing the embedding model
 
 In **AI Statistics**, choose **EmbeddingGemma 2 (GPU)**, **MobileCLIP2-S2
-(GPU FP16)** or **MobileCLIP2-S2 (NPU BF16)**. The selection is saved for the
+(GPU FP16)**, **MobileCLIP2-S2 (NPU BF16)** or **MobileCLIP2-S2 (GPU + NPU)**. The selection is saved for the
 next application startup; the currently running model and its search results
 stay active until then. The desktop's existing startup policy clears old
 recordings and their search data. No history is re-embedded on selection.
@@ -36,7 +36,7 @@ EmbeddingGemma `library` and `bundle`, so both models remain selectable:
 ```
 
 `embedding_model` defaults to `embeddinggemma2`; `mobileclip_backend` is `gpu`
-or `npu`. MobileCLIP2 runs in the installed `amdva-mobileclip-worker` process,
+or `npu`; `gpu+npu` enables concurrent collection on both. MobileCLIP2 runs in the installed `amdva-mobileclip-worker` process,
 which can be overridden with `mobileclip_worker`. NPU workers source
 `/opt/xilinx/xrt/setup.sh` and the configured venv's `bin/activate`, isolating
 Ryzen AI and its NPU handles from the NVR's HIP initialization. The NPU worker replaces the inherited library path with the ROCm and Ryzen AI
@@ -54,9 +54,40 @@ the EmbeddingGemma prompt. EmbeddingGemma retains its portrait profiles.
 MobileCLIP returns 512D vectors. They are zero-extended to the existing 768-float
 storage envelope, preserving cosine similarity without a catalog migration.
 Model manifests, backend and crop limit identify a separate search space;
-EmbeddingGemma, MobileCLIP GPU and MobileCLIP NPU are never compared together.
+Each query vector is compared only with records from the matching model and
+image backend.
 GPU FP16 and NPU BF16 results can differ; Japanese retrieval accuracy also
 differs between the model families. ReID features remain independent.
+In `gpu+npu` mode, GPU and NPU consume a shared bounded queue independently.
+The NPU takes one eligible crop; the GPU takes up to `embedding_batch` (1 or 4).
+Neither waits for the other device or for a full batch. Free NPU capacity is
+preferred, and a person cannot be in flight on both devices. Every crop is stored
+once under the fingerprint of the backend that actually encoded it. Both workers
+must initialize successfully; a missing backend is reported rather than silently
+turning this into a single-device mode.
+
+**MobileCLIP GPU duty limit** and **MobileCLIP NPU duty limit** in AI Statistics
+accept 1–100%, apply immediately and persist as
+`search.mobileclip_gpu_budget_percent` / `search.mobileclip_npu_budget_percent`.
+Both default to 100% (no intentional post-inference wait). At 20%, each device
+waits four times its previous inference duration before its next collection job.
+These are scheduling budgets, not hardware utilization caps. GPU work still yields
+to YOLO, tracking and user queries; NPU inference does not hold the GPU gate.
+The requested per-person interval remains the minimum, without MobileCLIP's
+former adaptive 20% pacing. New tracking images are required for subsequent
+embeddings; increasing the budget does not recompute an unchanged image.
+
+A region query is encoded on both devices concurrently and each vector searches
+only its matching backend's records. Text queries use the shared CPU FP32 text
+encoder for both namespaces. Hits are merged by the existing camera/person
+rules and ordered by their within-backend cosine scores; vectors from different
+backends are never directly compared. Similarity-score distributions can differ
+between FP16 and BF16. **Image embedding GPU** and **Image embedding NPU** rows
+show device-specific call counts, batch sizes and time; **Image embedding**
+aggregates individual completed collection jobs. GPU and NPU jobs can overlap,
+so their times must not be summed as elapsed time. Separate GPU/NPU in-flight
+rows and the pending queue row show admitted versus waiting work.
+
 SDK consumers must rebuild for the extended `SearchOptions` and floating-point
 `Options::ai_fps` / AI frequency interfaces.
 
@@ -318,3 +349,37 @@ and deletion. This checks functionality, not retrieval accuracy or 16-camera thr
 The UI validation exercised 1.3 Hz / 0.7 s targets, persisted all three model
 selections and restored the initial model without changing the running encoder.
 Local logs are in `artifacts/mobileclip-switch/`.
+
+Before independent device dispatch was introduced, the combined mode passed a
+two-camera 1440p run with both backend
+namespaces populated (224 GPU / 81 NPU observations in the collection check),
+four-way UI selection persistence, and the same text/region/deletion workflow.
+The 40-second statistics run measured mean GPU calls of 25.24 ms, NPU calls of
+13.63 ms and combined collection wall time of 25.26 ms, with logical batches
+averaging 3.59 images. Device rows include only work sent to that device and
+should not be summed as serial latency. These are short functional checks,
+not a throughput benchmark. Logs are under `artifacts/mobileclip-combined/`.
+
+
+## Independent MobileCLIP scheduling checks (2026-10-25)
+
+A 16-source 1440p test used 2 Hz tracking, a deliberately short 100 ms requested
+person interval and GPU/NPU budgets of 100%. Across approximately 90 seconds
+with 16, four and zero visible cameras, sampled embedding and tracking queue drop
+counters stayed at zero. The maximum sampled embedding queue depth was 51 of
+128. The final sample reported 4,838 stored observations and no search error;
+both backend namespaces were populated. The final rolling window measured mean
+GPU calls of 29.74 ms (batch 4) and NPU calls of 17.86 ms (batch 1).
+These figures describe this short run, not a guarantee for every input workload.
+The demo's configured person interval was not changed.
+
+UI validation applied and persisted GPU/NPU budgets of 35%/80%, then restored
+both original settings. A separate two-camera run passed English/Japanese
+text queries, inline playback, live/paused-live/recorded region searches and
+deletion. All 33 CTests passed; the scheduler, configuration and search contract
+tests also passed after the final initialization change. Local logs are under
+`artifacts/mobileclip-budget/`.
+
+The NPU-only mode was also checked with 16 sources and the unchanged 5-second
+person interval for 40 seconds: 487 stored observations, maximum sampled
+embedding queue depth 65/128, and zero embedding/tracking queue drops.

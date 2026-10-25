@@ -43,9 +43,21 @@ void AiRuntime::configure(double fps, unsigned interval) {
     interval_ = interval;
     effective_ = std::max(effective_, interval);
 }
-bool AiRuntime::embedding_ready() const {
+bool AiRuntime::embedding_ready(bool mobileclip) const {
     std::lock_guard<std::mutex> l(gate_);
-    return !busy_ && !waiting_[Tracking] && !waiting_[Query] && Clock::now() >= low_due_;
+    return !busy_ && !waiting_[Tracking] && !waiting_[Query] &&
+           (mobileclip || Clock::now() >= low_due_);
+}
+void AiRuntime::mobileclip_budget(unsigned gpu, unsigned npu) {
+    if (!gpu || gpu > 100 || !npu || npu > 100)
+        throw std::invalid_argument("MobileCLIP budgets must be 1 to 100 percent");
+    std::lock_guard<std::mutex> lock(mutex_);
+    mobile_gpu_ = gpu;
+    mobile_npu_ = npu;
+}
+std::pair<unsigned, unsigned> AiRuntime::mobileclip_budget() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return {mobile_gpu_, mobile_npu_};
 }
 double AiRuntime::fps() const {
     std::lock_guard<std::mutex> l(mutex_);

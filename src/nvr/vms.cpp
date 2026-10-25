@@ -522,8 +522,11 @@ struct Window::Vms {
         tabs->addTab(
             new AiPage(
                 w.controller_, w.options_,
-                [this](double fps, unsigned interval) {
+                [this](double fps, unsigned interval, unsigned gpu_budget, unsigned npu_budget) {
                     w.controller_.ai_frequency(fps, interval);
+                    w.controller_.ai_runtime()->mobileclip_budget(gpu_budget, npu_budget);
+                    w.options_.search.mobileclip_gpu_budget_percent = gpu_budget;
+                    w.options_.search.mobileclip_npu_budget_percent = npu_budget;
                     w.options_.ai_fps = fps;
                     w.options_.search.interval_ms = interval;
                     try {
@@ -545,7 +548,7 @@ struct Window::Vms {
                             (s.device != 0 || (s.embedding_batch != 1 && s.embedding_batch != 4)))
                             throw std::runtime_error(
                                 "MobileCLIP requires device 0 and batch 1 or 4");
-                        if (model == "mobileclip2-s2" && backend == "npu" &&
+                        if (model == "mobileclip2-s2" && backend != "gpu" &&
                             !std::filesystem::exists(std::filesystem::path(s.ryzen_ai_venv) /
                                                      "bin/activate"))
                             throw std::runtime_error(

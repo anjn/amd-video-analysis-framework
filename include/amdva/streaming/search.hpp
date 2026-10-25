@@ -19,6 +19,7 @@ struct SearchOptions {
     std::string mobileclip_backend{"gpu"}, mobileclip_worker, ryzen_ai_venv;
     unsigned device{}, image_size{384}, interval_ms{5000}, queue_limit{128};
     unsigned embedding_width{}, embedding_height{}, embedding_batch{1};
+    unsigned mobileclip_gpu_budget_percent{100}, mobileclip_npu_budget_percent{100};
     double min_person_height{.1};
 };
 struct SearchImage {

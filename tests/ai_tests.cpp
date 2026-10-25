@@ -4,6 +4,7 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <thread>
 using namespace amdva::streaming;
 void require(bool b, const char *m) {
     if (!b)
@@ -42,6 +43,27 @@ int main() {
             r.record("inference", "cam0", 1);
         require(r.snapshot().front().samples == 8192 && r.snapshot().front().truncated,
                 "Bounded statistics");
+        r.mobileclip_budget(35, 100);
+        require(r.mobileclip_budget() == std::pair<unsigned, unsigned>{35, 100},
+                "Per-device budget configuration");
+        bool bad_budget = false;
+        try {
+            r.mobileclip_budget(0, 100);
+        } catch (const std::invalid_argument &) {
+            bad_budget = true;
+        }
+        require(bad_budget && r.mobileclip_budget().first == 35, "Invalid budgets are atomic");
+        AiRuntime gate;
+        {
+            auto lease = gate.acquire(AiRuntime::Embedding);
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        require(!gate.embedding_ready() && gate.embedding_ready(true),
+                "MobileCLIP bypasses Gemma cooldown");
+        {
+            auto lease = gate.acquire(AiRuntime::Tracking);
+            require(!gate.embedding_ready(true), "MobileCLIP still yields to tracking");
+        }
         std::atomic<int> inside{0}, overlap{0};
         auto run = [&](AiRuntime::Priority p) {
             for (int i = 0; i < 20; ++i) {
@@ -55,9 +77,11 @@ int main() {
         auto a = std::async(std::launch::async, run, AiRuntime::Tracking);
         auto b = std::async(std::launch::async, run, AiRuntime::Query);
         auto c = std::async(std::launch::async, run, AiRuntime::Embedding);
+        auto d = std::async(std::launch::async, run, AiRuntime::MobileClip);
         a.get();
         b.get();
         c.get();
+        d.get();
         require(overlap == 0, "GPU stages are serialized");
         std::cout << "AI statistics and execution gate passed\n";
     } catch (const std::exception &e) {

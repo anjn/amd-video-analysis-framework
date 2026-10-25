@@ -15,20 +15,28 @@ interval is also shown because it can be longer than the requested interval.
 ## Execution policy
 
 YOLO and person crop/ReID work share the highest priority, followed by user
-queries, then background image embedding. Inference sections, including
-MobileCLIP worker calls, are serialized with FIFO ordering within a priority. An already-running inference is not preempted.
-After each background embedding batch, the scheduler waits four times that
+queries, then background image embedding. GPU inference sections, including MobileCLIP GPU worker calls, are serialized
+with FIFO ordering within a priority. MobileCLIP NPU runs independently. An already-running inference is not preempted.
+For EmbeddingGemma 2, after each background embedding batch, the scheduler waits four times that
 batch's execution duration before allowing another. This caps collection's
 scheduled inference duty at approximately 20%; it is not a GPU-utilization cap
 and does not include video decode, rendering or CPU/database work.
+
+MobileCLIP has separate **GPU duty limit** and **NPU duty limit** settings in
+AI Statistics (1–100%, default 100%, applied and saved immediately). At 100%
+there is no intentional post-inference wait; at 20% the wait is four times that
+device's last inference duration. GPU and NPU dispatch independently, without a
+paired-batch barrier. The requested per-person interval is retained; MobileCLIP
+does not lengthen it using the EmbeddingGemma adaptive budget. GPU collection
+still yields to detection/tracking and queries, while NPU does not use the GPU gate.
 
 Each camera is admitted on its requested cadence using its newest frame.
 Tracking has at most 16 queued camera frames; a new frame replaces that camera's
 older queued frame. Embedding retains the newest high-confidence crop for each
 confirmed person, up to `search.queue_limit` (default 128). Old departed-person
 entries expire. Overload can drop collection, but does not accumulate an
-unbounded backlog. The effective interval adapts to estimated active-person
-cost and is bounded at 60 seconds. New people can receive an initial embedding
+unbounded backlog. For EmbeddingGemma 2, the effective interval adapts to
+estimated active-person cost and is bounded at 60 seconds. New people can receive an initial embedding
 before that periodic interval. Five-second coverage is therefore a target,
 not a guarantee for 128 simultaneous people.
 
@@ -90,7 +98,7 @@ configuration. `image_size` bounds the stored crop and ReID source; embedding
 gets a separate smaller, aspect-preserving input with black padding and no
 upscaling. Both embedding dimensions must be set together. Leaving both zero
 preserves the legacy square preprocessing namespace. Collection
-intervals down to 100 ms are honored as requested targets. Adaptive intervals are
+intervals down to 100 ms are honored as requested targets. EmbeddingGemma adaptive intervals are
 rounded up in 100 ms increments, still constrained by the 20% collection budget.
 Changing preprocessing or ReID weights selects a different search namespace;
 old observations remain in the catalog and can be queried with their original

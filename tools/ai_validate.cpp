@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QSurfaceFormat>
 #include <QTabWidget>
 #include <QTimer>
@@ -67,20 +68,39 @@ int main(int argc, char **argv) {
                         throw std::runtime_error("AI controls did not persist");
                     change("ai-frequency", options.ai_fps);
                     change("embedding-interval", options.search.interval_ms / 1000.);
+                    auto budget = [&](const char *name, unsigned value) {
+                        auto *spin = window.findChild<QSpinBox *>(name);
+                        if (!spin)
+                            throw std::runtime_error("Missing budget control");
+                        spin->setValue(value);
+                        QMetaObject::invokeMethod(spin, "editingFinished", Qt::DirectConnection);
+                    };
+                    budget("mobileclip-gpu-budget", 35);
+                    budget("mobileclip-npu-budget", 80);
+                    const auto budgets_saved = load_config(argv[1]).search;
+                    if (controller.ai_runtime()->mobileclip_budget() !=
+                            std::pair<unsigned, unsigned>{35, 80} ||
+                        budgets_saved.mobileclip_gpu_budget_percent != 35 ||
+                        budgets_saved.mobileclip_npu_budget_percent != 80)
+                        throw std::runtime_error("Device budgets did not persist/apply");
+                    budget("mobileclip-gpu-budget", options.search.mobileclip_gpu_budget_percent);
+                    budget("mobileclip-npu-budget", options.search.mobileclip_npu_budget_percent);
                     if (!options.search.mobileclip_bundle.empty() &&
                         !options.search.ryzen_ai_venv.empty()) {
                         auto *model = window.findChild<QComboBox *>("embedding-model");
-                        if (!model || model->count() != 3)
+                        if (!model || model->count() != 4)
                             throw std::runtime_error("Missing model selector");
                         const auto original = model->currentIndex();
-                        for (int i : {0, 1, 2, original}) {
+                        for (int i : {0, 1, 2, 3, original}) {
                             model->setCurrentIndex(i);
                             QMetaObject::invokeMethod(model, "activated", Qt::DirectConnection,
                                                       Q_ARG(int, i));
                             const auto selected = load_config(argv[1]).search;
                             if (selected.embedding_model !=
                                     (i == 0 ? "embeddinggemma2" : "mobileclip2-s2") ||
-                                selected.mobileclip_backend != (i == 2 ? "npu" : "gpu"))
+                                selected.mobileclip_backend != (i == 3   ? "gpu+npu"
+                                                                : i == 2 ? "npu"
+                                                                         : "gpu"))
                                 throw std::runtime_error("Embedding selection not persisted");
                         }
                     }

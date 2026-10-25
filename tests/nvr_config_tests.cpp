@@ -76,6 +76,14 @@ int main(int argc, char **argv) {
                         mobile.search.mobileclip_bundle == "/tmp/mobileclip-bundle" &&
                         mobile.search.ryzen_ai_venv == "/tmp/ryzen-venv",
                     "MobileCLIP and fine frequency roundtrip");
+            tuned.search.mobileclip_gpu_budget_percent = 35;
+            tuned.search.mobileclip_npu_budget_percent = 80;
+            tuned.search.mobileclip_backend = "gpu+npu";
+            save_config(path, tuned);
+            require(load_config(path).search.mobileclip_backend == "gpu+npu" &&
+                        load_config(path).search.mobileclip_gpu_budget_percent == 35 &&
+                        load_config(path).search.mobileclip_npu_budget_percent == 80,
+                    "Combined backend roundtrip");
             require(load_config(path).search.bundle == search.search.bundle &&
                         load_config(path).search.reid_model == (dir / "osnet.mxr"),
                     "Search and ReID roundtrip");
@@ -149,6 +157,8 @@ int main(int argc, char **argv) {
                  {"search", QJsonObject{{"mobileclip_backend", "cpu"}}},
                  {"search",
                   QJsonObject{{"embedding_model", "mobileclip2-s2"}, {"embedding_batch", 2}}},
+                 {"search", QJsonObject{{"mobileclip_gpu_budget_percent", 0}}},
+                 {"search", QJsonObject{{"mobileclip_npu_budget_percent", 101}}},
                  {"search", QJsonObject{{"min_person_height", 1.1}}},
                  {"sources", "bad"},
                  {"tracking_enabled", "true"},

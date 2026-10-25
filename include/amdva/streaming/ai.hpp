@@ -6,6 +6,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 namespace amdva::streaming {
 struct AiMetric {
@@ -19,7 +20,7 @@ struct AiMetric {
 class AiRuntime {
   public:
     using Clock = std::chrono::steady_clock;
-    enum Priority { Tracking, Query, Embedding };
+    enum Priority { Tracking, Query, Embedding, MobileClip };
     class Lease {
         AiRuntime *owner_{};
         Priority priority_{};
@@ -38,7 +39,9 @@ class AiRuntime {
                uint64_t drops = 0);
     std::vector<AiMetric> snapshot() const;
     void configure(double fps, unsigned interval_ms);
-    bool embedding_ready() const;
+    bool embedding_ready(bool mobileclip = false) const;
+    void mobileclip_budget(unsigned gpu, unsigned npu);
+    std::pair<unsigned, unsigned> mobileclip_budget() const;
     double fps() const;
     unsigned interval_ms() const;
     void effective_interval(unsigned ms);
@@ -61,10 +64,11 @@ class AiRuntime {
     Clock::time_point started_ = Clock::now();
     double fps_{2};
     unsigned interval_{5000}, effective_{5000};
+    unsigned mobile_gpu_{100}, mobile_npu_{100};
     mutable std::mutex gate_;
     std::condition_variable cv_;
-    unsigned waiting_[3]{};
-    uint64_t next_ticket_[3]{}, serving_ticket_[3]{};
+    unsigned waiting_[4]{};
+    uint64_t next_ticket_[4]{}, serving_ticket_[4]{};
     bool busy_{};
     Clock::time_point low_due_{};
 };
