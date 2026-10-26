@@ -15,18 +15,8 @@ pkg_check_modules(APP REQUIRED IMPORTED_TARGET gstreamer-app-1.0)
 pkg_check_modules(RTSP_SERVER REQUIRED IMPORTED_TARGET gstreamer-rtsp-server-1.0)
 pkg_check_modules(NVR_SQLITE REQUIRED IMPORTED_TARGET sqlite3)
 pkg_check_modules(NVR_JSON REQUIRED IMPORTED_TARGET json-glib-1.0)
-# The rootless sysroot ships GLib development archives but no GLib runtime: link
-# the host shared GLib so the process has a single GObject type system.
-pkg_get_variable(NVR_GLIB_LIBDIR glib-2.0 libdir)
-get_target_property(NVR_JSON_LINKS PkgConfig::NVR_JSON INTERFACE_LINK_LIBRARIES)
-foreach(component gio-2.0 gobject-2.0 glib-2.0)
-  find_library(NVR_SHARED_${component} NAMES ${component} PATHS "${NVR_GLIB_LIBDIR}" /usr/lib/x86_64-linux-gnu NO_DEFAULT_PATH REQUIRED)
-  list(FILTER NVR_JSON_LINKS EXCLUDE REGEX "/lib${component}\\.(a|so)$")
-  list(APPEND NVR_JSON_LINKS "${NVR_SHARED_${component}}")
-endforeach()
-set_target_properties(PkgConfig::NVR_JSON PROPERTIES INTERFACE_LINK_LIBRARIES "${NVR_JSON_LINKS}")
-find_library(NVR_SQLITE_SHARED NAMES sqlite3 libsqlite3.so.0 PATHS /usr/lib/x86_64-linux-gnu /lib/x86_64-linux-gnu NO_DEFAULT_PATH REQUIRED)
-set_target_properties(PkgConfig::NVR_SQLITE PROPERTIES INTERFACE_LINK_LIBRARIES "${NVR_SQLITE_SHARED}")
+amdva_use_host_glib(PkgConfig::NVR_JSON)
+amdva_use_host_sqlite(PkgConfig::NVR_SQLITE)
 set(NVR_SQLITE_VEC "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/sqlite-vec")
 
 # Qt-free backend: camera controller, configuration, AI scheduling and person search.

@@ -5,7 +5,9 @@ GType amd_detect_get_type();
 GType amd_classify_get_type();
 GType amd_inference_get_type();
 GType amd_watermark_get_type();
+#ifdef AMDVA_HAVE_PYTHON
 GType amd_python_get_type();
+#endif
 GType amd_meta_publish_get_type();
 GType amd_encode_get_type();
 static gboolean plugin_init(GstPlugin* p) {
@@ -15,7 +17,9 @@ static gboolean plugin_init(GstPlugin* p) {
            gst_element_register(p,"amdclassify",GST_RANK_NONE,amd_classify_get_type()) &&
            gst_element_register(p,"amdinference",GST_RANK_NONE,amd_inference_get_type()) &&
            gst_element_register(p,"amdwatermark",GST_RANK_NONE,amd_watermark_get_type()) &&
+#ifdef AMDVA_HAVE_PYTHON
            gst_element_register(p,"amdpython",GST_RANK_NONE,amd_python_get_type()) &&
+#endif
            gst_element_register(p,"amdmetapublish",GST_RANK_NONE,amd_meta_publish_get_type()) &&
            gst_element_register(p,"amdencode",GST_RANK_NONE,amd_encode_get_type());
 }

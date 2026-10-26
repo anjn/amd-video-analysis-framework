@@ -32,6 +32,20 @@ Streamer elements), `AMDVA_BUILD_STREAMING`, `AMDVA_HARDWARE_TESTS`, and for the
 applications under `examples/`: `AMDVA_BUILD_EXAMPLES`, `AMDVA_BUILD_NVR`,
 `AMDVA_BUILD_NVR_GUI` (needs Qt6), `AMDVA_BUILD_DASHBOARD`, `AMDVA_BUILD_RTSP_FILES`.
 
+Optional dependencies, all `ON` by default: `AMDVA_WITH_MQTT` (Eclipse Paho),
+`AMDVA_WITH_KAFKA` (librdkafka) for result publication, and `AMDVA_WITH_PYTHON`
+(embedded CPython) for `amdpython`. A minimal framework build:
+
+```bash
+cmake -S . -B build-min -DAMDVA_ROCM_ROOT="$AMDVA_ROCM_ROOT" -DAMDVA_BUILD_EXAMPLES=OFF \
+  -DAMDVA_WITH_MQTT=OFF -DAMDVA_WITH_KAFKA=OFF -DAMDVA_WITH_PYTHON=OFF
+```
+
+`AMDVA_SYSROOT` (default `.deps/sysroot`) locates the rootless development
+packages. The installed package provides `amdva_use_host_glib()` and
+`amdva_use_host_sqlite()` (`AmdvaHostLibraries.cmake`) so applications link
+the host GLib/SQLite runtime like the framework does.
+
 ## Consuming from CMake
 
 ```cmake

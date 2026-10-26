@@ -7,8 +7,10 @@
 #include <gst/analytics/analytics.h>
 #include <iostream>
 #include <json-glib/json-glib.h>
+#ifdef AMDVA_HAVE_KAFKA
 #include <librdkafka/rdkafka.h>
 #include <librdkafka/rdkafka_mock.h>
+#endif
 #include <poll.h>
 #include <sys/socket.h>
 #include <thread>
@@ -27,6 +29,7 @@ template <class F> static void eventually(F f, const char *why) {
     }
     throw std::runtime_error(why);
 }
+#ifdef AMDVA_HAVE_MQTT
 // Local MQTT 3.1.1 protocol fixture: CONNECT, QoS1 PUBLISH, PING, disconnect.
 // No external broker or network service is used by this test.
 class Broker {
@@ -120,6 +123,19 @@ class Broker {
         close(socket_);
     }
 };
+#endif
+// A broker method left out of the build must fail at construction, not silently drop results.
+[[maybe_unused]] static void require_unavailable(const char *method) {
+    PublicationOptions o;
+    o.method = method;
+    o.address = "localhost:1";
+    try {
+        ResultPublisher p(o);
+    } catch (const std::runtime_error &) {
+        return;
+    }
+    throw std::runtime_error(std::string(method) + " accepted although not built");
+}
 int main(int argc, char **argv) {
     gst_init(&argc, &argv);
     try {
@@ -183,6 +199,7 @@ int main(int argc, char **argv) {
             require(p.flush(4000), "File publication did not recover");
             require(p.status().delivered > 0, "File records not delivered");
         }
+#ifdef AMDVA_HAVE_MQTT
         {
             Broker broker;
             PublicationOptions o;
@@ -204,6 +221,10 @@ int main(int argc, char **argv) {
             require(p.flush(12000), "MQTT reconnection");
             require(p.status().delivered >= 2, "MQTT recovery delivery");
         }
+#else
+        require_unavailable("mqtt");
+#endif
+#ifdef AMDVA_HAVE_KAFKA
         {
             char error[512];
             auto *seed = rd_kafka_new(RD_KAFKA_PRODUCER, rd_kafka_conf_new(), error, sizeof(error));
@@ -233,6 +254,9 @@ int main(int argc, char **argv) {
             rd_kafka_mock_cluster_destroy(cluster);
             rd_kafka_destroy(seed);
         }
+#else
+        require_unavailable("kafka");
+#endif
         std::filesystem::remove_all(directory);
         std::cout
             << "Metadata JSON, bounded queues, file/MQTT/Kafka delivery and recovery passed\n";

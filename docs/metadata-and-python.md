@@ -102,7 +102,10 @@ logic to the dictionary or to a C++ pad probe.
 Publication is asynchronous and bounded: broker outages never stall video. MQTT
 uses QoS 1 and Kafka uses delivery callbacks; this is best-effort delivery, not
 exactly-once storage. To keep DL Streamer's `gvametapublish` instead, use the
-vendored element with `gvametaconvert` in front of it.
+vendored element with `gvametaconvert` in front of it. A build with
+`AMDVA_WITH_MQTT=OFF` or `AMDVA_WITH_KAFKA=OFF` rejects that method when the
+publisher starts, and omits the matching `gvametapublish` module; with
+`AMDVA_WITH_PYTHON=OFF` the `amdpython` element is not registered.
 
 ## C++ SDK
 

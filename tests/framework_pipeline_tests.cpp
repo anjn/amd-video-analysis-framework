@@ -120,8 +120,10 @@ static unsigned run(const std::string &description, const std::string &kind) {
                         if (attachment.parent_id >= 0 && !attachment.result.classifications.empty())
                             classified = true;
                     require(classified, "ROI classification relation missing");
+#ifdef AMDVA_HAVE_PYTHON
                     require(data.custom_json.find("objects_seen") != std::string::npos,
                             "Python custom metadata missing");
+#endif
                 }
                 if (kind == "semantic")
                     require(data.attachments.back().result.tensors[0].name == "semantic-mask",
@@ -302,10 +304,14 @@ int main(int argc, char **argv) {
         std::ofstream(callback) << "from dataclasses import dataclass\n@dataclass\nclass Counts:\n "
                                    "   value: int\ndef process(frame):\n    return "
                                    "{'objects_seen': Counts(len(frame['objects'])).value}\n";
-        run(source + " ! amdpython module=" + quoted(callback) + " ! " + detector +
+#ifdef AMDVA_HAVE_PYTHON
+        const std::string python = "amdpython module=" + quoted(callback);
+#else
+        const std::string python = "identity"; // Built with AMDVA_WITH_PYTHON=OFF.
+#endif
+        run(source + " ! " + python + " ! " + detector +
                 " ! gvatrack tracking-type=short-term-imageless ! " +
-                element("amdclassify", models, "resnet18") +
-                " ! amdpython module=" + quoted(callback) +
+                element("amdclassify", models, "resnet18") + " ! " + python +
                 " ! identity name=checked ! amdwatermark ! appsink name=output sync=false "
                 "max-buffers=4",
             "classify");

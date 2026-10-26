@@ -6,6 +6,11 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 include(CTest)
 option(AMDVA_HARDWARE_TESTS "Enable tests requiring the validated AMD VA/HIP device" OFF)
 find_package(PkgConfig REQUIRED)
+include(cmake/AmdvaHostLibraries.cmake)
+set(AMDVA_SYSROOT "${CMAKE_SOURCE_DIR}/.deps/sysroot" CACHE PATH "Optional rootless development package sysroot")
+option(AMDVA_WITH_MQTT "Build MQTT result publication (Eclipse Paho)" ON)
+option(AMDVA_WITH_KAFKA "Build Kafka result publication (librdkafka)" ON)
+option(AMDVA_WITH_PYTHON "Build the amdpython element (embedded CPython)" ON)
 pkg_check_modules(VA REQUIRED IMPORTED_TARGET libva libva-drm)
 set(AMDVA_ROCM_ROOT "/opt/rocm/core-10.0" CACHE PATH "ROCm runtime root")
 set(AMDVA_HIP_INCLUDE "${AMDVA_ROCM_ROOT}/include" CACHE PATH "HIP headers")
@@ -76,4 +81,5 @@ write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalysisCo
   VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
 install(EXPORT AMDVideoAnalysisTargets NAMESPACE AMDVA:: DESTINATION lib/cmake/AMDVideoAnalysis)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalysisConfig.cmake"
-  "${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalysisConfigVersion.cmake" DESTINATION lib/cmake/AMDVideoAnalysis)
+  "${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalysisConfigVersion.cmake"
+  cmake/AmdvaHostLibraries.cmake DESTINATION lib/cmake/AMDVideoAnalysis)

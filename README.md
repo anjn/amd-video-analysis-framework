@@ -69,6 +69,8 @@ build/src/gst/amdva-validate-preproc
 Dependencies are pinned with SHA256 hashes in [dependencies.lock.json](dependencies.lock.json):
 GStreamer 1.28.2 with DL Streamer's analytics extension patch (`patches/`),
 ROCm 7.2.0 / MIGraphX 2.15.0, with Paho MQTT, librdkafka and embedded CPython.
+The last three are optional (`AMDVA_WITH_MQTT`, `AMDVA_WITH_KAFKA`,
+`AMDVA_WITH_PYTHON`; see the [SDK guide](docs/sdk-guide.md#build-and-install)).
 DL Streamer v2026.2.0 sources are vendored in `third_party/dlstreamer` (MIT) and
 need neither a clone nor OpenVINO; inference uses MIGraphX.
 `python3 scripts/bootstrap.py --check` verifies cached dependency downloads.

@@ -1,12 +1,20 @@
 #include "amdva/publishing.hpp"
+#ifdef AMDVA_HAVE_MQTT
 #include <MQTTAsync.h>
+#else
+using MQTTAsync = void *; // Not built: the client handle stays null.
+#endif
 #include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <fstream>
 #include <gst/analytics/analytics.h>
 #include <json-glib/json-glib.h>
+#ifdef AMDVA_HAVE_KAFKA
 #include <librdkafka/rdkafka.h>
+#else
+typedef struct rd_kafka_s rd_kafka_t; // Not built: the producer stays null.
+#endif
 #include <thread>
 namespace amdva {
 std::string analysis_json(GstBuffer *buffer, const FrameIdentity &fallback) {
@@ -197,6 +205,14 @@ struct ResultPublisher::Impl {
             ((options.method == "mqtt" || options.method == "kafka") &&
              (options.address.empty() || options.topic.empty())))
             throw std::runtime_error("Missing publication destination");
+#ifndef AMDVA_HAVE_MQTT
+        if (options.method == "mqtt")
+            throw std::runtime_error("MQTT publication is not built (AMDVA_WITH_MQTT=OFF)");
+#endif
+#ifndef AMDVA_HAVE_KAFKA
+        if (options.method == "kafka")
+            throw std::runtime_error("Kafka publication is not built (AMDVA_WITH_KAFKA=OFF)");
+#endif
         if (options.method != "none")
             worker = std::thread([this] { run(); });
     }
@@ -215,14 +231,17 @@ struct ResultPublisher::Impl {
             --pending;
         ready.notify_all();
     }
+#ifdef AMDVA_HAVE_KAFKA
     static void kafka_delivery(rd_kafka_t *, const rd_kafka_message_t *message, void *opaque) {
         auto *self = static_cast<Impl *>(opaque);
         self->delivered(!message->err);
         if (message->err)
             self->failure(rd_kafka_err2str(message->err));
     }
+#endif
     void initialize() {
 
+#ifdef AMDVA_HAVE_MQTT
         if (options.method == "mqtt") {
             auto *uuid = g_uuid_string_random();
             std::string id = "amdva-" + std::string(uuid);
@@ -245,6 +264,8 @@ struct ResultPublisher::Impl {
                     nullptr) != MQTTASYNC_SUCCESS)
                 throw std::runtime_error("Cannot register MQTT callbacks");
         }
+#endif
+#ifdef AMDVA_HAVE_KAFKA
         if (options.method == "kafka") {
             auto *conf = rd_kafka_conf_new();
             char error[512];
@@ -269,12 +290,14 @@ struct ResultPublisher::Impl {
                 throw std::runtime_error(error);
             }
         }
+#endif
     }
     void run() {
         try {
             initialize();
             auto retry = std::chrono::steady_clock::time_point{};
             while (!stop) {
+#ifdef AMDVA_HAVE_MQTT
                 if (mqtt && !connected && !connecting &&
                     std::chrono::steady_clock::now() >= retry) {
                     connecting = true;
@@ -300,6 +323,7 @@ struct ResultPublisher::Impl {
                         failure("MQTT connect rejected");
                     }
                 }
+#endif
                 if (options.method == "file" && !file.is_open()) {
                     if (std::chrono::steady_clock::now() < retry) {
                         std::unique_lock<std::mutex> lock(mutex);
@@ -315,8 +339,10 @@ struct ResultPublisher::Impl {
                         continue;
                     }
                 }
+#ifdef AMDVA_HAVE_KAFKA
                 if (kafka)
                     rd_kafka_poll(kafka, 0);
+#endif
                 std::string json;
                 {
                     std::unique_lock<std::mutex> lock(mutex);
@@ -343,6 +369,7 @@ struct ResultPublisher::Impl {
                         retry = std::chrono::steady_clock::now() + std::chrono::seconds(1);
                     }
                 }
+#ifdef AMDVA_HAVE_MQTT
                 if (mqtt) {
                     MQTTAsync_message message = MQTTAsync_message_initializer;
                     message.payload = json.data();
@@ -371,6 +398,8 @@ struct ResultPublisher::Impl {
                         (void)MQTTAsync_disconnect(mqtt, &d);
                     }
                 }
+#endif
+#ifdef AMDVA_HAVE_KAFKA
                 if (kafka) {
                     if (rd_kafka_producev(kafka, RD_KAFKA_V_TOPIC(options.topic.c_str()),
                                           RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY),
@@ -380,18 +409,23 @@ struct ResultPublisher::Impl {
                         failure("Kafka produce queue rejected message");
                     }
                 }
+#endif
             }
         } catch (const std::exception &e) {
             failure(e.what());
             stop = true;
         }
+#ifdef AMDVA_HAVE_MQTT
         if (mqtt)
             MQTTAsync_destroy(&mqtt);
+#endif
+#ifdef AMDVA_HAVE_KAFKA
         if (kafka) {
             rd_kafka_flush(kafka, 1000);
             rd_kafka_destroy(kafka);
             kafka = nullptr;
         }
+#endif
         std::lock_guard<std::mutex> lock(mutex);
         state.dropped += queue.size();
         pending -= queue.size();
