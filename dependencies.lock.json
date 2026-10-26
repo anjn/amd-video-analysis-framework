@@ -578,9 +578,7 @@
   "python": {
     "meson": "1.12.1",
     "ninja": "1.13.2",
-    "openvino": "2026.2.0",
-    "numpy": "2.4.6",
-    "openvino-telemetry": "2025.2.0"
+    "numpy": "2.4.6"
   },
   "model_export": {
     "torch": {

@@ -9,7 +9,6 @@ relicensed as project code. Retain license files when packaging a binary distrib
 | DL Streamer | v2026.2.0, vendored subset in `third_party/dlstreamer` (see `README.AMD.md`) | MIT, `third_party/dlstreamer/LICENSE` and `third-party-programs.txt`; installed to `share/doc/amdva/dlstreamer` |
 | GStreamer | 1.28.2 plus `patches/gst-plugins-bad-0020-gst-analytics.patch` (from DL Streamer) | LGPL-2.1-or-later; retain patch/source notices |
 | ROCm HIP / MIGraphX | 7.2.0 / 2.15.0 | Component-specific licenses distributed in ROCm packages |
-| OpenVINO | 2026.2.0 (model export environment only) | Apache-2.0, wheel notices |
 | OpenCV | Ubuntu 4.6.0 | Apache-2.0, Ubuntu copyright files |
 | libva / Mesa | host libva 2.20 / Mesa 25.2.8 | Upstream and Ubuntu component notices |
 | Qt | Ubuntu 6.4.2 | LGPL-3.0 / GPL-2.0 / GPL-3.0; retain Ubuntu copyright and Qt notices |

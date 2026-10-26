@@ -1,12 +1,13 @@
 # AMD Video Analysis Framework
 
 GStreamer video analytics for AMD APUs, using VA codecs/VPE, HIP image
-processing and MIGraphX inference. Selected Intel DL Streamer elements provide
+processing, MIGraphX inference and VA hardware encoding. A vendored subset of
+Intel DL Streamer (`gvatrack`, `gvastreammux`, `gvametaconvert`, ...) provides
 tracking, stream mux/demux, metadata aggregation and interoperability.
 
 ```text
 RTSP / file → VA decode → amddetect → gvatrack → amdclassify (ROI)
-                       → amdpython → amdmetapublish → amdwatermark → DMA-BUF sink
+                       → amdpython → amdmetapublish → amdwatermark → amdencode → file / RTSP
 ```
 
 The framework supports YOLOv8 detection, instance segmentation and pose,
@@ -18,6 +19,19 @@ The reusable `amdva_streaming` library provides dynamic RTSP registration,
 recording, reconnect, selected-source analytics and background keyframe AI
 without Qt. The desktop NVR uses that library to display up to 16 tiles with
 tracked detections. A headless command and installed CMake SDK are included.
+
+## Documentation
+
+| Topic | |
+| --- | --- |
+| Coming from DL Streamer | [element and property map, models, example](docs/migration-from-dlstreamer.md) |
+| Coming from DeepStream | [element map, `config_infer` mapping, metadata](docs/migration-from-deepstream.md) |
+| Elements | [reference: caps, properties, defaults](docs/elements.md) |
+| Models | [model-info JSON and compilation](docs/model-info.md) |
+| Metadata | [JSON schema, `amdpython`, publication](docs/metadata-and-python.md) |
+| Encoding | [hardware encode, recording, RTSP serving](docs/encode-and-serve.md) |
+| SDK | [libraries, CMake package, examples, tests](docs/sdk-guide.md) |
+| gst-launch recipes | [examples/pipelines](examples/pipelines/README.md) |
 
 See [framework support and examples](docs/framework.md),
 [memory contracts](docs/architecture.md), [NVR usage](docs/nvr.md),
@@ -49,9 +63,10 @@ build/src/gst/amdva-validate-preproc
 ```
 
 Dependencies are pinned with SHA256 hashes in [dependencies.lock.json](dependencies.lock.json):
-GStreamer 1.28.2 with DL Streamer's analytics extension patch, DL Streamer
-v2026.2.0, ROCm 7.2.0 / MIGraphX 2.15.0, and OpenVINO 2026.2.0, with Paho MQTT, librdkafka and embedded CPython. The selected
-DL Streamer build retains its OpenVINO dependency; inference uses MIGraphX.
+GStreamer 1.28.2 with DL Streamer's analytics extension patch (`patches/`),
+ROCm 7.2.0 / MIGraphX 2.15.0, with Paho MQTT, librdkafka and embedded CPython.
+DL Streamer v2026.2.0 sources are vendored in `third_party/dlstreamer` (MIT) and
+need neither a clone nor OpenVINO; inference uses MIGraphX.
 `python3 scripts/bootstrap.py --check` verifies cached dependency downloads.
 Do not reinstall or rebuild loaded libraries during a running pipeline.
 

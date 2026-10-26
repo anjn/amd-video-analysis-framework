@@ -3,10 +3,14 @@
 The AMD framework covers the main video analytics pipeline: decode, image/ROI
 preprocessing, inference, detection/classification/segmentation/pose
 postprocessing, tracking, metadata, drawing, Python callbacks and result
-publication. It reuses selected DL Streamer elements rather than renaming AMD
-inference to `gvadetect` or adding a MIGraphX backend to upstream OpenVINO
-inference. Existing DL Streamer `model-proc` files and every upstream model
-adapter are not drop-in compatible. Audio, generative AI, 3D sensor fusion and
+publication, plus hardware encoding. It vendors a subset of DL Streamer
+(`third_party/dlstreamer`, MIT) for tracking, metadata conversion and stream
+muxing rather than renaming AMD inference to `gvadetect` or adding a MIGraphX
+backend to upstream OpenVINO inference. Existing DL Streamer `model-proc` files
+and every upstream model adapter are not drop-in compatible. Developers coming
+from DL Streamer or DeepStream should start with the
+[DL Streamer migration guide](migration-from-dlstreamer.md) or the
+[DeepStream migration guide](migration-from-deepstream.md). Audio, generative AI, 3D sensor fusion and
 NPU execution are outside this implementation.
 
 ## Components
@@ -16,6 +20,7 @@ NPU execution are outside this implementation.
 | `amdva_runtime` | `runtime.hpp`, `preprocess.hpp`, `telemetry.hpp` | VA/HIP import, VPE operations, GPU image packing, inverse image geometry |
 | `amdva_inference` | `model.hpp`, `batching.hpp` | Named static GPU tensor I/O, model manifests, task adapters, bounded shared batches |
 | `amdva_gst_support` | `tensor_meta.hpp`, `video_preprocess.hpp`, `tracking.hpp`, `overlay.hpp`, `publishing.hpp`, `gst_telemetry.hpp` | GstAnalytics interop, GPU payload ownership, video preprocessing, imageless tracking, drawing and output |
+| `amdva_media` | `vui.hpp`, `rtsp_server.hpp`, `egl_import.hpp` | BT.709 H.264 VUI signalling, appsrc RTSP server wrapper, Qt-free VA-to-EGL DMA-BUF texture import |
 | `amdva_streaming` | `streaming/*.hpp` | Dynamic RTSP registration/selection, reconnect, compressed recording, SQLite catalog, storage quota, background keyframe admission and analytics scheduling |
 | Desktop NVR | `src/nvr` | Qt controls and EGL tile presentation; uses the public streaming library |
 
@@ -36,15 +41,16 @@ specific to the Qt UI.
 | `amdwatermark` | GPU boxes, class labels, tracking IDs, masks and COCO-17 skeletons; NV12 VAMemory input, BGRA DMA-BUF output |
 | `amdpython` | Metadata-only `callback(frame_dict)` extension, without exposing pixels or GPU addresses |
 | `amdmetapublish` | Bounded asynchronous JSON-lines, MQTT QoS1 or Kafka publication |
+| `amdencode` | VA hardware H.264/H.265/AV1 encoder bin for VAMemory or BGRA DMA-BUF frames; see [encoding and serving](encode-and-serve.md) |
 | `amdpreproc`, `amdmigraphx` | Existing two-element YOLOv8 interface, retained for compatibility |
 
-Selected upstream elements include `gvatrack`, `gvametaconvert`,
-`gvametapublish`, `gvastreammux`, `gvastreamdemux`, `gvametaaggregate`,
-`gvaattachroi`, `gvaanalytics`, `gvafpscounter` and `gvafpsthrottle`.
-Upstream MQTT/Kafka publisher modules and `gvapython` are also built. Upstream
-`gvapython` additionally requires a working PyGObject environment and the
-GStreamer Video/Analytics typelibs; the rootless baseline does not supply those
-typelibs. Use `amdpython` for the validated metadata callback interface.
+The vendored DL Streamer subset provides `gvatrack`, `gvametaconvert`,
+`gvametapublish` (file, MQTT and Kafka modules), `gvastreammux`,
+`gvastreamdemux` and `gvametaaggregate`. Other upstream elements
+(`gvadetect`, `gvaclassify`, `gvainference`, `gvawatermark`, `gvapython`,
+`gvaattachroi`, `gvaanalytics`, `gvafpscounter`, `gvafpsthrottle`) are not
+included; use the `amd*` elements. See the [element reference](elements.md) for
+every property.
 
 Imageless `gvatrack` avoids CPU image mapping. Upstream image-based tracker and
 watermark paths do not satisfy the AMD GPU memory contract and are not enabled
@@ -235,7 +241,7 @@ snapshots. See [the SDK example](../examples/sdk/CMakeLists.txt).
 
 External CMake consumers use `find_package(AMDVideoAnalysis REQUIRED)` and
 link `AMDVA::amdva_streaming`, `AMDVA::amdva_gst_support`,
-`AMDVA::amdva_inference` or `AMDVA::amdva_runtime`. The installed package
+`AMDVA::amdva_inference`, `AMDVA::amdva_media` or `AMDVA::amdva_runtime`. The installed package
 requires the compatible host VA/GStreamer/ROCm stack; it does not bundle a
 portable driver runtime. Set `AMDVA_ROCM_ROOT` when locating HIP headers on a
 compatible installation. The Qt desktop can be disabled independently of the
