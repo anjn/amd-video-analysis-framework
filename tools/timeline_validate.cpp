@@ -3,6 +3,7 @@
 #include <fstream>
 #include <gst/va/gstvadisplay_drm.h>
 #include <iostream>
+#include <thread>
 using namespace amdva::streaming;
 namespace fs = std::filesystem;
 void require(bool value, const char *message) {

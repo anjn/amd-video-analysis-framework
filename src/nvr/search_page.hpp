@@ -1,4 +1,5 @@
 #pragma once
+#include "amdva/streaming/controller.hpp"
 #include "amdva/streaming/playback.hpp"
 #include <QWidget>
 namespace amdva::nvr {

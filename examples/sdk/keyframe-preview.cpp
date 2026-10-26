@@ -2,6 +2,7 @@
 #include <gst/va/gstvadisplay_drm.h>
 #include <iostream>
 #include <unistd.h>
+#include <thread>
 using namespace amdva::streaming;
 int main(int argc, char **argv) {
     if (argc != 4) {

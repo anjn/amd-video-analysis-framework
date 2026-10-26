@@ -1,4 +1,5 @@
 #include "amdva/streaming/catalog.hpp"
+#include <gst/gst.h>
 #include <fstream>
 #include <sqlite3.h>
 #include <iostream>
@@ -70,7 +71,7 @@ int main() {
             c.store_analysis({frame});
             check(c.analysis("cam", 0, 3000).empty(), "Wrong session rejected");
             frame.session = "new-session";
-            c.enqueue_analysis(frame, std::make_shared<AiRuntime>());
+            c.enqueue_analysis(frame);
             c.closed("two.mkv", 2 * GST_SECOND);
         }
         {

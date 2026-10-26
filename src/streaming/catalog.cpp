@@ -97,7 +97,6 @@ Catalog::Catalog(const std::filesystem::path &root) {
             sql("CREATE INDEX IF NOT EXISTS recordings_media_time ON recordings"
                 "(channel,COALESCE(media_started_ms,created),name);");
             sql("COMMIT;");
-            initialize_search();
             initialize_analysis();
         } catch (...) {
             sql("ROLLBACK;");
@@ -153,6 +152,21 @@ void Catalog::closed(const std::string &name, int64_t duration_ns) {
     s.text(1, name);
     s.done();
 }
+void Catalog::extend(CatalogExtension extension) {
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
+    if (extension.initialize)
+        extension.initialize(db_);
+    extensions_.push_back(std::move(extension));
+}
+void Catalog::with_database(const std::function<void(sqlite3 *)> &f) const {
+    std::lock_guard<std::recursive_mutex> guard(mutex_);
+    f(db_);
+}
+bool Catalog::recording_present(const std::string &name) const {
+    struct stat st {};
+    return safe(name) && fstatat(directory_, name.c_str(), &st, AT_SYMLINK_NOFOLLOW) == 0 &&
+           S_ISREG(st.st_mode);
+}
 uint64_t Catalog::bytes() const {
     std::lock_guard<std::recursive_mutex> guard(mutex_);
     Statement s(db_, "SELECT name FROM recordings");
@@ -164,11 +178,9 @@ uint64_t Catalog::bytes() const {
             S_ISREG(st.st_mode))
             total += uint64_t(st.st_size);
     }
-    Statement payload(
-        db_, "SELECT COALESCE(SUM(length(png)+length(embedding)+COALESCE(length(reid),0)+256),0) "
-             "FROM observations");
-    if (sqlite3_step(payload.p) == SQLITE_ROW)
-        total += sqlite3_column_int64(payload.p, 0);
+    for (const auto &extension : extensions_)
+        if (extension.bytes)
+            total += extension.bytes(db_);
     Statement analysis_payload(
         db_, "SELECT COALESCE((SELECT SUM(length(channel)+length(session)+length(run)+192) FROM "
              "analysis_frames),0) + (SELECT COUNT(*)*96 FROM analysis_objects)");

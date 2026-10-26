@@ -1,5 +1,6 @@
 #include "amdva/streaming/catalog.hpp"
 #include <algorithm>
+#include <condition_variable>
 #include <cstdio>
 #include <sqlite3.h>
 #include <sstream>
@@ -61,9 +62,9 @@ bool has_column(sqlite3 *db, const char *table, const char *column) {
 struct Catalog::AnalysisWriter {
     struct Item {
         RecordedAnalysis frame;
-        std::shared_ptr<AiRuntime> runtime;
         std::chrono::steady_clock::time_point queued;
     };
+    AnalysisHooks hooks;
     std::mutex mutex;
     std::condition_variable cv;
     std::deque<Item> queue;
@@ -120,6 +121,7 @@ void Catalog::initialize_analysis() {
     w->thread = std::thread([this, w] {
         for (;;) {
             std::vector<AnalysisWriter::Item> items;
+            AnalysisHooks hooks;
             {
                 std::unique_lock<std::mutex> lock(w->mutex);
                 w->cv.wait_for(lock, std::chrono::milliseconds(250),
@@ -130,8 +132,9 @@ void Catalog::initialize_analysis() {
                     items.push_back(std::move(w->queue.front()));
                     w->queue.pop_front();
                 }
-                if (!items.empty() && items.front().runtime)
-                    items.front().runtime->queue("Analysis save queue", "", w->queue.size());
+                hooks = w->hooks;
+                if (!items.empty() && hooks.on_queue)
+                    hooks.on_queue(w->queue.size(), 0);
             }
             if (items.empty())
                 continue;
@@ -141,9 +144,8 @@ void Catalog::initialize_analysis() {
                 for (auto &item : items)
                     batch.push_back(std::move(item.frame));
                 store_analysis(batch);
-                if (auto r = items.front().runtime)
-                    r->record(
-                        "Analysis DB save", "",
+                if (hooks.on_saved)
+                    hooks.on_saved(
                         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
                                                                   begin)
                             .count(),
@@ -153,8 +155,8 @@ void Catalog::initialize_analysis() {
             } catch (const std::exception &e) {
                 std::lock_guard<std::mutex> lock(w->mutex);
                 w->error = e.what();
-                if (auto r = items.front().runtime)
-                    r->queue("Analysis save errors", "", 0, items.size());
+                if (hooks.on_failed)
+                    hooks.on_failed(items.size());
             }
         }
     });
@@ -170,7 +172,13 @@ void Catalog::stop_analysis() {
     if (analysis_writer_->thread.joinable())
         analysis_writer_->thread.join();
 }
-void Catalog::enqueue_analysis(RecordedAnalysis frame, std::shared_ptr<AiRuntime> runtime) {
+void Catalog::analysis_hooks(AnalysisHooks hooks) {
+    if (!analysis_writer_)
+        return;
+    std::lock_guard<std::mutex> lock(analysis_writer_->mutex);
+    analysis_writer_->hooks = std::move(hooks);
+}
+void Catalog::enqueue_analysis(RecordedAnalysis frame) {
     if (!analysis_writer_ || frame.session.empty() || !frame.time_ms)
         return;
     auto &w = *analysis_writer_;
@@ -182,9 +190,9 @@ void Catalog::enqueue_analysis(RecordedAnalysis frame, std::shared_ptr<AiRuntime
         w.queue.pop_front();
         dropped = 1;
     }
-    w.queue.push_back({std::move(frame), runtime, std::chrono::steady_clock::now()});
-    if (runtime)
-        runtime->queue("Analysis save queue", "", w.queue.size(), dropped);
+    w.queue.push_back({std::move(frame), std::chrono::steady_clock::now()});
+    if (w.hooks.on_queue)
+        w.hooks.on_queue(w.queue.size(), dropped);
     w.cv.notify_one();
 }
 std::string Catalog::analysis_error() const {

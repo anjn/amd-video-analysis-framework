@@ -1,6 +1,7 @@
 #include <amdva/streaming/playback.hpp>
 #include <gst/va/gstvadisplay_drm.h>
 #include <iostream>
+#include <thread>
 using namespace amdva::streaming;
 int main(int argc, char **argv) {
     if (argc != 3) {

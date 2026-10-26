@@ -76,7 +76,7 @@ GLuint program(QOpenGLExtraFunctions *gl, const char *vertex, const char *fragme
     return result;
 }
 } // namespace
-Tiles::Tiles(Controller &c, Slot *playback)
+Tiles::Tiles(Controller &c, PreviewSlot *playback)
     : QOpenGLWindow(QOpenGLWindow::NoPartialUpdate), controller_(c), playback_(playback) {
     connect(this, &QOpenGLWindow::frameSwapped, this, [this] {
         const auto now = Telemetry::monotonic_ns();
@@ -645,7 +645,9 @@ void Tiles::paintGL() {
         if (p.timing.telemetry && !p.timing.frame.ns[unsigned(TimingStage::Swap)])
             pending_swap_.push_back({index, unsigned(image), p.timing});
         if (!playback_) {
-            OverlayFrame overlay{s.detection_width, s.detection_height, {}, {}};
+            // Live tiles only: the slot also carries the latest AI results.
+            auto &live = controller_.gpu_slots()[index];
+            OverlayFrame overlay{live.detection_width, live.detection_height, {}, {}};
             bool person_tracking = false;
             if (auto *search = controller_.search_service()) {
                 const auto tracking = search->tracks(s.channel);
@@ -661,13 +663,14 @@ void Tiles::paintGL() {
                 }
             }
             if (!person_tracking &&
-                Clock::now() - s.detected_at <= std::chrono::milliseconds(500) &&
-                p.original_width == s.detection_width && p.original_height == s.detection_height) {
-                if (!s.tracked.empty())
-                    for (const auto &tracked : s.tracked)
+                Clock::now() - live.detected_at <= std::chrono::milliseconds(500) &&
+                p.original_width == live.detection_width &&
+                p.original_height == live.detection_height) {
+                if (!live.tracked.empty())
+                    for (const auto &tracked : live.tracked)
                         overlay.objects.push_back({tracked.box, tracked.label, tracked.id, {}});
                 else
-                    for (const auto &box : s.detections)
+                    for (const auto &box : live.detections)
                         overlay.objects.push_back(
                             {box, box.class_id == 0 ? "Person" : "Object", 0, {}});
             }

@@ -399,6 +399,7 @@ std::string fingerprint(const SearchOptions &o) {
 }
 } // namespace
 struct SearchService::Impl {
+    SearchIndex &index;
     Catalog &catalog;
     GstVaDisplay *display;
     SearchOptions options;
@@ -435,8 +436,8 @@ struct SearchService::Impl {
     std::string run_id =
         std::to_string(std::random_device{}()) + "-" +
         std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
-    Impl(Catalog &c, GstVaDisplay *d, SearchOptions o, std::shared_ptr<AiRuntime> r)
-        : catalog(c), display(d), options(std::move(o)),
+    Impl(SearchIndex &i, GstVaDisplay *d, SearchOptions o, std::shared_ptr<AiRuntime> r)
+        : index(i), catalog(i.catalog()), display(d), options(std::move(o)),
           runtime(r ? r : std::make_shared<AiRuntime>()) {
         if (!r) {
             runtime->configure(runtime->fps(), options.interval_ms);
@@ -571,7 +572,7 @@ struct SearchService::Impl {
                         recorded.objects.push_back(
                             {b, reid ? identities[i].person : 0, reid ? identities[i].track : 0});
                     }
-                    catalog.enqueue_analysis(std::move(recorded), runtime);
+                    catalog.enqueue_analysis(std::move(recorded));
                     std::lock_guard<std::mutex> lock(mutex);
                     for (size_t i = 0; i < detections.size(); ++i) {
                         const auto &identity = identities[i];
@@ -663,7 +664,7 @@ struct SearchService::Impl {
                             item.observation.model = device == 1 && model.combined ? npu_key : key;
                             auto start = Clock::now();
                             item.observation.png = png_encode(item.image);
-                            stored = catalog.store_observation(item.observation);
+                            stored = index.store(item.observation);
                             runtime->record("PNG + DB save", item.observation.channel,
                                             elapsed(start));
                         } catch (const std::exception &e) {
@@ -720,9 +721,9 @@ struct SearchService::Impl {
                     runtime->record(request.image.rgb.empty() ? "Text query" : "Image query", "",
                                     elapsed(start));
                     auto search_start = Clock::now();
-                    auto hits = catalog.search(enabled[0] ? gpu : npu, key);
+                    auto hits = index.search(enabled[0] ? gpu : npu, key);
                     if (model.combined) {
-                        auto more = catalog.search(npu, npu_key);
+                        auto more = index.search(npu, npu_key);
                         hits.insert(hits.end(), std::make_move_iterator(more.begin()),
                                     std::make_move_iterator(more.end()));
                     }
@@ -971,9 +972,9 @@ struct SearchService::Impl {
                                 std::chrono::duration<double, std::milli>(t - wait).count());
                         }
                         auto t = Clock::now();
-                        auto hits = catalog.search(embedding, key);
+                        auto hits = index.search(embedding, key);
                         if (model.combined) {
-                            auto npu_hits = catalog.search(npu_embedding, npu_key);
+                            auto npu_hits = index.search(npu_embedding, npu_key);
                             hits.insert(hits.end(), std::make_move_iterator(npu_hits.begin()),
                                         std::make_move_iterator(npu_hits.end()));
                         }
@@ -1010,7 +1011,7 @@ struct SearchService::Impl {
                                 p.observation.model = i < model.last_gpu_count ? key : npu_key;
                             auto t = Clock::now();
                             p.observation.png = png_encode(images[i]);
-                            bool stored = catalog.store_observation(p.observation);
+                            bool stored = index.store(p.observation);
                             runtime->record("PNG + DB save", p.observation.channel, elapsed(t));
                             std::lock_guard<std::mutex> l(mutex);
                             if (stored) {
@@ -1035,9 +1036,9 @@ struct SearchService::Impl {
         }
     }
 };
-SearchService::SearchService(Catalog &c, GstVaDisplay *d, SearchOptions o,
+SearchService::SearchService(SearchIndex &i, GstVaDisplay *d, SearchOptions o,
                              std::shared_ptr<AiRuntime> r)
-    : impl_(std::make_unique<Impl>(c, d, std::move(o), std::move(r))) {}
+    : impl_(std::make_unique<Impl>(i, d, std::move(o), std::move(r))) {}
 SearchService::~SearchService() = default;
 void SearchService::shutdown() { impl_->stop(); }
 void SearchService::wait_initialized() {

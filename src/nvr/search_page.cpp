@@ -326,11 +326,11 @@ struct SearchPage::Impl {
                 if (thumbnail_targets.count(load.first))
                     loads.push_back(load);
             }
-            auto *catalog = &controller.recording_catalog();
-            pictures = std::async(std::launch::async, [catalog, loads = std::move(loads)] {
+            auto *index = &controller.search_index();
+            pictures = std::async(std::launch::async, [index, loads = std::move(loads)] {
                 Pictures out;
                 for (auto [token, id] : loads)
-                    out.values.emplace_back(token, catalog->observation_image(id));
+                    out.values.emplace_back(token, index->image(id));
                 return out;
             });
         }

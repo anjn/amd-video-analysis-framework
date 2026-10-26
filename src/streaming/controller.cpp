@@ -21,14 +21,6 @@
 #include <map>
 #include <random>
 namespace amdva::streaming {
-void initialize_runtime() {
-    // Reuse a bounded set of glibc arenas across transient camera worker groups.
-    // Respect an operator's explicit allocator setting.
-    const auto *arenas = std::getenv("MALLOC_ARENA_MAX");
-    if (!arenas || !*arenas)
-        mallopt(M_ARENA_MAX, 4);
-    gst_init(nullptr, nullptr);
-}
 namespace {
 constexpr uint64_t compressed_limit = 16ull << 20;
 GstElement *parse(const std::string &description) {
@@ -79,13 +71,10 @@ std::string public_error(const std::string &error, const Source &source) {
 }
 } // namespace
 Slot::~Slot() {
-    preview_va.reset();
+    // The base releases the preview surfaces and the VA session afterwards.
     image.reset();
-    if (va) {
-        for (auto &p : preview)
-            va->destroy_surface(p.surface);
+    if (va)
         va->destroy_surface(ai_surface);
-    }
 }
 struct Controller::Channel {
     Controller &controller;
@@ -712,6 +701,17 @@ Controller::Controller(Options options) : options_(std::move(options)) {
         throw std::runtime_error("Cannot open shared VA display");
     try {
         catalog_ = std::make_unique<Catalog>(options_.recording_root);
+        search_index_ = std::make_unique<SearchIndex>(*catalog_);
+        catalog_->analysis_hooks(
+            {[runtime = ai_runtime_](size_t pending, unsigned dropped) {
+                 runtime->queue("Analysis save queue", "", unsigned(pending), dropped);
+             },
+             [runtime = ai_runtime_](double ms, double wait, size_t frames) {
+                 runtime->record("Analysis DB save", "", ms, wait, unsigned(frames));
+             },
+             [runtime = ai_runtime_](size_t frames) {
+                 runtime->queue("Analysis save errors", "", 0, frames);
+             }});
         if (options_.results.method != "none")
             publisher_ = std::make_unique<ResultPublisher>(options_.results);
         for (auto &s : slots_) {
@@ -771,7 +771,7 @@ Controller::Controller(Options options) : options_(std::move(options)) {
     }
     if (options_.search.enabled) {
         search_ =
-            std::make_unique<SearchService>(*catalog_, display_, options_.search, ai_runtime_);
+            std::make_unique<SearchService>(*search_index_, display_, options_.search, ai_runtime_);
         // HIP graph capture must finish before the live GPU schedulers start.
         search_->wait_initialized();
     }
@@ -1498,7 +1498,7 @@ void Controller::gpu_loop() {
                         b.h /= item.frame.height;
                         recorded.objects.push_back({b, 0, 0});
                     }
-                    catalog_->enqueue_analysis(std::move(recorded), ai_runtime_);
+                    catalog_->enqueue_analysis(std::move(recorded));
                 }
                 if (options_.search.enabled && !options_.search.reid_model.empty())
                     s.detections.erase(std::remove_if(s.detections.begin(), s.detections.end(),

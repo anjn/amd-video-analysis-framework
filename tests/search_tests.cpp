@@ -1,5 +1,6 @@
 #include "../src/streaming/mobileclip_batch.hpp"
 #include "amdva/streaming/catalog.hpp"
+#include "amdva/streaming/search.hpp"
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -111,6 +112,7 @@ int main() {
                 "60-second cap and 10-second inclusive boundary");
         {
             Catalog c(root);
+            SearchIndex index(c);
             std::ofstream(root / "one.mkv") << "fixture";
             c.opened("one.mkv", "a", "Camera", "s");
             c.media_start("one.mkv", 1000);
@@ -124,15 +126,15 @@ int main() {
             o.person_id = "camera/session/person-1";
             o.track_id = "track-1";
             o.reid[0] = 1;
-            require(c.store_observation(o), "Active observation accepted");
-            require(c.search(o.embedding, "test").empty(), "Active recording hidden");
+            require(index.store(o), "Active observation accepted");
+            require(index.search(o.embedding, "test").empty(), "Active recording hidden");
             c.closed("one.mkv", 10000000000LL);
-            auto r = c.search(o.embedding, "test");
+            auto r = index.search(o.embedding, "test");
             require(r.size() == 1 && std::abs(r[0].similarity - 1) < 1e-6, "Cosine retrieval");
-            require(c.observation_image(r[0].id) == o.png, "Image persistence");
+            require(index.image(r[0].id) == o.png, "Image persistence");
             require(r[0].person_id == o.person_id && r[0].track_id == o.track_id,
                     "Identity persistence");
-            require(c.search(o.embedding, "other").empty(), "Model isolation");
+            require(index.search(o.embedding, "other").empty(), "Model isolation");
             for (const auto &model : {"mobileclip-gpu", "mobileclip-npu"}) {
                 auto mobile = o;
                 mobile.model = model;
@@ -140,29 +142,29 @@ int main() {
                 mobile.embedding.fill(0);
                 mobile.embedding[0] = .6f;
                 mobile.embedding[511] = .8f;
-                require(c.store_observation(mobile),
+                require(index.store(mobile),
                         "512D observation stored in zero-extended envelope");
-                auto found = c.search(mobile.embedding, model);
+                auto found = index.search(mobile.embedding, model);
                 require(found.size() == 1 && found[0].person_id == model &&
                             std::abs(found[0].similarity - 1) < 1e-6,
                         "MobileCLIP backend isolation and zero-extension cosine");
             }
-            require(c.search(o.embedding, "test").size() == 1, "Embedding spaces never mix");
+            require(index.search(o.embedding, "test").size() == 1, "Embedding spaces never mix");
             auto pin = c.open_recording("one.mkv");
             auto job = c.begin_delete();
             c.delete_batch(job);
-            require(c.search(o.embedding, "test").size() == 1,
+            require(index.search(o.embedding, "test").size() == 1,
                     "Playback pins protect observations");
             pin.reset();
             job = c.begin_delete();
             c.delete_batch(job);
-            require(c.search(o.embedding, "test").empty(), "Deletion cascades");
-            require(!c.store_observation(o), "Late completion cannot resurrect deleted recording");
+            require(index.search(o.embedding, "test").empty(), "Deletion cascades");
+            require(!index.store(o), "Late completion cannot resurrect deleted recording");
             auto zero = o.embedding;
             zero.fill(0);
             bool rejected = false;
             try {
-                c.search(zero, "test");
+                index.search(zero, "test");
             } catch (...) {
                 rejected = true;
             }
@@ -170,9 +172,10 @@ int main() {
         }
         {
             Catalog reopened(root);
+            SearchIndex reopened_index(reopened);
             std::array<float, 768> v{};
             v[0] = 1;
-            require(reopened.search(v, "test").empty(), "Reopen migration");
+            require(reopened_index.search(v, "test").empty(), "Reopen migration");
         }
         {
             auto legacy = root / "legacy";
@@ -185,10 +188,11 @@ int main() {
             old.png = {1, 2, 3};
             {
                 Catalog c(legacy);
+                SearchIndex index(c);
                 c.opened("old.mkv", old.channel, "Old camera", old.session, 0);
                 std::ofstream(legacy / "old.mkv") << "fixture";
                 c.media_start("old.mkv", 1000);
-                require(c.store_observation(old), "Legacy row stored");
+                require(index.store(old), "Legacy row stored");
                 c.closed("old.mkv", 1000000000);
             }
             sqlite3 *db = nullptr;
@@ -202,9 +206,10 @@ int main() {
             sqlite3_close(db);
             require(rc == SQLITE_OK, "Build pre-ReID schema fixture");
             Catalog migrated(legacy);
-            auto rows = migrated.search(old.embedding, old.model);
+            SearchIndex migrated_index(migrated);
+            auto rows = migrated_index.search(old.embedding, old.model);
             require(rows.size() == 1 && rows[0].person_id.empty() &&
-                        migrated.observation_image(rows[0].id) == old.png,
+                        migrated_index.image(rows[0].id) == old.png,
                     "Migration preserves legacy image retrieval");
         }
         std::filesystem::remove_all(root);

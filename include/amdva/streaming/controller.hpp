@@ -4,6 +4,8 @@
 #include "amdva/publishing.hpp"
 #include "amdva/runtime.hpp"
 #include "amdva/streaming/catalog.hpp"
+#include "amdva/streaming/preview.hpp"
+#include "amdva/streaming/search.hpp"
 #include "amdva/tracking.hpp"
 #include <array>
 #include <atomic>
@@ -19,12 +21,6 @@
 #include <mutex>
 #include <thread>
 namespace amdva::streaming {
-// Shared admission and persistent preview-surface bounds.
-inline constexpr unsigned max_video_width = 2560;
-inline constexpr unsigned max_video_height = 1440;
-// Call before creating GStreamer, Qt or worker threads.
-void initialize_runtime();
-using Clock = std::chrono::steady_clock;
 using Sample = std::shared_ptr<GstSample>;
 struct Source {
     std::string id, name, uri;
@@ -71,42 +67,23 @@ struct Frame {
     int64_t wall_time_ms{};
     std::string recording_session;
 };
-struct Plane {
-    TraceToken timing;
-    VASurfaceID surface{VA_INVALID_SURFACE};
-    // 0 free; 1 complete; 2 displayed; 3 fence pending. GL objects belong
-    // exclusively to the UI thread; VA writes only to state 0.
-    int state{};
-    unsigned width{}, height{}, original_width{}, original_height{};
-    uint64_t generation{}, sequence{};
-    std::string recording_channel, recording_session;
-    int64_t recording_start_ms{}, recording_end_ms{};
-    int64_t wall_time_ms{}; // Receiver-based recording datetime for this playback frame.
-    Clock::time_point time;
-};
-struct Slot {
+// Live camera slot: the preview surfaces plus the AI input and its latest results.
+struct Slot : PreviewSlot {
     std::atomic<bool> preview_visible{true};
-    std::mutex mutex;
-    std::unique_ptr<VaSession> va, preview_va;
-    std::array<unsigned, 4> preview_geometry{}, ai_geometry{};
+    std::array<unsigned, 4> ai_geometry{};
     VASurfaceID ai_surface{VA_INVALID_SURFACE};
     std::unique_ptr<ImportedSurface> image;
-    std::array<Plane, 3> preview;
     Frame latest;
-    std::string channel;
-    uint64_t generation{}, sequence{};
-    int64_t playback_until_ms{}; // Exclusive playback bound; zero means unbounded.
     std::vector<Detection> detections;
     std::vector<TrackedObject> tracked;
     std::unique_ptr<MetadataTracker> tracker;
     uint64_t tracking_generation{}, tracking_observation{};
     Clock::time_point detected_at{}, last_ai{};
     unsigned detection_width{}, detection_height{};
-    unsigned target_width{640}, target_height{360};
     uint64_t processed{}, inferred{};
     std::string error;
     bool job_done{};
-    ~Slot();
+    ~Slot() override;
 };
 struct DeletionStatus {
     std::string state{"idle"};
@@ -123,6 +100,7 @@ class Controller {
     std::shared_ptr<RecordingFile> open_recording(const std::string &name);
     // The catalog must outlive playback sessions that use it.
     Catalog &recording_catalog() { return *catalog_; }
+    SearchIndex &search_index() { return *search_index_; }
     StorageStatus storage() const;
     void recording_duration(const std::string &, int64_t);
     std::vector<std::pair<std::string, std::string>> recording_cameras() const;
@@ -170,6 +148,7 @@ class Controller {
     std::string fatal_;
     std::vector<std::unique_ptr<Channel>> channels_;
     std::unique_ptr<Catalog> catalog_;
+    std::unique_ptr<SearchIndex> search_index_;
     std::unique_ptr<ResultPublisher> publisher_;
     std::unique_ptr<SearchService> search_;
     std::atomic<bool> inference_ready_{false}, status_ready_{false};

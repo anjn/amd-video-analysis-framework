@@ -5,11 +5,12 @@
 #include <gst/app/gstappsink.h>
 #include <gst/va/gstva.h>
 #include <gst/video/video.h>
+#include <thread>
 namespace amdva::streaming {
 struct PlaybackSession::Impl {
     std::shared_ptr<GstVaDisplay> display;
-    Slot slot;
-    Slot *target;
+    PreviewSlot slot;
+    PreviewSlot *target;
     bool external{}, enabled{true}, preparing{};
     uint64_t output_generation{};
     int64_t initial_seek{-1};
@@ -27,7 +28,7 @@ struct PlaybackSession::Impl {
     std::shared_ptr<RecordingFile> file;
     Sample held;
     std::atomic<bool> linked{false}, unsupported{false};
-    Impl(GstVaDisplay *d, Slot *output = nullptr)
+    Impl(GstVaDisplay *d, PreviewSlot *output = nullptr)
         : display(GST_VA_DISPLAY(gst_object_ref(d)), [](auto *p) { gst_object_unref(p); }),
           target(output ? output : &slot), external(output != nullptr), enabled(!output) {
         if (!external) {
@@ -338,7 +339,7 @@ PlaybackSession::PlaybackSession(GstVaDisplay *d) {
     impl_ = std::make_unique<Impl>(d);
 }
 PlaybackSession::~PlaybackSession() = default;
-PlaybackSession::PlaybackSession(GstVaDisplay *d, Slot *target) {
+PlaybackSession::PlaybackSession(GstVaDisplay *d, PreviewSlot *target) {
     if (!d || !target)
         throw std::invalid_argument("Missing playback display or output");
     impl_ = std::make_unique<Impl>(d, target);
@@ -431,7 +432,7 @@ PlaybackStatus PlaybackSession::status() const {
     std::lock_guard<std::mutex> l(impl_->mutex);
     return impl_->status;
 }
-Slot &PlaybackSession::slot() { return impl_->slot; }
+PreviewSlot &PlaybackSession::slot() { return impl_->slot; }
 } // namespace amdva::streaming
 
 namespace amdva::streaming {
@@ -439,7 +440,7 @@ struct TimelinePlaybackSession::Impl {
     // Keep the VA display alive until after the shared output surfaces retire.
     std::shared_ptr<GstVaDisplay> display_owner;
     Catalog &catalog;
-    Slot slot;
+    PreviewSlot slot;
     std::unique_ptr<PlaybackSession> decoders[2];
     std::optional<Recording> records[2], cursor;
     uint64_t seen[2]{};
@@ -767,7 +768,7 @@ TimelinePlaybackStatus TimelinePlaybackSession::status() const {
     std::lock_guard<std::mutex> lock(impl_->mutex);
     return impl_->status;
 }
-Slot &TimelinePlaybackSession::slot() { return impl_->slot; }
+PreviewSlot &TimelinePlaybackSession::slot() { return impl_->slot; }
 } // namespace amdva::streaming
 
 namespace amdva::streaming {
@@ -800,7 +801,7 @@ struct KeyframePreviewSession::Impl {
     };
     Catalog &catalog;
     std::shared_ptr<GstVaDisplay> display;
-    Slot unused;
+    PreviewSlot unused;
     std::unique_ptr<PlaybackSession> decoder;
     mutable std::mutex mutex;
     std::condition_variable wake;
@@ -845,7 +846,7 @@ struct KeyframePreviewSession::Impl {
         result->width = std::max(2u, 2 * unsigned(std::ceil(info.width * scale / 2)));
         result->height = std::max(2u, 2 * unsigned(std::ceil(info.height * scale / 2)));
         result->impl_->surface = result->impl_->va->create_bgra(result->width, result->height);
-        Slot temporary;
+        PreviewSlot temporary;
         temporary.target_width = result->width;
         temporary.target_height = result->height;
         Plane out;

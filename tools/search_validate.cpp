@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
                                       << std::endl;
                         }
                         observation_id = r.groups.front().images.front().id;
-                        auto png = controller.recording_catalog().observation_image(observation_id);
+                        auto png = controller.search_index().image(observation_id);
                         QFile picture(QString::fromStdString(
                             (std::filesystem::path(argv[1]).parent_path() / "english-match.png")
                                 .string()));
@@ -248,8 +248,8 @@ int main(int argc, char **argv) {
                 } else if (stage == 7 && tick > deletion_start + 10) {
                     auto state = controller.deletion_status();
                     if (state.state != "running" && state.state != "waiting") {
-                        if (!controller.recording_catalog()
-                                 .observation_image(observation_id)
+                        if (!controller.search_index()
+                                 .image(observation_id)
                                  .empty())
                             throw std::runtime_error("Deleted recording retained its image");
                         if (errors && errors())

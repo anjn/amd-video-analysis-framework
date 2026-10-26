@@ -5,6 +5,7 @@
 #include <fstream>
 #include <gst/va/gstvadisplay_drm.h>
 #include <iostream>
+#include <thread>
 using namespace amdva::streaming;
 void check(bool value, const char *message) {
     if (!value)

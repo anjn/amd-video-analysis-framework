@@ -46,7 +46,7 @@ if(BUILD_TESTING AND AMDVA_HARDWARE_TESTS)
 endif()
 
 find_package(PNG REQUIRED)
-target_sources(amdva_streaming PRIVATE ai.cpp search.cpp search_catalog.cpp person_tracking.cpp reid.cpp ../../third_party/sqlite-vec/sqlite-vec.c)
+target_sources(amdva_streaming PRIVATE ai.cpp search.cpp search_index.cpp person_tracking.cpp reid.cpp ../../third_party/sqlite-vec/sqlite-vec.c)
 set_source_files_properties(../../third_party/sqlite-vec/sqlite-vec.c PROPERTIES COMPILE_DEFINITIONS "SQLITE_CORE;SQLITE_VEC_STATIC;SQLITE_VEC_OMIT_FS")
 target_link_libraries(amdva_streaming PRIVATE PNG::PNG ${CMAKE_DL_LIBS})
 if(BUILD_TESTING)

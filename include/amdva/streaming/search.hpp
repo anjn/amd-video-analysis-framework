@@ -8,6 +8,7 @@
 #include <functional>
 #include <future>
 #include <gst/va/gstvadisplay.h>
+struct sqlite3;
 namespace amdva::streaming {
 class Catalog;
 struct Frame;
@@ -81,9 +82,26 @@ struct PersonTrackFrame {
     std::chrono::steady_clock::time_point captured{};
     std::vector<Object> objects;
 };
+// Crop embeddings kept in the recording catalog database. Rows are deleted with their
+// recordings and count against the recording quota. The catalog must outlive the index.
+class SearchIndex {
+  public:
+    explicit SearchIndex(Catalog &);
+    Catalog &catalog() const { return catalog_; }
+    // False when the recording was deleted meanwhile.
+    bool store(const SearchObservation &);
+    std::vector<SearchObservation> search(const std::array<float, 768> &, const std::string &model);
+    std::vector<uint8_t> image(int64_t id) const;
+    void reconcile();
+
+  private:
+    void initialize(sqlite3 *);
+    void reconcile(sqlite3 *);
+    Catalog &catalog_;
+};
 class SearchService {
   public:
-    SearchService(Catalog &, GstVaDisplay *, SearchOptions, std::shared_ptr<AiRuntime> = {});
+    SearchService(SearchIndex &, GstVaDisplay *, SearchOptions, std::shared_ptr<AiRuntime> = {});
     ~SearchService();
     void submit(const Frame &, const std::string &channel, const std::vector<Detection> &);
     uint64_t text(std::string);

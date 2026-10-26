@@ -1,9 +1,11 @@
 #pragma once
-#include "amdva/streaming/search.hpp"
+#include "amdva/inference.hpp"
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <deque>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -75,23 +77,40 @@ struct RecordedAnalysis {
     // schema-1 record). Not interpreted by the catalog.
     std::string custom_json;
 };
+// Application tables kept in the catalog database, for example an index of crops
+// that must disappear with their recordings (use a trigger on `recordings`). The
+// callbacks run on the catalog connection with the catalog lock held.
+struct CatalogExtension {
+    std::function<void(sqlite3 *)> initialize; // create or migrate tables and triggers
+    std::function<uint64_t(sqlite3 *)> bytes;   // stored payload counted against the quota
+};
+// Optional observers of the recorded-analysis write queue, called on catalog threads.
+struct AnalysisHooks {
+    std::function<void(size_t pending, unsigned dropped)> on_queue;
+    std::function<void(double save_ms, double wait_ms, size_t frames)> on_saved;
+    std::function<void(size_t frames)> on_failed;
+};
 class Catalog {
   public:
     explicit Catalog(const std::filesystem::path &root);
     ~Catalog();
     Catalog(const Catalog &) = delete;
     Catalog &operator=(const Catalog &) = delete;
-    void initialize_search();
-    void enqueue_analysis(RecordedAnalysis, std::shared_ptr<AiRuntime>);
+    // Initializes the extension now and includes its bytes in storage accounting.
+    void extend(CatalogExtension);
+    // Runs `f` on the catalog connection with the catalog lock held.
+    void with_database(const std::function<void(sqlite3 *)> &f) const;
+    // True when the catalogued file exists as a regular file (symlinks are rejected).
+    bool recording_present(const std::string &filename) const;
+    // Set before the first enqueue_analysis().
+    void analysis_hooks(AnalysisHooks);
+    // Bounded asynchronous write; the oldest frame is dropped beyond 1024 pending.
+    void enqueue_analysis(RecordedAnalysis);
     void store_analysis(const std::vector<RecordedAnalysis> &);
     std::vector<RecordedAnalysis> analysis(const std::string &channel, int64_t from,
                                            int64_t to) const;
     std::string analysis_error() const;
 
-    bool store_observation(const SearchObservation &);
-    std::vector<SearchObservation> search(const std::array<float, 768> &, const std::string &model);
-    std::vector<uint8_t> observation_image(int64_t id) const;
-    void reconcile_search();
     void opened(const std::string &filename, const std::string &channel,
                 const std::string &camera_name = {}, const std::string &session = {},
                 unsigned fragment = 0, std::optional<int64_t> media_started_ms = {});
@@ -131,6 +150,7 @@ class Catalog {
     std::vector<std::weak_ptr<RecordingFile>> playing_;
     std::set<std::string> duration_attempted_;
     std::atomic<uint64_t> deletion_generation_{0};
+    std::vector<CatalogExtension> extensions_;
     Recording row(sqlite3_stmt *) const;
     void sql(const char *statement);
 };

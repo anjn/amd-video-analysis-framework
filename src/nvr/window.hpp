@@ -18,7 +18,7 @@
 namespace amdva::nvr {
 class Tiles final : public QOpenGLWindow {
   public:
-    explicit Tiles(Controller &controller, Slot *playback = nullptr);
+    explicit Tiles(Controller &controller, PreviewSlot *playback = nullptr);
     void layout(const std::array<std::string, 16> &cells, unsigned count, int focus = -1);
     std::function<void(unsigned, bool)> activated;
     void select_tile(unsigned cell) {
@@ -102,8 +102,8 @@ class Tiles final : public QOpenGLWindow {
     std::future<streaming::SearchImage> extracting_;
     void poll_selection();
     Controller &controller_;
-    Slot *playback_{};
-    Slot &slot(unsigned i) { return playback_ ? *playback_ : controller_.gpu_slots()[i]; }
+    PreviewSlot *playback_{};
+    PreviewSlot &slot(unsigned i) { return playback_ ? *playback_ : controller_.gpu_slots()[i]; }
     unsigned slot_count() const { return playback_ ? 1 : 16; }
     std::array<std::string, 16> cells_{};
     unsigned cell_count_{};

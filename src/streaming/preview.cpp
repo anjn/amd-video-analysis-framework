@@ -1,10 +1,27 @@
-#include "amdva/streaming/playback.hpp"
+#include "amdva/streaming/preview.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <malloc.h>
+#include <stdexcept>
 #include <gst/va/gstva.h>
 #include <gst/video/video.h>
 namespace amdva::streaming {
-void prepare_preview(GstVaDisplay *display, Slot &s, Plane &out, GstSample *sample,
+void initialize_runtime() {
+    // Reuse a bounded set of glibc arenas across transient camera worker groups.
+    // Respect an operator's explicit allocator setting.
+    const auto *arenas = std::getenv("MALLOC_ARENA_MAX");
+    if (!arenas || !*arenas)
+        mallopt(M_ARENA_MAX, 4);
+    gst_init(nullptr, nullptr);
+}
+PreviewSlot::~PreviewSlot() {
+    preview_va.reset();
+    if (va)
+        for (auto &p : preview)
+            va->destroy_surface(p.surface);
+}
+void prepare_preview(GstVaDisplay *display, PreviewSlot &s, Plane &out, GstSample *sample,
                      uint64_t generation, uint64_t sequence) {
     GstVideoInfo info{};
     auto *buffer = gst_sample_get_buffer(sample);

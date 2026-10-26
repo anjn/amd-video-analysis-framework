@@ -1,10 +1,8 @@
 #pragma once
-#include "amdva/streaming/controller.hpp"
+#include "amdva/streaming/catalog.hpp"
+#include "amdva/streaming/preview.hpp"
 #include <future>
 namespace amdva::streaming {
-// Caller holds the slot mutex. Pixels remain on VA surfaces.
-void prepare_preview(GstVaDisplay *, Slot &, Plane &, GstSample *, uint64_t generation,
-                     uint64_t sequence);
 struct PlaybackStatus {
     std::string recording, state{"stopped"}, error;
     int64_t position_ns{}, duration_ns{-1};
@@ -24,12 +22,12 @@ class PlaybackSession {
     void stop();
     std::future<void> stop_and_release();
     PlaybackStatus status() const;
-    Slot &slot();
+    PreviewSlot &slot();
 
   private:
     friend class TimelinePlaybackSession;
     friend class KeyframePreviewSession;
-    PlaybackSession(GstVaDisplay *, Slot *);
+    PlaybackSession(GstVaDisplay *, PreviewSlot *);
     void output(bool enabled, uint64_t generation);
     bool ready() const;
     void keyframe(std::shared_ptr<RecordingFile>, int64_t, std::function<void(GstSample *)>);
@@ -58,7 +56,7 @@ class TimelinePlaybackSession {
     std::future<void> stop_and_release();
     void follow(bool expected);
     TimelinePlaybackStatus status() const;
-    Slot &slot();
+    PreviewSlot &slot();
 
   private:
     struct Impl;
