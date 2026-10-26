@@ -32,12 +32,17 @@
       "sha256": "917c58b9ff14f91a6b5cd1c3af16c9fcfdf5d8d78d3d167c7e8fa5bdda35f947"
     }
   ],
-  "dlstreamer": {
-    "url": "https://github.com/open-edge-platform/dlstreamer.git",
+  "gst_analytics_patch": {
+    "path": "patches/gst-plugins-bad-0020-gst-analytics.patch",
+    "origin": "Intel DL Streamer v2026.2.0 dependencies/patches/0020-gst-analytics.patch (commit ad3f68259b650f1c1aaec694d80cdfcd1055045a); adds gstanalyticsgroupmtd and gstanalyticskeypointmtd to gst-plugins-bad 1.28.2 (LGPL-2.1-or-later)",
+    "sha256": "7f6fd7e52e455389490c6be3e22e7bec4ea201c705bf3962400bc10b830d942d"
+  },
+  "dlstreamer_vendored": {
+    "path": "third_party/dlstreamer",
     "tag": "v2026.2.0",
     "commit": "ad3f68259b650f1c1aaec694d80cdfcd1055045a",
-    "analytics_patch": "dependencies/patches/0020-gst-analytics.patch",
-    "analytics_patch_sha256": "7f6fd7e52e455389490c6be3e22e7bec4ea201c705bf3962400bc10b830d942d"
+    "license": "MIT",
+    "local_changes": "patches formerly in patches/dlstreamer-*.patch are applied in-tree"
   },
   "rocm": {
     "version": "7.2.0",

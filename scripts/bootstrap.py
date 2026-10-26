@@ -73,19 +73,9 @@ def main():
                  "libbrotlicommon", "libbrotlidec", "libbrotlienc", "expat"):
         path = DEPS / "sysroot/usr/lib/x86_64-linux-gnu/pkgconfig" / f"{name}.pc"
         (DEPS / "pkgconfig" / path.name).write_text(path.read_text().replace("prefix=/usr", f"prefix={DEPS}/sysroot/usr"))
-    source = DEPS / "src/dlstreamer"
-    if not source.exists():
-        run("git", "clone", "--depth", "1", "--branch", lock["dlstreamer"]["tag"], lock["dlstreamer"]["url"], source)
-    commit = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
-    if commit != lock["dlstreamer"]["commit"]:
-        raise RuntimeError("DL Streamer checkout differs from lock")
-    patch = source / lock["dlstreamer"]["analytics_patch"]
-    if not verify(patch, lock["dlstreamer"]["analytics_patch_sha256"]):
-        raise RuntimeError("DL Streamer analytics patch differs from lock")
-    for name in ("dlstreamer-gstanalytics-label-id.patch", "dlstreamer-amd-metadata-merge.patch", "dlstreamer-stream-identities.patch"):
-        local_patch = ROOT / "patches" / name
-        if subprocess.run(["git", "apply", "--reverse", "--check", str(local_patch)], cwd=source, capture_output=True).returncode:
-            run("git", "apply", local_patch, cwd=source)
+    patch = ROOT / lock["gst_analytics_patch"]["path"]
+    if not verify(patch, lock["gst_analytics_patch"]["sha256"]):
+        raise RuntimeError("GstAnalytics patch differs from lock")
     for archive in lock["gstreamer"]:
         path = DEPS / "src" / Path(archive["url"]).name
         download(archive["url"], path, archive["sha256"])
@@ -114,14 +104,8 @@ def main():
         run(*command, build, DEPS / "src" / f"{name}-1.28.2", f"--prefix={DEPS}/prefix", "--libdir=lib", *options, env=env)
         run("meson", "compile", "-C", build, "-j", args.jobs, env=env)
         run("meson", "install", "-C", build, env=env)
-    openvino = next((DEPS / "venv/lib").glob("python*/site-packages/openvino/cmake"))
-    run("cmake", "-S", ROOT / "cmake/dlstreamer-selected", "-B", DEPS / "build-dls",
-        f"-DDLS_SOURCE={source}", f"-DSYSROOT={DEPS}/sysroot", f"-DOpenVINO_DIR={openvino}",
-        f"-DCMAKE_INSTALL_PREFIX={DEPS}/prefix", "-DCMAKE_BUILD_TYPE=Release", env=env)
-    run("cmake", "--build", DEPS / "build-dls", "-j", args.jobs, env=env)
-    run("cmake", "--install", DEPS / "build-dls", env=env)
     run("cmake", "-S", ROOT, "-B", ROOT / "build", f"-DAMDVA_ROCM_ROOT={env['AMDVA_ROCM_ROOT']}",
-        f"-DCMAKE_PREFIX_PATH={DEPS}/sysroot/usr", "-DCMAKE_BUILD_TYPE=RelWithDebInfo", "-DAMDVA_DLSTREAMER_TESTS=ON", f"-DCMAKE_INSTALL_PREFIX={DEPS}/prefix", env=env)
+        f"-DCMAKE_PREFIX_PATH={DEPS}/sysroot/usr", "-DCMAKE_BUILD_TYPE=RelWithDebInfo", f"-DCMAKE_INSTALL_PREFIX={DEPS}/prefix", env=env)
     run("cmake", "--build", ROOT / "build", "-j", args.jobs, env=env)
     run("ctest", "--test-dir", ROOT / "build", "--output-on-failure", env=env)
     return 0
