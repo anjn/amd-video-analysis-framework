@@ -94,6 +94,12 @@ recorder as a reusable class: feed it H.264/H.265 access units from a keyframe w
 `Catalog` (names, media start time, duration, interrupted segments) in step.
 Retention and quota live in the catalog and controller (`docs/vms.md`).
 
+`amdva::streaming::RtspIngest` (`amdva/streaming/ingest.hpp`) is the matching
+receive side: it pulls one RTSP camera as byte-stream, AU-aligned H.264/H.265 access
+units into a bounded queue (`take()`), reports overflow and a five second video
+timeout through `poll()`, and leaves reconnect policy to the caller. Ingest,
+recorder and a VA decoder are the three pieces the controller composes per camera.
+
 ## Serving over RTSP
 
 `amdva::RtspServer` (`amdva/rtsp_server.hpp`) wraps `gst-rtsp-server` for

@@ -8,7 +8,7 @@
 | `AMDVA::amdva_inference` | `model.hpp`, `batching.hpp`, `inference.hpp` | `ModelInfo`, `ModelExecutor`, task post-processors, shared batch executor |
 | `AMDVA::amdva_gst_support` | `tensor_meta.hpp`, `video_preprocess.hpp`, `tracking.hpp`, `overlay.hpp`, `publishing.hpp`, `gst_telemetry.hpp` | GstAnalytics interop, tracking, drawing, publication |
 | `AMDVA::amdva_media` | `vui.hpp`, `rtsp_server.hpp`, `egl_import.hpp`, `copy_audit.hpp` | encode helpers, RTSP serving, EGL import |
-| `AMDVA::amdva_streaming` | `streaming/*.hpp` | RTSP ingest, `SegmentRecorder`, catalog, playback, analytics scheduling |
+| `AMDVA::amdva_streaming` | `streaming/*.hpp` | `RtspIngest`, `SegmentRecorder`, catalog, playback, analytics scheduling |
 | `AMDVA::amdva_monitor` | `resource_monitor.hpp` | CPU/GPU/memory/power and DRM engine load |
 
 Plugins (`gstamdanalytics`, `gstgva`, `gstgvametapublish*`) install to

@@ -2,6 +2,7 @@
 #include "amdva/batching.hpp"
 #include "amdva/preprocess.hpp"
 #include "amdva/streaming/config.hpp"
+#include "amdva/streaming/ingest.hpp"
 #include "amdva/streaming/keyframe.hpp"
 #include "amdva/streaming/playback.hpp"
 #include "amdva/streaming/recorder.hpp"
@@ -91,19 +92,15 @@ struct Controller::Channel {
     Status state;
     std::shared_ptr<Telemetry> timing;
     std::unique_ptr<PipelineTelemetry> receive_timing, decode_timing;
-    GstElement *receive{}, *decoder{}, *decode_input{};
+    std::unique_ptr<RtspIngest> ingest;
+    GstElement *decoder{}, *decode_input{};
     std::vector<std::unique_ptr<SegmentRecorder>> recordings;
     SegmentRecorder *recording{};
-    std::mutex encoded_mutex;
-    std::deque<Sample> encoded;
-    uint64_t queued{};
-    std::atomic<int> codec{0};
-    std::atomic<uint64_t> input_frames{0}, input_bytes{0};
+    // 0 until the stream is seen, 1 H.264, 2 H.265, -1 unsupported.
+    int codec_id() const { return ingest ? ingest->codec() : 0; }
     uint64_t input_frames_base{}, input_bytes_base{};
     Clock::time_point input_rates_at{Clock::now()};
     void reset_input_metrics() {
-        input_frames = 0;
-        input_bytes = 0;
         input_frames_base = 0;
         input_bytes_base = 0;
         input_rates_at = Clock::now();
@@ -116,7 +113,7 @@ struct Controller::Channel {
         const double seconds = std::chrono::duration<double>(now - input_rates_at).count();
         if (seconds < 1)
             return;
-        const auto frames = input_frames.load(), bytes = input_bytes.load();
+        const auto frames = ingest ? ingest->frames() : 0, bytes = ingest ? ingest->bytes() : 0;
         state.input_fps = (frames - input_frames_base) / seconds;
         state.input_mbps = (bytes - input_bytes_base) * 8.0 / seconds / 1000000.0;
         input_frames_base = frames;
@@ -137,8 +134,7 @@ struct Controller::Channel {
         state.input_width = unsigned(std::max(0, width));
         state.input_height = unsigned(std::max(0, height));
     }
-    std::atomic<bool> overflow{false}, record_failed{false};
-    std::atomic<int64_t> last_packet_us{0};
+    std::atomic<bool> record_failed{false};
     bool removed{}, decode_wait{true};
     GstClockTime decode_origin{GST_CLOCK_TIME_NONE};
     struct SearchStamp {
@@ -176,92 +172,6 @@ struct Controller::Channel {
         stop_receive();
         stop_decode();
         recordings.clear();
-    }
-    static GstFlowReturn received(GstAppSink *sink, gpointer data) {
-        auto &c = *static_cast<Channel *>(data);
-        auto sample = own(gst_app_sink_pull_sample(sink));
-        if (!sample)
-            return GST_FLOW_EOS;
-        auto *b = gst_sample_get_buffer(sample.get());
-        const auto size = gst_buffer_get_size(b);
-        // Count before queue drops and before decode/recording selection.
-        c.input_frames.fetch_add(1, std::memory_order_relaxed);
-        c.input_bytes.fetch_add(size, std::memory_order_relaxed);
-        c.last_packet_us = g_get_monotonic_time();
-        std::lock_guard<std::mutex> l(c.encoded_mutex);
-        if (c.queued + size > compressed_limit ||
-            (!c.encoded.empty() && GST_CLOCK_TIME_IS_VALID(GST_BUFFER_PTS(b)) &&
-             GST_CLOCK_TIME_IS_VALID(
-                 GST_BUFFER_PTS(gst_sample_get_buffer(c.encoded.front().get()))) &&
-             GST_BUFFER_PTS(b) >
-                 GST_BUFFER_PTS(gst_sample_get_buffer(c.encoded.front().get())) + 2 * GST_SECOND)) {
-            c.timing->counter(TimingCounter::EncodedDiscarded, c.encoded.size());
-            c.encoded.clear();
-            c.queued = 0;
-            c.overflow = true;
-        }
-        // An oversized AU must not bypass the compressed queue's hard cap.
-        if (size > compressed_limit)
-            c.timing->counter(TimingCounter::EncodedDiscarded);
-        if (size <= compressed_limit) {
-            c.queued += size;
-            c.encoded.push_back(std::move(sample));
-        }
-        return GST_FLOW_OK;
-    }
-    static void pad_added(GstElement *, GstPad *pad, gpointer data) {
-        auto &c = *static_cast<Channel *>(data);
-        auto *caps = gst_pad_get_current_caps(pad);
-        if (!caps)
-            caps = gst_pad_query_caps(pad, nullptr);
-        if (!caps || gst_caps_is_empty(caps)) {
-            if (caps)
-                gst_caps_unref(caps);
-            return;
-        }
-        auto *s = gst_caps_get_structure(caps, 0);
-        const char *media = gst_structure_get_string(s, "media"),
-                   *enc = gst_structure_get_string(s, "encoding-name");
-        if (!media || std::string(media) != "video") {
-            gst_caps_unref(caps);
-            return;
-        }
-        const int codec = enc && std::string(enc) == "H264"   ? 1
-                          : enc && std::string(enc) == "H265" ? 2
-                                                              : -1;
-        gst_caps_unref(caps);
-        int expected = 0;
-        if (!c.codec.compare_exchange_strong(expected, codec) || codec < 0)
-            return;
-        GError *e{};
-        const char *desc = codec == 1 ? "rtph264depay ! h264parse config-interval=-1 ! "
-                                        "video/x-h264,stream-format=byte-stream,alignment=au ! "
-                                        "appsink name=encoded sync=false max-buffers=1"
-                                      : "rtph265depay ! h265parse config-interval=-1 ! "
-                                        "video/x-h265,stream-format=byte-stream,alignment=au ! "
-                                        "appsink name=encoded sync=false max-buffers=1";
-        auto *branch = gst_parse_bin_from_description(desc, TRUE, &e);
-        if (e || !branch) {
-            g_clear_error(&e);
-            if (branch)
-                gst_object_unref(branch);
-            c.codec = -1;
-            return;
-        }
-        auto *sink = gst_bin_get_by_name(GST_BIN(branch), "encoded");
-        GstAppSinkCallbacks callbacks{};
-        callbacks.new_sample = received;
-        gst_app_sink_set_callbacks(GST_APP_SINK(sink), &callbacks, &c, nullptr);
-        auto *encoded_pad = gst_element_get_static_pad(sink, "sink");
-        c.receive_timing->attach_access_units(encoded_pad);
-        gst_object_unref(encoded_pad);
-        gst_object_unref(sink);
-        gst_bin_add(GST_BIN(c.receive), branch);
-        auto *input = gst_element_get_static_pad(branch, "sink");
-        if (gst_pad_link(pad, input) != GST_PAD_LINK_OK)
-            c.codec = -1;
-        gst_object_unref(input);
-        gst_element_sync_state_with_parent(branch);
     }
     static GstFlowReturn decoded(GstAppSink *sink, gpointer data) {
         auto &c = *static_cast<Channel *>(data);
@@ -316,7 +226,6 @@ struct Controller::Channel {
     }
     void start_receive() {
         try {
-            codec = 0;
             reset_input_metrics();
             keyframes.reset();
             state.connection = "connecting";
@@ -332,34 +241,31 @@ struct Controller::Channel {
             timing->begin_generation(state.generation);
             receive_timing = std::make_unique<PipelineTelemetry>(timing);
             receive_timing->background(state.slot < 0);
-            receive = gst_pipeline_new(nullptr);
-            auto *src = gst_element_factory_make("rtspsrc", nullptr);
-            if (!src)
-                throw std::runtime_error("rtspsrc unavailable");
-            g_object_set(src, "location", state.source.uri.c_str(), "protocols", 4, "latency", 100,
-                         "tcp-timeout", guint64(5 * G_USEC_PER_SEC), "do-rtsp-keep-alive", TRUE,
-                         nullptr);
-            receive_timing->attach_rtsp(src);
-            g_signal_connect(src, "pad-added", G_CALLBACK(pad_added), this);
-            gst_bin_add(GST_BIN(receive), src);
-            last_packet_us = g_get_monotonic_time();
-            if (gst_element_set_state(receive, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
-                throw std::runtime_error("Cannot start RTSP receiver");
+            RtspIngest::Options options;
+            options.uri = state.source.uri;
+            options.queue_limit_bytes = compressed_limit;
+            RtspIngest::Hooks hooks;
+            hooks.on_source = [this](GstElement *src) { receive_timing->attach_rtsp(src); };
+            hooks.on_access_unit_pad = [this](GstPad *pad) {
+                receive_timing->attach_access_units(pad);
+            };
+            hooks.on_discarded = [this](uint64_t count) {
+                timing->counter(TimingCounter::EncodedDiscarded, count);
+            };
+            ingest = std::make_unique<RtspIngest>(std::move(options), std::move(hooks));
+            ingest->start();
         } catch (const std::exception &e) {
             failed(e.what());
         }
     }
     void stop_receive() {
-        if (receive)
+        if (ingest)
             controller.request_reclaim();
-        destroy(receive);
+        ingest.reset();
         receive_timing.reset();
         reset_input_metrics();
         timing->availability(TimingStage::Input, true, false);
         timing->availability(TimingStage::AccessUnit, true, false);
-        std::lock_guard<std::mutex> l(encoded_mutex);
-        encoded.clear();
-        queued = 0;
     }
     void cancel_background() {
         if (background_slot < 0)
@@ -560,7 +466,7 @@ struct Controller::Channel {
     }
     void start_decoder(GstCaps *caps) {
         const char *decode =
-            codec == 1
+            codec_id() == 1
                 ? "appsrc name=input is-live=true format=time block=false ! h264parse ! "
                   "vah264dec name=decode ! video/x-raw(memory:VAMemory),format=NV12 ! appsink "
                   "name=frames sync=false max-buffers=1 drop=true"
@@ -596,7 +502,7 @@ struct Controller::Channel {
         SegmentRecorder::Options options;
         options.channel = state.source.id;
         options.camera_name = state.source.name;
-        options.codec = codec == 1 ? RecordCodec::H264 : RecordCodec::H265;
+        options.codec = codec_id() == 1 ? RecordCodec::H264 : RecordCodec::H265;
         options.segment_seconds = controller.options_.segment_seconds;
         options.queue_limit_bytes = compressed_limit;
         options.on_destroyed = [this] { controller.request_reclaim(); };
@@ -686,23 +592,12 @@ struct Controller::Channel {
             end_record();
             state.recording = "quota paused";
         }
-        if (!receive) {
+        if (!ingest) {
             if (Clock::now() >= reconnect)
                 start_receive();
             return;
         }
-        auto *bus = gst_element_get_bus(receive);
-        std::string error;
-        while (auto *m =
-                   gst_bus_pop_filtered(bus, GstMessageType(GST_MESSAGE_ERROR | GST_MESSAGE_EOS))) {
-            error = GST_MESSAGE_TYPE(m) == GST_MESSAGE_ERROR ? message_error(m) : "RTSP ended";
-            gst_message_unref(m);
-        }
-        gst_object_unref(bus);
-        if (codec == -1)
-            error = "Unsupported video codec";
-        if (g_get_monotonic_time() - last_packet_us.load() > 5 * G_USEC_PER_SEC)
-            error = "RTSP video timeout";
+        const std::string error = ingest->poll();
         if (!error.empty()) {
             failed(error);
             return;
@@ -725,19 +620,14 @@ struct Controller::Channel {
             }
             gst_object_unref(b);
         }
-        if (overflow.exchange(false)) {
+        if (ingest->take_overflow()) {
             cancel_background();
             keyframes.reset();
             stop_decode();
             end_record();
             state.gaps++;
         }
-        std::deque<Sample> packets;
-        {
-            std::lock_guard<std::mutex> l(encoded_mutex);
-            packets.swap(encoded);
-            queued = 0;
-        }
+        auto packets = ingest->take();
         for (auto &sample : packets) {
             input_format(gst_sample_get_caps(sample.get()));
             state.received++;
@@ -766,7 +656,7 @@ struct Controller::Channel {
             }
             const bool independent =
                 controller.options_.background_ai_enabled
-                    ? keyframes.observe(gst_sample_get_buffer(sample.get()), codec.load())
+                    ? keyframes.observe(gst_sample_get_buffer(sample.get()), codec_id())
                     : false;
             if (state.slot < 0 && controller.options_.background_ai_enabled) {
                 if (continuous_search())
