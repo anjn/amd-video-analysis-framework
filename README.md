@@ -15,10 +15,14 @@ classification logits, semantic segmentation and generic GPU tensor results.
 Image and mask processing stay on the GPU; only bounded result metadata returns
 to the CPU. Shared batches support static sizes 1/2/4/8/16 and partial timeouts.
 
-The reusable `amdva_streaming` library provides dynamic RTSP registration,
-recording, reconnect, selected-source analytics and background keyframe AI
-without Qt. The desktop NVR uses that library to display up to 16 tiles with
-tracked detections. A headless command and installed CMake SDK are included.
+The Qt-free `amdva_streaming` library provides RTSP ingest, segment recording,
+a recording/analysis catalog with storage quota, and hardware playback. An
+installed CMake SDK is included.
+
+Applications are kept apart from the framework under [`examples/`](examples):
+a 16-camera NVR with person search, a hardware-encoded resource dashboard, a
+file-to-RTSP test server, SDK programs and `gst-launch` recipes. They use only
+the public headers and `AMDVA::` targets.
 
 ## Documentation
 
@@ -34,8 +38,8 @@ tracked detections. A headless command and installed CMake SDK are included.
 | gst-launch recipes | [examples/pipelines](examples/pipelines/README.md) |
 
 See [framework support and examples](docs/framework.md),
-[memory contracts](docs/architecture.md), [NVR usage](docs/nvr.md),
-[AI statistics and 16-camera evaluation](docs/nvr-ai-performance.md), and
+[memory contracts](docs/architecture.md), [NVR usage](examples/nvr/README.md),
+[AI statistics and 16-camera evaluation](examples/nvr/docs/nvr-ai-performance.md), and
 [validation](docs/validation.md), and [decode/presentation telemetry](docs/telemetry.md). AMD elements use their own model-info format;
 they do not implement every upstream DL Streamer model adapter or its gva
 inference backend. The legacy `amdpreproc ! amdmigraphx` pipeline remains
@@ -108,7 +112,7 @@ requires DL Streamer integration plus copy-audit success. See
 [validation](docs/validation.md) for acceptance thresholds and reproduction.
 
 Video recording preserves compressed RTSP packets; the framework does not
-provide an NPU inference backend. The [resource dashboard sample](docs/resource-dashboard.md)
+provide an NPU inference backend. The [resource dashboard sample](examples/resource-dashboard/README.md)
 uses hardware H.264 encoding for GPU-rendered monitoring graphics.
 
 ## Licenses
@@ -117,23 +121,34 @@ New code is MIT licensed. External sources remain separately licensed; see
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). Model and sample-image terms
 must be checked separately before redistribution.
 
-## Desktop NVR sample
+## Examples
 
-The Qt sample receives and records dynamically registered RTSP cameras, displays
+```text
+include/, src/, tools/, tests/   framework libraries, plugins, tools and contract tests
+examples/nvr/                    NVR sample: backend/, app/ (Qt), headless service, tools, docs
+examples/resource-dashboard/     GPU-rendered RTSP resource dashboard
+examples/rtsp-files/             file-to-RTSP test server
+examples/sdk/, examples/pipelines/  small SDK programs and gst-launch recipes
+```
+
+`-DAMDVA_BUILD_EXAMPLES=OFF` builds the framework alone; each example directory
+also configures on its own against an installed SDK.
+
+The NVR sample receives and records dynamically registered RTSP cameras, displays
 up to 16 selected H.264/H.265 channels through VA/VPE/EGL, and overlays YOLOv8n
 GPU batch detections. It supports automatic reconnect and quota-based deletion
-of closed managed MKV recordings. See [NVR setup, architecture and verification](docs/nvr.md)
-and [the example configuration](examples/nvr.json). Optional background AI
+of closed managed MKV recordings. See [NVR setup, architecture and verification](examples/nvr/README.md)
+and [the example configuration](examples/nvr/config/nvr.json). Optional background AI
 decodes only independently decodable keyframes from hidden sources, at a
 configurable interval (five seconds by default), using four bounded AI slots.
 
-The desktop sample includes fixed live layouts, camera management, recording search and hardware playback; see the [VMS GUI guide](docs/vms.md).
+The desktop sample includes fixed live layouts, camera management, recording search and hardware playback; see the [VMS GUI guide](examples/nvr/docs/vms.md).
 
-The [resource dashboard prototype](examples/resource-dashboard/README.md) is a
+The [resource dashboard prototype](examples/resource-dashboard/PROTOTYPE.md) is a
 standalone HTML preview of CPU, GPU and DRAM monitoring, with simulated readings
-and a 1080p video composition. The [native RTSP sample](docs/resource-dashboard.md)
+and a 1080p video composition. The [native RTSP sample](examples/resource-dashboard/README.md)
 collects real metrics and serves the composition through GPU rendering and
 hardware H.264 encoding.
 
 For video files as repeatable RTSP camera inputs, see the
-[file-to-RTSP tool](docs/rtsp-files.md).
+[file-to-RTSP tool](examples/rtsp-files/README.md).

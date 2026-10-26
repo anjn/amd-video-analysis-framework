@@ -1,6 +1,7 @@
 pkg_check_modules(MEDIA_GST REQUIRED IMPORTED_TARGET gstreamer-1.0>=1.28.2 gstreamer-codecparsers-1.0 gstreamer-rtsp-server-1.0)
 pkg_check_modules(MEDIA_GL REQUIRED IMPORTED_TARGET egl glesv2)
 add_library(amdva_media SHARED h264_vui.cpp rtsp_server.cpp egl_import.cpp)
+add_library(AMDVA::amdva_media ALIAS amdva_media)
 target_compile_definitions(amdva_media PRIVATE GST_USE_UNSTABLE_API)
 target_include_directories(amdva_media PUBLIC "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>")
 target_link_libraries(amdva_media PUBLIC PkgConfig::MEDIA_GST PkgConfig::MEDIA_GL)

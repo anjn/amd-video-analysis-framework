@@ -1,0 +1,139 @@
+{
+  "model": "../../../artifacts/ai-benchmark/yolo11n-640x384-b4.mxr",
+  "single_model": "../../../artifacts/ai-benchmark/yolo11n-640x384-b1.mxr",
+  "model_info": "yolo11n-rect.json",
+  "recording_root": "../../../artifacts/nvr-ai-recordings",
+  "tracking_enabled": true,
+  "telemetry": {
+    "enabled": true,
+    "stall_ms": 1000
+  },
+  "ai_fps": 2,
+  "batch_size": 4,
+  "segment_seconds": 5,
+  "retention_minutes": 5,
+  "background_ai_enabled": true,
+  "background_ai_interval_seconds": 5,
+  "quota_gib": 8.0,
+  "reserve_gib": 1.0,
+  "search": {
+    "enabled": true,
+    "library": "libeg2.so",
+    "bundle": "../../../artifacts/ai-benchmark/embedding-combined",
+    "reid_model": "../../../artifacts/ai-benchmark/osnet_x0_25-128x256-b4.mxr",
+    "device": 0,
+    "image_size": 256,
+    "interval_ms": 5000,
+    "queue_limit": 128,
+    "embedding_width": 108,
+    "embedding_height": 192,
+    "embedding_batch": 4,
+    "min_person_height": 0.1
+  },
+  "results": {
+    "method": "none",
+    "file_path": "",
+    "address": "",
+    "topic": "amdva/analytics",
+    "queue_limit": 256,
+    "byte_limit": 4194304
+  },
+  "sources": [
+    {
+      "id": "cam0",
+      "name": "M01",
+      "uri": "rtsp://127.0.0.1:18569/cam0",
+      "selected": true
+    },
+    {
+      "id": "cam1",
+      "name": "M02",
+      "uri": "rtsp://127.0.0.1:18569/cam1",
+      "selected": true
+    },
+    {
+      "id": "cam2",
+      "name": "M03",
+      "uri": "rtsp://127.0.0.1:18569/cam2",
+      "selected": true
+    },
+    {
+      "id": "cam3",
+      "name": "M04",
+      "uri": "rtsp://127.0.0.1:18569/cam3",
+      "selected": true
+    },
+    {
+      "id": "cam4",
+      "name": "M05",
+      "uri": "rtsp://127.0.0.1:18569/cam4",
+      "selected": true
+    },
+    {
+      "id": "cam5",
+      "name": "M06",
+      "uri": "rtsp://127.0.0.1:18569/cam5",
+      "selected": true
+    },
+    {
+      "id": "cam6",
+      "name": "M07",
+      "uri": "rtsp://127.0.0.1:18569/cam6",
+      "selected": true
+    },
+    {
+      "id": "cam7",
+      "name": "M08",
+      "uri": "rtsp://127.0.0.1:18569/cam7",
+      "selected": true
+    },
+    {
+      "id": "cam8",
+      "name": "M09",
+      "uri": "rtsp://127.0.0.1:18569/cam8",
+      "selected": true
+    },
+    {
+      "id": "cam9",
+      "name": "M10",
+      "uri": "rtsp://127.0.0.1:18569/cam9",
+      "selected": true
+    },
+    {
+      "id": "cam10",
+      "name": "M11",
+      "uri": "rtsp://127.0.0.1:18569/cam10",
+      "selected": true
+    },
+    {
+      "id": "cam11",
+      "name": "M12",
+      "uri": "rtsp://127.0.0.1:18569/cam11",
+      "selected": true
+    },
+    {
+      "id": "cam12",
+      "name": "M13",
+      "uri": "rtsp://127.0.0.1:18569/cam12",
+      "selected": true
+    },
+    {
+      "id": "cam13",
+      "name": "M14",
+      "uri": "rtsp://127.0.0.1:18569/cam13",
+      "selected": true
+    },
+    {
+      "id": "cam14",
+      "name": "M15",
+      "uri": "rtsp://127.0.0.1:18569/cam14",
+      "selected": true
+    },
+    {
+      "id": "cam15",
+      "name": "M16",
+      "uri": "rtsp://127.0.0.1:18569/cam15",
+      "selected": true
+    }
+  ]
+}

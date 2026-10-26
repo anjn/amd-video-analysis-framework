@@ -41,7 +41,7 @@ into a BGRA VA surface and encode it:
 2. Import into EGL with `amdva::EglDmaBufImporter` (`amdva/egl_import.hpp`), attach
    the texture to an FBO, draw, and wait on a GL fence.
 3. Convert to NV12 on the VA video processor into a `gst_va_pool` buffer and push it
-   to an `appsrc` feeding the encoder. `src/dashboard/renderer.cpp` is the complete
+   to an `appsrc` feeding the encoder. `examples/resource-dashboard/renderer.cpp` is the complete
    example.
 
 Mesa 25.2.x note: converting an RGB surface to NV12 over identical regions
@@ -92,7 +92,7 @@ Recording the camera's own compressed stream (no re-encode) is what the NVR does
 recorder as a reusable class: feed it H.264/H.265 access units from a keyframe with
 `push()`, pump `poll()`, and it writes rolling Matroska segments while keeping the
 `Catalog` (names, media start time, duration, interrupted segments) in step.
-Retention and quota live in the catalog and controller (`docs/vms.md`).
+Retention and quota live in the catalog and controller (`examples/nvr/docs/vms.md`).
 
 `amdva::streaming::RtspIngest` (`amdva/streaming/ingest.hpp`) is the matching
 receive side: it pulls one RTSP camera as byte-stream, AU-aligned H.264/H.265 access
@@ -124,7 +124,7 @@ supported by clients, so use AV1 for files.
 
 If your source is already encoded (files, camera restream), serve it without
 decoding: `amdva-rtsp-files` does exactly that for H.264/H.265 files.
-The dashboard (`docs/resource-dashboard.md`) serves a GPU-rendered stream and
+The dashboard (`examples/resource-dashboard/README.md`) serves a GPU-rendered stream and
 applies the BT.709 rewrite on the encoder output.
 
 ## SDK pieces

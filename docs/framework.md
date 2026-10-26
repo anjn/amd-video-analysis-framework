@@ -21,15 +21,24 @@ NPU execution are outside this implementation.
 | `amdva_inference` | `model.hpp`, `batching.hpp` | Named static GPU tensor I/O, model manifests, task adapters, bounded shared batches |
 | `amdva_gst_support` | `tensor_meta.hpp`, `video_preprocess.hpp`, `tracking.hpp`, `overlay.hpp`, `publishing.hpp`, `gst_telemetry.hpp` | GstAnalytics interop, GPU payload ownership, video preprocessing, imageless tracking, drawing and output |
 | `amdva_media` | `vui.hpp`, `rtsp_server.hpp`, `egl_import.hpp` | BT.709 H.264 VUI signalling, appsrc RTSP server wrapper, Qt-free VA-to-EGL DMA-BUF texture import |
-| `amdva_streaming` | `streaming/*.hpp` | Dynamic RTSP registration/selection, reconnect, compressed recording, SQLite catalog, storage quota, background keyframe admission and analytics scheduling |
-| Desktop NVR | `src/nvr` | Qt controls and EGL tile presentation; uses the public streaming library |
+| `amdva_streaming` | `streaming/*.hpp` | RTSP access-unit ingest, compressed segment recording, SQLite recording/analysis catalog with storage quota, keyframe inspection, hardware playback and GPU preview surfaces |
+| `amdva_monitor` | `resource_monitor.hpp` | CPU/GPU/memory/power readings and DRM engine utilization |
 
-`amdva_streaming` has no Qt dependency. Applications can use its controller
-without a desktop, or construct ordinary GStreamer pipelines with the AMD
-plugins. The NVR retains its latest-frame admission policy and preview buffers;
-its image packer, batch executor, tracking and publication now use the same
-framework implementations as the plugins. No inference implementation remains
-specific to the Qt UI.
+`amdva_streaming` has no Qt dependency. It provides building blocks, not an
+application: camera scheduling, AI admission and search policies belong to the
+application. Applications under [`examples/`](../examples) are built only on the
+public headers and `AMDVA::` targets:
+
+| Example | Shows |
+| --- | --- |
+| [`examples/nvr`](../examples/nvr/README.md) | 16-camera NVR: a Qt-free controller (`amdva_nvr_backend`) on top of `amdva_streaming`, person search, the headless `amdva-streams` service and the Qt desktop |
+| [`examples/resource-dashboard`](../examples/resource-dashboard/README.md) | GPU-rendered, hardware-encoded RTSP dashboard using `amdva_monitor` |
+| [`examples/rtsp-files`](../examples/rtsp-files/README.md) | File-to-RTSP test server |
+| [`examples/sdk`](../examples/sdk) | Small programs for transcode, telemetry and recorded-video APIs |
+| [`examples/pipelines`](../examples/pipelines/README.md) | `gst-launch` recipes |
+
+The NVR sample's image packer, batch executor, tracking and publication use the
+same framework implementations as the plugins.
 
 ## Elements and supported tasks
 
@@ -221,31 +230,32 @@ GPU tensor descriptors with data type, device and batch index, and optional cust
 metadata. It never serializes image buffers, masks or GPU pointers. Source URLs
 are not added automatically; applications choose the source identity.
 
-## Headless SDK
+## Headless build and SDK
 
 ```bash
 source scripts/env.sh
-cmake -S . -B build-headless -DAMDVA_BUILD_NVR=OFF \
+cmake -S . -B build-headless -DAMDVA_BUILD_NVR_GUI=OFF \
   -DAMDVA_ROCM_ROOT="$AMDVA_ROCM_ROOT"
 cmake --build build-headless -j6
-build-headless/src/streaming/amdva-streams examples/nvr.json 60
+build-headless/examples/nvr/amdva-streams examples/nvr/config/nvr.json 60
 cmake --install build-headless --prefix /path/to/amdva-sdk
 ```
 
-`amdva-streams` receives/records sources and performs selected/background
-analytics without allocating EGL previews or requiring a display server. A
-zero duration or omitted duration runs until SIGINT/SIGTERM. Use the public
-controller's `add`, `remove` and `select` methods for dynamic control; commands
-are serialized on its control worker. `status` and `publication_status` provide
-snapshots. See [the SDK example](../examples/sdk/CMakeLists.txt).
+`-DAMDVA_BUILD_NVR_GUI=OFF` keeps the NVR backend and its headless
+`amdva-streams` service but needs no Qt; `-DAMDVA_BUILD_EXAMPLES=OFF` builds the
+framework only. `amdva-streams` receives/records sources and performs
+selected/background analytics without allocating EGL previews or requiring a
+display server. A zero duration or omitted duration runs until SIGINT/SIGTERM.
 
 External CMake consumers use `find_package(AMDVideoAnalysis REQUIRED)` and
 link `AMDVA::amdva_streaming`, `AMDVA::amdva_gst_support`,
-`AMDVA::amdva_inference`, `AMDVA::amdva_media` or `AMDVA::amdva_runtime`. The installed package
+`AMDVA::amdva_inference`, `AMDVA::amdva_media`, `AMDVA::amdva_monitor` or
+`AMDVA::amdva_runtime`. The same targets exist in the source tree, so every
+directory under `examples/` also configures on its own against an installed SDK
+(see [`examples/sdk/CMakeLists.txt`](../examples/sdk/CMakeLists.txt)). The installed package
 requires the compatible host VA/GStreamer/ROCm stack; it does not bundle a
 portable driver runtime. Set `AMDVA_ROCM_ROOT` when locating HIP headers on a
-compatible installation. The Qt desktop can be disabled independently of the
-streaming framework.
+compatible installation.
 
 ## Decode and presentation telemetry
 
@@ -257,11 +267,13 @@ No latency/FPS acceptance thresholds or automatic controls are imposed. See
 [timing boundaries, SDK adapters and validation](telemetry.md).
 
 
-Recording queries, protected playback handles and the Qt-free recording player
-are part of `amdva_streaming`. See the [VMS interfaces and migration](vms.md#framework-interfaces-and-migration)
+Recording queries, protected playback handles, the Qt-free recording player and
+the recorded-analysis store are part of `amdva_streaming`. Applications keep
+their own tables in the catalog database with `Catalog::extend` (the NVR's
+person-search index is one). See the [VMS interfaces and migration](../examples/nvr/docs/vms.md#framework-interfaces-and-migration)
 and [SDK playback example](../examples/sdk/playback.cpp).
 
 The Qt-free `amdva_monitor` library provides optional-valued CPU/GPU/memory/power
 readings and observable DRM engine utilization via `amdva/resource_monitor.hpp`.
-The [resource dashboard sample](resource-dashboard.md) uses it independently of
+The [resource dashboard sample](../examples/resource-dashboard/README.md) uses it independently of
 NVR, analytics plugins and model loading.

@@ -8,7 +8,7 @@
 | `AMDVA::amdva_inference` | `model.hpp`, `batching.hpp`, `inference.hpp` | `ModelInfo`, `ModelExecutor`, task post-processors, shared batch executor |
 | `AMDVA::amdva_gst_support` | `tensor_meta.hpp`, `video_preprocess.hpp`, `tracking.hpp`, `overlay.hpp`, `publishing.hpp`, `gst_telemetry.hpp` | GstAnalytics interop, tracking, drawing, publication |
 | `AMDVA::amdva_media` | `vui.hpp`, `rtsp_server.hpp`, `egl_import.hpp`, `copy_audit.hpp` | encode helpers, RTSP serving, EGL import |
-| `AMDVA::amdva_streaming` | `streaming/*.hpp` | `RtspIngest`, `SegmentRecorder`, catalog, playback, analytics scheduling |
+| `AMDVA::amdva_streaming` | `streaming/*.hpp` | `RtspIngest`, `SegmentRecorder`, `Catalog` (recordings, recorded analysis, application tables), playback sessions, `PreviewSlot` |
 | `AMDVA::amdva_monitor` | `resource_monitor.hpp` | CPU/GPU/memory/power and DRM engine load |
 
 Plugins (`gstamdanalytics`, `gstgva`, `gstgvametapublish*`) install to
@@ -25,8 +25,9 @@ cmake --install build --prefix /path/to/amdva-sdk
 ```
 
 Useful options: `AMDVA_BUILD_PLUGINS`, `AMDVA_BUILD_GVA_COMPAT` (vendored DL
-Streamer elements), `AMDVA_BUILD_STREAMING`, `AMDVA_BUILD_NVR` (needs Qt6),
-`AMDVA_BUILD_DASHBOARD`, `AMDVA_BUILD_RTSP_FILES`, `AMDVA_HARDWARE_TESTS`.
+Streamer elements), `AMDVA_BUILD_STREAMING`, `AMDVA_HARDWARE_TESTS`, and for the
+applications under `examples/`: `AMDVA_BUILD_EXAMPLES`, `AMDVA_BUILD_NVR`,
+`AMDVA_BUILD_NVR_GUI` (needs Qt6), `AMDVA_BUILD_DASHBOARD`, `AMDVA_BUILD_RTSP_FILES`.
 
 ## Consuming from CMake
 
@@ -47,7 +48,8 @@ cmake -S examples/sdk -B build-sdk -DCMAKE_PREFIX_PATH=/path/to/amdva-sdk
 | Program / script | Shows |
 | --- | --- |
 | `examples/sdk/transcode.cpp` | decode, detect, overlay, encode to a file or RTSP |
-| `examples/sdk/main.cpp` | headless controller (RTSP ingest, recording, AI) |
+| `examples/nvr/headless.cpp` | headless NVR service on the sample's controller (RTSP ingest, recording, AI) |
+| `examples/nvr`, `examples/resource-dashboard`, `examples/rtsp-files` | complete applications; see each README |
 | `examples/sdk/playback.cpp`, `timeline.cpp`, `keyframe-preview.cpp` | recorded-video APIs |
 | `examples/sdk/telemetry.cpp` | decode and presentation timing |
 | `examples/pipelines/*.sh` | `gst-launch` recipes: annotate to file, segment, multistream |

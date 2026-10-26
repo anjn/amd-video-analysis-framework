@@ -124,7 +124,7 @@ first observation expose an unavailable age rather than guessing a stop time.
 Sparse background keyframe inference has separate rates/intervals and does not
 trigger continuous-stage stop detection.
 
-Native NVR exposes `Controller::telemetry()`, shows actual decode/swap/AI FPS
+The NVR sample exposes `Controller::telemetry()`, shows actual decode/swap/AI FPS
 and input→decode/input→swap P99 columns, and provides full statistics in the FPS
 cell tooltip. Display observation pauses while hidden, unexposed or minimized.
 Headless mode leaves preview/draw/swap unavailable. Existing `Status::decoded`

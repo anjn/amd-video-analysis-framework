@@ -109,4 +109,4 @@ fails instead of silently copying system-memory frames.
 INT8 calibration, TensorRT engine import, `nvinferserver`/Triton, NvDCF and
 DeepSORT trackers, ReID tracker features, `nvdsanalytics`, custom bounding-box
 parsers, audio and Smart Record. Person ReID and semantic search exist in the
-NVR library (`amdva_streaming`), not as elements.
+[NVR sample](../examples/nvr/README.md), not as framework elements.

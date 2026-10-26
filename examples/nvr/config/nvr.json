@@ -1,0 +1,51 @@
+{
+  "model": "../../../artifacts/nvr-model/yolov8n-b4.mxr",
+  "single_model": "../../../artifacts/nvr-model/yolov8n-b1.mxr",
+  "model_info": "../../../artifacts/nvr-model/model-info.json",
+  "recording_root": "../../../artifacts/nvr-recordings",
+  "batch_size": 4,
+  "background_ai_enabled": true,
+  "background_ai_interval_seconds": 5,
+  "segment_seconds": 60,
+  "retention_minutes": 60,
+  "quota_gib": 100,
+  "reserve_gib": 1,
+  "sources": [
+    {
+      "id": "camera-1",
+      "name": "Camera 1",
+      "uri": "rtsp://127.0.0.1:8554/cam0",
+      "selected": true
+    },
+    {
+      "id": "camera-2",
+      "name": "Camera 2",
+      "uri": "rtsp://127.0.0.1:8554/cam1",
+      "selected": true
+    }
+  ],
+  "tracking_enabled": true,
+  "results": {
+    "method": "none",
+    "file_path": "",
+    "address": "",
+    "topic": "amdva/analytics",
+    "queue_limit": 256,
+    "byte_limit": 4194304
+  },
+  "telemetry": {
+    "enabled": true,
+    "stall_ms": 1000
+  },
+  "search": {
+    "enabled": true,
+    "library": "libeg2.so",
+    "bundle": "../../../artifacts/nvr-search",
+    "device": 0,
+    "image_size": 384,
+    "interval_ms": 5000,
+    "queue_limit": 128,
+    "reid_model": "../../../artifacts/reid-model/osnet-x1-msmt17.mxr"
+  },
+  "ai_fps": 2
+}

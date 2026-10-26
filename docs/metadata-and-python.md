@@ -129,6 +129,9 @@ example classifications) and the frame-level `RecordedAnalysis::custom_json`.
 Databases created before this detail existed gain the nullable columns on open.
 
 ```cpp
-catalog.enqueue_analysis(std::move(frame), runtime);   // bounded, written in batches
+AnalysisHooks hooks;                                    // optional queue metrics
+hooks.on_saved = [](double ms, double wait_ms, size_t frames) { /* ... */ };
+catalog.analysis_hooks(std::move(hooks));
+catalog.enqueue_analysis(std::move(frame));             // bounded, written in batches
 auto frames = catalog.analysis("cam0", from_ms, to_ms); // only for live recordings
 ```

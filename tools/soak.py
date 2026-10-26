@@ -30,6 +30,37 @@ def gpu_alloc_kib(pid):
     return sum(clients.values()) if clients else None
 
 
+def stop(process):
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+
+def process_work(pid):
+    """CPU time and DRM engine work, deduplicating aliases of each client."""
+    stat = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
+    cpu = (int(stat[11]) + int(stat[12])) / os.sysconf('SC_CLK_TCK')
+    clients = {}
+    for path in Path(f'/proc/{pid}/fdinfo').iterdir():
+        try:
+            fields = dict(line.split(':', 1) for line in path.read_text().splitlines() if ':' in line)
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        client = fields.get('drm-client-id')
+        if client:
+            clients[(fields.get('drm-pdev'), client)] = fields
+    result = {'cpu_seconds': cpu}
+    for engine in ('enc', 'vpe'):
+        values = [int(f[f'drm-engine-{engine}'].split()[0]) for f in clients.values()
+                  if f'drm-engine-{engine}' in f]
+        result[f'drm_engine_{engine}_ns'] = sum(values) if values else None
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input")
