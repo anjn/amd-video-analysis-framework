@@ -11,6 +11,9 @@
 | `AMDVA::amdva_streaming` | `streaming/*.hpp` | `RtspIngest`, `SegmentRecorder`, `Catalog` (recordings, recorded analysis, application tables), playback sessions, `PreviewSlot` |
 | `AMDVA::amdva_monitor` | `resource_monitor.hpp` | CPU/GPU/memory/power and DRM engine load |
 
+Shared libraries carry the SONAME `lib<name>.so.<major>.<minor>`; 0.x minor
+releases make no ABI promise, so rebuild applications when the minor version changes.
+
 Plugins (`gstamdanalytics`, `gstgva`, `gstgvametapublish*`) install to
 `lib/gstreamer-1.0`. Add that directory to `GST_PLUGIN_PATH` when you use a
 non-system prefix.
