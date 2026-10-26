@@ -1,11 +1,32 @@
 # Person search in the NVR/VMS demo
 
-The **Search** tab finds recorded person crops using a text description or a
-region dragged on live or recorded video in **Live** single view. Both modes use the same result
-cards. Each card shows the camera, timestamps, cosine similarity, up to four
-thumbnails and a selector for every matched image. **Play nearby video** plays
-that scene inside the card, with pause and seek controls. Only one card plays
-at a time; leaving Search releases playback.
+The **Search** tab has a resizable left conditions panel and shared result cards
+on the right. The initial panel width is 320 pixels. Three modes are available:
+
+- **Image search** opens automatically when a region is dragged on live, paused
+  live or recorded video in **Live** single view. The selected crop appears on
+  the left and the search starts immediately.
+- **Text search** is the initial mode. Searches run after 350 ms without an edit,
+  or immediately on Enter. Japanese IME composition is not submitted until committed.
+- **Person search** provides checkboxes for age group, skin tone, hair color,
+  upper/lower clothing type and color, eyewear and bag type. Each category allows
+  at most one checked value; clicking it again removes that condition. Changes
+  search immediately. **Clear conditions** removes all selections.
+
+Person conditions generate a visible English description and use the existing
+text embedding search. They find similar appearances, not exact attribute
+matches or verified ages/skin tones. No attribute classifier or additional
+collection inference is used. Conditions are retained separately while switching
+modes, but are not persisted across application restarts. Empty text or person
+conditions clear the results without submitting a query.
+
+An updated query keeps the preceding results visible until the new result arrives;
+changing modes clears them. Superseded requests and thumbnail loads cannot update
+newer results. Each card shows the camera, timestamps, cosine similarity, up to
+four thumbnails and a selector for every matched image. **Play nearby video**
+plays that scene inside the card, with pause and seek controls. Only one card
+plays at a time. A result replacement stops playback; leaving Search also cancels
+pending searches and debounce timers. Recording deletion invalidates the results.
 
 The **AI Statistics** tab reports completed stage timings and per-camera update
 rates. Detection/tracking defaults to 2 Hz per camera; collection requests one
@@ -383,3 +404,15 @@ tests also passed after the final initialization change. Local logs are under
 The NPU-only mode was also checked with 16 sources and the unchanged 5-second
 person interval for 40 seconds: 487 stored observations, maximum sampled
 embedding queue depth 65/128, and zero embedding/tracking queue drops.
+
+## Search modes validation (2026-10-25)
+
+All 34 CTests passed, including a new UI-only test for debounce replacement,
+Enter submission, Japanese IME commit, empty conditions, mode switching,
+exclusive/unset checkboxes, generated descriptions and cancellation. The search
+contract tests were rerun after the final layout adjustments. A two-camera
+1440p MobileCLIP GPU+NPU run passed checkbox person search, incremental
+English/Japanese text queries, result playback, recorded/live/paused-live region
+search and deletion. The purple-skirt query returned matching clothing in the
+reviewed top results; this is a functional spot check, not an attribute accuracy
+benchmark. Logs and the reviewed screenshot are in `artifacts/search-modes/`.

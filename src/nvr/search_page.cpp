@@ -1,13 +1,16 @@
 #include "search_page.hpp"
+#include "search_conditions.hpp"
 #include "window.hpp"
 #include <QComboBox>
 #include <QDateTime>
 #include <QImage>
 #include <QLineEdit>
 #include <QPixmap>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSlider>
+#include <QSplitter>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -17,8 +20,9 @@ struct SearchPage::Impl {
     SearchPage &page;
     Controller &controller;
     SearchService *service;
-    QLineEdit *input{};
-    QLabel *status{}, *query_image{}, *play_status{};
+    SearchConditions *conditions{};
+    QString idle_status{"Enter search conditions."};
+    QLabel *status{}, *play_status{};
     QWidget *cards{}, *video{}, *active_card{}, *container{};
     QVBoxLayout *results{};
     QSlider *seek{};
@@ -30,36 +34,45 @@ struct SearchPage::Impl {
     int64_t start{}, end{};
     bool interval_active{};
     struct Pictures {
-        std::vector<std::pair<QLabel *, std::vector<uint8_t>>> values;
+        std::vector<std::pair<uint64_t, std::vector<uint8_t>>> values;
     };
     std::future<Pictures> pictures;
+    uint64_t thumbnail_serial{};
+    std::map<uint64_t, QPointer<QLabel>> thumbnail_targets;
+    std::vector<std::pair<uint64_t, int64_t>> thumbnail_loads;
     explicit Impl(SearchPage &p, Controller &c)
         : page(p), controller(c), service(c.search_service()) {
         p.setObjectName("search-page");
-        auto *layout = new QVBoxLayout(&p);
-        auto *row = new QHBoxLayout;
-        input = new QLineEdit;
-        input->setObjectName("search-text");
-        input->setPlaceholderText("Describe a person, clothing or appearance…");
-        auto *button = new QPushButton("Search");
-        button->setObjectName("search-submit");
-        row->addWidget(input, 1);
-        row->addWidget(button);
-        layout->addLayout(row);
-        query_image = new QLabel;
-        query_image->setObjectName("search-query-image");
-        layout->addWidget(query_image);
+        auto *layout = new QHBoxLayout(&p);
+        auto *splitter = new QSplitter;
+        splitter->setObjectName("search-splitter");
+        splitter->setChildrenCollapsible(false);
+        layout->addWidget(splitter);
+        auto *left = new QScrollArea;
+        left->setWidgetResizable(true);
+        left->setMinimumWidth(220);
+        conditions = new SearchConditions;
+        left->setWidget(conditions);
+        splitter->addWidget(left);
+        auto *right = new QWidget;
+        right->setMinimumWidth(280);
+        auto *right_layout = new QVBoxLayout(right);
         status = new QLabel;
         status->setObjectName("search-status");
         status->setWordWrap(true);
-        layout->addWidget(status);
+        status->setText("Enter search conditions.");
+        right_layout->addWidget(status);
         scroll = new QScrollArea;
         scroll->setWidgetResizable(true);
         cards = new QWidget;
         results = new QVBoxLayout(cards);
         results->addStretch();
         scroll->setWidget(cards);
-        layout->addWidget(scroll, 1);
+        right_layout->addWidget(scroll, 1);
+        splitter->addWidget(right);
+        splitter->setStretchFactor(0, 0);
+        splitter->setStretchFactor(1, 1);
+        splitter->setSizes({320, 680});
         video = new QWidget(&p);
         auto *vl = new QVBoxLayout(video);
         auto *controls = new QHBoxLayout;
@@ -91,17 +104,17 @@ struct SearchPage::Impl {
             if (active_card && player)
                 player->seek(std::min(end - 1, start + (end - start) * seek->value() / 1000));
         });
-        QObject::connect(button, &QPushButton::clicked, &p, [this] {
-            if (!service)
-                return;
-            reset();
-            query_image->clear();
-            request = service->text(input->text().trimmed().toStdString());
-            status->setText("Searching…");
-        });
-        QObject::connect(input, &QLineEdit::returnPressed, button, &QPushButton::click);
-        button->setEnabled(service);
-        input->setEnabled(service);
+        conditions->invalidate = [this](bool clear) {
+            if (service)
+                service->cancel();
+            request = 0;
+            if (clear)
+                reset();
+            idle_status = conditions->empty() ? "Enter search conditions." : "Searching…";
+            status->setText(idle_status);
+        };
+        conditions->submit = [this] { submit(); };
+        conditions->setEnabled(service);
         auto *timer = new QTimer(&p);
         QObject::connect(timer, &QTimer::timeout, &p, [this] { tick(); });
         timer->start(33);
@@ -114,10 +127,30 @@ struct SearchPage::Impl {
         delete video;
         player.reset();
     }
+    void submit() {
+        conditions->debounce.stop();
+        if (!service || conditions->empty())
+            return;
+        request = conditions->mode->currentIndex() == SearchConditions::Image
+                      ? service->image(conditions->image)
+                      : service->text(conditions->text().toStdString());
+        status->setText("Searching…");
+    }
+    void load_thumbnail(QLabel *label, int64_t id) {
+        const auto previous = label->property("thumbnail-token").toULongLong();
+        thumbnail_targets.erase(previous);
+        thumbnail_loads.erase(
+            std::remove_if(thumbnail_loads.begin(), thumbnail_loads.end(),
+                           [previous](auto load) { return load.first == previous; }),
+            thumbnail_loads.end());
+        const auto token = ++thumbnail_serial;
+        label->setProperty("thumbnail-token", QVariant::fromValue<qulonglong>(token));
+        thumbnail_targets[token] = label;
+        thumbnail_loads.emplace_back(token, id);
+    }
     void reset() {
-        if (pictures.valid())
-            pictures.wait();
-        pictures = {};
+        thumbnail_targets.clear();
+        thumbnail_loads.clear();
         if (player)
             player->stop();
         interval_active = false;
@@ -139,7 +172,7 @@ struct SearchPage::Impl {
     void render(std::vector<SearchGroup> value) {
         reset();
         groups = std::move(value);
-        std::vector<std::pair<QLabel *, int64_t>> loads;
+
         for (size_t i = 0; i < groups.size(); ++i) {
             const auto &g = groups[i];
             auto *card = new QWidget;
@@ -160,36 +193,30 @@ struct SearchPage::Impl {
                     QString::fromStdString(g.person_id.substr(g.person_id.rfind('/') + 1)) + " · " +
                     title->text());
             title->setTextFormat(Qt::PlainText);
+            title->setWordWrap(true);
             l->addWidget(title);
             auto *thumbs = new QHBoxLayout;
             auto *photo = new QLabel;
-            photo->setMinimumSize(100, 120);
-            thumbs->addWidget(photo);
-            loads.emplace_back(photo, g.images.front().id);
+            photo->setMinimumSize(64, 96);
+            photo->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+            thumbs->addWidget(photo, 1);
+            load_thumbnail(photo, g.images.front().id);
             for (size_t n = 1; n < std::min<size_t>(4, g.images.size()); ++n) {
                 auto *extra = new QLabel;
-                thumbs->addWidget(extra);
-                loads.emplace_back(extra, g.images[n].id);
+                extra->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+                thumbs->addWidget(extra, 1);
+                load_thumbnail(extra, g.images[n].id);
             }
             auto *choose = new QComboBox;
             for (const auto &im : g.images)
                 choose->addItem(time(im.time_ms), QVariant::fromValue<qlonglong>(im.id));
-            thumbs->addWidget(choose);
-            thumbs->addStretch();
+
             l->addLayout(thumbs);
-            QObject::connect(
-                choose, qOverload<int>(&QComboBox::activated), &page, [this, choose, photo](int) {
-                    // Keep only one bounded thumbnail read job; no UI-thread SQLite work.
-                    if (pictures.valid())
-                        return;
-                    auto id = choose->currentData().toLongLong();
-                    pictures = std::async(std::launch::async, [this, photo, id] {
-                        Pictures out;
-                        out.values.emplace_back(
-                            photo, controller.recording_catalog().observation_image(id));
-                        return out;
-                    });
-                });
+            l->addWidget(choose);
+            QObject::connect(choose, qOverload<int>(&QComboBox::activated), &page,
+                             [this, choose, photo](int) {
+                                 load_thumbnail(photo, choose->currentData().toLongLong());
+                             });
             auto *appearances = new QComboBox;
             std::map<std::string, std::pair<int64_t, int64_t>> intervals;
             for (const auto &im : g.images) {
@@ -250,13 +277,6 @@ struct SearchPage::Impl {
             });
             results->insertWidget(results->count() - 1, card);
         }
-        pictures = std::async(std::launch::async, [this, loads] {
-            Pictures out;
-            for (auto [label, id] : loads)
-                out.values.emplace_back(label,
-                                        controller.recording_catalog().observation_image(id));
-            return out;
-        });
     }
     void update_video() {
         if (!tiles || !container)
@@ -275,22 +295,44 @@ struct SearchPage::Impl {
     void tick() {
         update_video();
         if (!service) {
-            status->setText(
-                "Search is disabled. Configure an EmbeddingGemma 2 bundle to enable it.");
+            status->setText("Search is disabled. Configure an embedding model to enable it.");
             return;
         }
         if (pictures.valid() &&
             pictures.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             try {
-                for (auto &[label, png] : pictures.get().values) {
+                for (auto &[token, png] : pictures.get().values) {
+                    auto target = thumbnail_targets.find(token);
+                    if (target == thumbnail_targets.end())
+                        continue;
+                    auto label = target->second;
+                    thumbnail_targets.erase(target);
+                    if (!label)
+                        continue;
                     QPixmap image;
                     image.loadFromData(png.data(), int(png.size()), "PNG");
                     label->setPixmap(
-                        image.scaled(192, 144, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                        image.scaled(144, 128, Qt::KeepAspectRatio, Qt::SmoothTransformation));
                 }
             } catch (const std::exception &e) {
                 status->setText(e.what());
             }
+        }
+        if (!pictures.valid() && !thumbnail_loads.empty()) {
+            std::vector<std::pair<uint64_t, int64_t>> loads;
+            while (!thumbnail_loads.empty() && loads.size() < 8) {
+                auto load = thumbnail_loads.front();
+                thumbnail_loads.erase(thumbnail_loads.begin());
+                if (thumbnail_targets.count(load.first))
+                    loads.push_back(load);
+            }
+            auto *catalog = &controller.recording_catalog();
+            pictures = std::async(std::launch::async, [catalog, loads = std::move(loads)] {
+                Pictures out;
+                for (auto [token, id] : loads)
+                    out.values.emplace_back(token, catalog->observation_image(id));
+                return out;
+            });
         }
         SearchResult r;
         if (request && shown != request)
@@ -313,12 +355,8 @@ struct SearchPage::Impl {
                             .arg(s.inference_ms, 0, 'f', 1)
                             .arg(QString::fromStdString(s.error)));
         if (!request)
-            status->setText(s.state == "ready"
-                                ? QString("Ready · %1 images stored · %2 skipped · %3 queued")
-                                      .arg(s.stored)
-                                      .arg(s.dropped)
-                                      .arg(s.pending)
-                                : QString::fromStdString(s.state + ": " + s.error));
+            status->setText(s.state == "ready" ? idle_status
+                                               : QString::fromStdString(s.state + ": " + s.error));
         auto p = player ? player->status() : TimelinePlaybackStatus{};
         if (tiles)
             tiles->paused(p.state == "paused" || p.state == "ended");
@@ -338,10 +376,12 @@ struct SearchPage::Impl {
         auto gen = controller.recording_catalog().deletion_generation();
         if (gen != generation) {
             generation = gen;
+            conditions->debounce.stop();
             service->cancel();
             request = 0;
             reset();
-            status->setText("Recordings changed. Search again to refresh results.");
+            idle_status = "Recordings changed. Change conditions to refresh results.";
+            status->setText(idle_status);
         }
     }
 };
@@ -352,12 +392,17 @@ void SearchPage::search_image(SearchImage im) {
     auto &p = *impl_;
     if (!p.service)
         return;
-    p.reset();
-    p.input->clear();
-    QImage image(im.rgb.data(), im.width, im.height, im.width * 3, QImage::Format_RGB888);
-    p.query_image->setPixmap(QPixmap::fromImage(image).scaled(192, 144, Qt::KeepAspectRatio));
-    p.request = p.service->image(std::move(im));
-    p.status->setText("Searching by selected region…");
+    p.conditions->debounce.stop();
+    p.conditions->image = std::move(im);
+    const auto &source = p.conditions->image;
+    QImage image(source.rgb.data(), source.width, source.height, source.width * 3,
+                 QImage::Format_RGB888);
+    p.conditions->preview->setPixmap(
+        QPixmap::fromImage(image).scaled(256, 192, Qt::KeepAspectRatio));
+    if (p.conditions->mode->currentIndex() != SearchConditions::Image)
+        p.conditions->mode->setCurrentIndex(SearchConditions::Image);
+    else
+        p.conditions->changed(true, true);
 }
 streaming::TimelinePlaybackStatus SearchPage::playback_status() const {
     return impl_->player ? impl_->player->status() : TimelinePlaybackStatus{};
@@ -374,6 +419,8 @@ std::string SearchPage::renderer_status() const {
 }
 uint64_t SearchPage::presented() const { return impl_->tiles ? impl_->tiles->presented() : 0; }
 void SearchPage::leave() {
+    impl_->conditions->debounce.stop();
+    impl_->idle_status = "Change conditions to search.";
     if (impl_->tiles)
         impl_->tiles->hide();
     if (impl_->player)

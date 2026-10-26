@@ -2,6 +2,8 @@
 #include "search_page.hpp"
 #include "window.hpp"
 #include <QApplication>
+#include <QCheckBox>
+#include <QComboBox>
 #include <QFile>
 #include <QKeyEvent>
 #include <QLineEdit>
@@ -36,7 +38,7 @@ int main(int argc, char **argv) {
             throw std::runtime_error("Search disabled");
         auto *tabs = window.findChild<QTabWidget *>("vms-tabs");
         auto *input = window.findChild<QLineEdit *>("search-text");
-        auto *submit = window.findChild<QPushButton *>("search-submit");
+
         auto audit = reinterpret_cast<void (*)()>(dlsym(RTLD_DEFAULT, "amdva_audit_start"));
         bool auditing = false;
         unsigned live_drag_checks = 0;
@@ -72,9 +74,30 @@ int main(int argc, char **argv) {
                             (std::filesystem::path(argv[1]).parent_path() / "person-overlay.png")
                                 .string()));
                     tabs->setCurrentIndex(2);
-                    input->setText("a person wearing a purple skirt");
-                    submit->click();
-                    stage = 1;
+                    auto *mode = window.findChild<QComboBox *>("search-mode");
+                    if (!mode)
+                        throw std::runtime_error("Missing search modes");
+                    mode->setCurrentIndex(2);
+                    window.findChild<QCheckBox *>("search-person-lower-2")->click();
+                    window.findChild<QCheckBox *>("search-person-lower-color-10")->click();
+                    stage = 9;
+                } else if (stage == 9) {
+                    auto r = service->result();
+                    if (!r.error.empty())
+                        throw std::runtime_error(r.error);
+                    if (r.request && !r.groups.empty() &&
+                        window.findChild<QWidget *>("search-result-0")) {
+                        std::cout << "PASS: checkbox person search; groups=" << r.groups.size()
+                                  << " best=" << r.groups.front().similarity << std::endl;
+                        window.grab().save(QString::fromStdString(
+                            (std::filesystem::path(argv[1]).parent_path() / "person-search.png")
+                                .string()));
+                        input->setText("a person wearing a purple skirt");
+                        window.findChild<QComboBox *>("search-mode")->setCurrentIndex(1);
+                        // Exercise debounce rather than mode-switch submission.
+                        input->setText("a person wearing a purple skirt outdoors");
+                        stage = 1;
+                    }
                 } else if (stage == 1) {
                     auto r = service->result();
                     if (!r.error.empty())
@@ -104,7 +127,7 @@ int main(int argc, char **argv) {
                             picture.write(reinterpret_cast<const char *>(png.data()), png.size());
                         request = r.request;
                         input->setText(QString::fromUtf8("紫色のスカートを着た人"));
-                        submit->click();
+
                         stage = 2;
                     }
                 } else if (stage == 2) {
@@ -172,6 +195,8 @@ int main(int argc, char **argv) {
                     QApplication::sendEvent(v, &release);
                     stage = 6;
                 } else if (stage == 6) {
+                    if (window.findChild<QComboBox *>("search-mode")->currentIndex() != 0)
+                        throw std::runtime_error("Region search did not select image mode");
                     auto r = service->result();
                     if (tabs->currentIndex() == 2 && r.request > request && !r.groups.empty()) {
                         if (errors && errors())
