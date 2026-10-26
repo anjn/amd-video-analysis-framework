@@ -1,3 +1,4 @@
+#include "amdva/egl_import.hpp"
 #include "renderer.hpp"
 #include "amdva/runtime.hpp"
 #include <EGL/egl.h>
@@ -78,7 +79,7 @@ struct Renderer::Impl {
     EGLContext context{EGL_NO_CONTEXT};
     EGLImageKHR image{EGL_NO_IMAGE_KHR};
     GLuint texture{}, fbo{}, program{}, vbo{}, vao{}, atlas{};
-    PFNEGLDESTROYIMAGEKHRPROC destroy_image{};
+    std::unique_ptr<EglDmaBufImporter> importer;
     VASurfaceID bgra{VA_INVALID_SURFACE};
     VAConfigID config{VA_INVALID_ID};
     VAContextID vpp{VA_INVALID_ID};
@@ -107,8 +108,8 @@ struct Renderer::Impl {
                 glDeleteFramebuffers(1, &fbo);
             if (texture)
                 glDeleteTextures(1, &texture);
-            if (image != EGL_NO_IMAGE_KHR && destroy_image)
-                destroy_image(egl, image);
+            if (importer)
+                importer->destroy(egl, image);
             eglMakeCurrent(egl, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
             eglDestroyContext(egl, context);
         }
@@ -168,33 +169,20 @@ struct Renderer::Impl {
                 "AMD hardware GLES renderer required");
         bgra = va->create_bgra(1920, 1082);
         auto d = va->export_surface(bgra, true);
-        auto create =
-            reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC>(eglGetProcAddress("eglCreateImageKHR"));
-        destroy_image =
-            reinterpret_cast<PFNEGLDESTROYIMAGEKHRPROC>(eglGetProcAddress("eglDestroyImageKHR"));
-        auto target = reinterpret_cast<PFNGLEGLIMAGETARGETTEXTURE2DOESPROC>(
-            eglGetProcAddress("glEGLImageTargetTexture2DOES"));
-        require(create && destroy_image && target, "EGL DMA-BUF import unavailable");
-        EGLint ia[] = {EGL_WIDTH,
-                       1920,
-                       EGL_HEIGHT,
-                       1082,
-                       EGL_LINUX_DRM_FOURCC_EXT,
-                       EGLint(d.layers[0].drm_format),
-                       EGL_DMA_BUF_PLANE0_FD_EXT,
-                       d.objects[d.layers[0].object_index[0]].fd,
-                       EGL_DMA_BUF_PLANE0_OFFSET_EXT,
-                       EGLint(d.layers[0].offset[0]),
-                       EGL_DMA_BUF_PLANE0_PITCH_EXT,
-                       EGLint(d.layers[0].pitch[0]),
-                       EGL_NONE};
-        image = create(egl, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, ia);
+        importer = std::make_unique<EglDmaBufImporter>();
+        try {
+            image = importer->import_plane0(egl, d, 1920, 1082, d.layers[0].offset[0],
+                                            d.layers[0].pitch[0]);
+        } catch (...) {
+            for (unsigned i = 0; i < d.num_objects; i++)
+                close(d.objects[i].fd);
+            throw;
+        }
         for (unsigned i = 0; i < d.num_objects; i++)
             close(d.objects[i].fd);
-        require(image != EGL_NO_IMAGE_KHR, "Cannot import writable BGRA surface");
         glGenTextures(1, &texture);
         glBindTexture(GL_TEXTURE_2D, texture);
-        target(GL_TEXTURE_2D, image);
+        importer->bind_texture(image);
         glGenFramebuffers(1, &fbo);
         glBindFramebuffer(GL_FRAMEBUFFER, fbo);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);

@@ -3,6 +3,8 @@
 #include "amdva/streaming/playback.hpp"
 #include "controller.hpp"
 #include "vector_text.hpp"
+#include "amdva/egl_import.hpp"
+#include <memory>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <QCoreApplication>
@@ -116,9 +118,7 @@ class Tiles final : public QOpenGLWindow {
     std::array<std::array<Texture, 3>, 16> textures_{};
     std::array<int, 16> current_{};
     GLuint image_program_{}, box_program_{};
-    PFNEGLCREATEIMAGEKHRPROC create_{};
-    PFNEGLDESTROYIMAGEKHRPROC destroy_{};
-    PFNGLEGLIMAGETARGETTEXTURE2DOESPROC target_{};
+    std::unique_ptr<amdva::EglDmaBufImporter> importer_;
     EGLDisplay egl_{EGL_NO_DISPLAY};
     QOpenGLExtraFunctions *gl_{};
     GLuint buffer_{};

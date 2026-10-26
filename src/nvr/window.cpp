@@ -146,8 +146,8 @@ Tiles::~Tiles() {
                 gl_->glDeleteSync(t.fence);
             if (t.texture)
                 gl_->glDeleteTextures(1, &t.texture);
-            if (t.image != EGL_NO_IMAGE_KHR && destroy_)
-                destroy_(egl_, t.image);
+            if (importer_)
+                importer_->destroy(egl_, t.image);
         }
     if (buffer_)
         gl_->glDeleteBuffers(1, &buffer_);
@@ -169,14 +169,7 @@ void Tiles::initializeGL() {
             (std::string(renderer).find("AMD") == std::string::npos &&
              std::string(renderer).find("Radeon") == std::string::npos))
             throw std::runtime_error("Hardware EGL/OpenGL ES context required");
-        create_ =
-            reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC>(eglGetProcAddress("eglCreateImageKHR"));
-        destroy_ =
-            reinterpret_cast<PFNEGLDESTROYIMAGEKHRPROC>(eglGetProcAddress("eglDestroyImageKHR"));
-        target_ = reinterpret_cast<PFNGLEGLIMAGETARGETTEXTURE2DOESPROC>(
-            eglGetProcAddress("glEGLImageTargetTexture2DOES"));
-        if (!create_ || !destroy_ || !target_)
-            throw std::runtime_error("EGL DMA-BUF import unavailable");
+        importer_ = std::make_unique<amdva::EglDmaBufImporter>();
         for (unsigned i = 0; i < slot_count(); ++i) {
             auto &s = slot(i);
             std::lock_guard<std::mutex> l(s.mutex);
@@ -184,26 +177,13 @@ void Tiles::initializeGL() {
                 auto d = s.va->export_surface(s.preview[j].surface);
                 try {
                     const auto layout = validate_layout(d);
-                    EGLint attrs[] = {EGL_WIDTH,
-                                      EGLint(streaming::max_video_width),
-                                      EGL_HEIGHT,
-                                      EGLint(streaming::max_video_height),
-                                      EGL_LINUX_DRM_FOURCC_EXT,
-                                      EGLint(d.layers[0].drm_format),
-                                      EGL_DMA_BUF_PLANE0_FD_EXT,
-                                      d.objects[0].fd,
-                                      EGL_DMA_BUF_PLANE0_OFFSET_EXT,
-                                      EGLint(layout.y_offset),
-                                      EGL_DMA_BUF_PLANE0_PITCH_EXT,
-                                      EGLint(layout.y_pitch),
-                                      EGL_NONE};
                     auto &t = textures_[i][j];
-                    t.image = create_(egl_, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, attrs);
-                    if (t.image == EGL_NO_IMAGE_KHR)
-                        throw std::runtime_error("Cannot import VA preview surface into EGL");
+                    t.image = importer_->import_plane0(egl_, d, streaming::max_video_width,
+                                                       streaming::max_video_height,
+                                                       layout.y_offset, layout.y_pitch);
                     gl_->glGenTextures(1, &t.texture);
                     gl_->glBindTexture(GL_TEXTURE_2D, t.texture);
-                    target_(GL_TEXTURE_2D, t.image);
+                    importer_->bind_texture(t.image);
                     gl_->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                     gl_->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                     gl_->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -429,8 +409,8 @@ void Tiles::release_preview() {
     gl_->glFinish();
     if (preview_texture_.texture)
         gl_->glDeleteTextures(1, &preview_texture_.texture);
-    if (preview_texture_.image != EGL_NO_IMAGE_KHR)
-        destroy_(egl_, preview_texture_.image);
+    if (importer_)
+        importer_->destroy(egl_, preview_texture_.image);
     preview_texture_ = {};
     preview_current_.reset();
 }
@@ -478,26 +458,12 @@ void Tiles::draw_preview() {
                 auto d = preview_current_->export_surface();
                 try {
                     auto l = validate_layout(d);
-                    EGLint attrs[] = {EGL_WIDTH,
-                                      EGLint(preview_current_->width),
-                                      EGL_HEIGHT,
-                                      EGLint(preview_current_->height),
-                                      EGL_LINUX_DRM_FOURCC_EXT,
-                                      EGLint(d.layers[0].drm_format),
-                                      EGL_DMA_BUF_PLANE0_FD_EXT,
-                                      d.objects[0].fd,
-                                      EGL_DMA_BUF_PLANE0_OFFSET_EXT,
-                                      EGLint(l.y_offset),
-                                      EGL_DMA_BUF_PLANE0_PITCH_EXT,
-                                      EGLint(l.y_pitch),
-                                      EGL_NONE};
-                    preview_texture_.image =
-                        create_(egl_, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, attrs);
-                    if (preview_texture_.image == EGL_NO_IMAGE_KHR)
-                        throw std::runtime_error("Preview DMA-BUF import failed");
+                    preview_texture_.image = importer_->import_plane0(
+                        egl_, d, preview_current_->width, preview_current_->height, l.y_offset,
+                        l.y_pitch);
                     gl_->glGenTextures(1, &preview_texture_.texture);
                     gl_->glBindTexture(GL_TEXTURE_2D, preview_texture_.texture);
-                    target_(GL_TEXTURE_2D, preview_texture_.image);
+                    importer_->bind_texture(preview_texture_.image);
                     gl_->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                     gl_->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                     gl_->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
