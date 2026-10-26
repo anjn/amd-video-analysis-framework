@@ -53,15 +53,27 @@ class RecordingFile {
     int fd_{-1};
     Recording recording_;
 };
+struct RecordedKeypoint {
+    float x{}, y{}, confidence{}; // Normalized source coordinates.
+};
 struct RecordedObject {
     Detection box; // Normalized source coordinates.
     uint64_t person{}, track{};
+    // Optional detail, stored only when set. `label` is the class name; keypoints are
+    // ordered as produced by the model (COCO-17 for pose); `attributes_json` is any
+    // JSON value an application attaches to the object (for example classifications).
+    std::string label;
+    std::vector<RecordedKeypoint> keypoints;
+    std::string attributes_json;
 };
 struct RecordedAnalysis {
     std::string channel, session, run;
     int64_t time_ms{};
     unsigned valid_ms{1000};
     std::vector<RecordedObject> objects;
+    // Optional frame-level JSON value (for example the `custom` member of the
+    // schema-1 record). Not interpreted by the catalog.
+    std::string custom_json;
 };
 class Catalog {
   public:

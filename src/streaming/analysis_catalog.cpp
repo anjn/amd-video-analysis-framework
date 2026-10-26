@@ -1,6 +1,8 @@
 #include "amdva/streaming/catalog.hpp"
 #include <algorithm>
+#include <cstdio>
 #include <sqlite3.h>
+#include <sstream>
 #include <stdexcept>
 #include <thread>
 namespace amdva::streaming {
@@ -25,6 +27,35 @@ struct Query {
 std::string text(sqlite3_stmt *p, int n) {
     auto s = sqlite3_column_text(p, n);
     return s ? reinterpret_cast<const char *>(s) : "";
+}
+// Keypoints are stored as "x,y,confidence;..." text so rows stay compact and readable.
+std::string encode_keypoints(const std::vector<RecordedKeypoint> &points) {
+    std::string out;
+    char buffer[96];
+    for (const auto &p : points) {
+        std::snprintf(buffer, sizeof(buffer), "%s%.6g,%.6g,%.6g", out.empty() ? "" : ";", p.x, p.y,
+                      p.confidence);
+        out += buffer;
+    }
+    return out;
+}
+std::vector<RecordedKeypoint> decode_keypoints(const std::string &text) {
+    std::vector<RecordedKeypoint> out;
+    std::istringstream stream(text);
+    std::string item;
+    while (std::getline(stream, item, ';')) {
+        RecordedKeypoint p;
+        if (std::sscanf(item.c_str(), "%f,%f,%f", &p.x, &p.y, &p.confidence) == 3)
+            out.push_back(p);
+    }
+    return out;
+}
+bool has_column(sqlite3 *db, const char *table, const char *column) {
+    Query q(db, (std::string("PRAGMA table_info(") + table + ")").c_str());
+    while (sqlite3_step(q.p) == SQLITE_ROW)
+        if (text(q.p, 1) == column)
+            return true;
+    return false;
 }
 } // namespace
 struct Catalog::AnalysisWriter {
@@ -60,6 +91,14 @@ void Catalog::initialize_analysis() {
         "(r.duration_ns>=0 AND "
         "analysis_frames.time_ms<COALESCE(r.media_started_ms,r.created)+(r.duration_ns+999999)/"
         "1000000)));");
+    // Databases written before object detail existed gain nullable columns in place.
+    for (const auto &[table, column] :
+         {std::pair<const char *, const char *>{"analysis_objects", "label"},
+          {"analysis_objects", "keypoints"},
+          {"analysis_objects", "attributes"},
+          {"analysis_frames", "custom"}})
+        if (!has_column(db_, table, column))
+            sql((std::string("ALTER TABLE ") + table + " ADD COLUMN " + column + " TEXT;").c_str());
     {
         Query records(db_,
                       "SELECT name,channel,session,COALESCE(media_started_ms,created),duration_ns "
@@ -161,8 +200,8 @@ void Catalog::store_analysis(const std::vector<RecordedAnalysis> &frames) {
         for (const auto &f : frames) {
             // Reject late queued results for recordings already deleted.
             Query q(db_,
-                    "INSERT INTO analysis_frames(channel,session,run,time_ms,valid_ms) SELECT "
-                    "?1,?2,?3,?4,?5 WHERE EXISTS(SELECT 1 FROM recordings r WHERE r.channel=?1 AND "
+                    "INSERT INTO analysis_frames(channel,session,run,time_ms,valid_ms,custom) SELECT "
+                    "?1,?2,?3,?4,?5,?6 WHERE EXISTS(SELECT 1 FROM recordings r WHERE r.channel=?1 AND "
                     "r.session=?2 AND ?4>=COALESCE(r.media_started_ms,r.created) AND (r.active=1 "
                     "OR (r.duration_ns>=0 AND "
                     "?4<COALESCE(r.media_started_ms,r.created)+(r.duration_ns+999999)/1000000)))");
@@ -171,12 +210,17 @@ void Catalog::store_analysis(const std::vector<RecordedAnalysis> &frames) {
             q.text(3, f.run);
             q.integer(4, f.time_ms);
             q.integer(5, std::min(2000u, f.valid_ms));
+            if (f.custom_json.empty())
+                sqlite3_bind_null(q.p, 6);
+            else
+                q.text(6, f.custom_json);
             q.done();
             if (!sqlite3_changes(db_))
                 continue;
             auto id = sqlite3_last_insert_rowid(db_);
             for (const auto &o : f.objects) {
-                Query b(db_, "INSERT INTO analysis_objects VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)");
+                Query b(db_, "INSERT INTO analysis_objects(frame,x,y,w,h,score,class_id,person,track,"
+                             "label,keypoints,attributes) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)");
                 b.integer(1, id);
                 b.real(2, o.box.x);
                 b.real(3, o.box.y);
@@ -186,6 +230,16 @@ void Catalog::store_analysis(const std::vector<RecordedAnalysis> &frames) {
                 b.integer(7, o.box.class_id);
                 b.integer(8, o.person);
                 b.integer(9, o.track);
+                // Empty detail is stored as NULL so plain detections stay as small as before.
+                const auto points = encode_keypoints(o.keypoints);
+                for (const auto &[index, value] :
+                     {std::pair<int, const std::string *>{10, &o.label},
+                      {11, &points},
+                      {12, &o.attributes_json}})
+                    if (value->empty())
+                        sqlite3_bind_null(b.p, index);
+                    else
+                        b.text(index, *value);
                 b.done();
             }
         }
@@ -200,7 +254,7 @@ std::vector<RecordedAnalysis> Catalog::analysis(const std::string &channel, int6
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     Query q(
         db_,
-        "SELECT f.id,f.channel,f.session,f.run,f.time_ms,f.valid_ms FROM analysis_frames f WHERE "
+        "SELECT f.id,f.channel,f.session,f.run,f.time_ms,f.valid_ms,f.custom FROM analysis_frames f WHERE "
         "f.channel=?1 AND f.time_ms>=?2 AND f.time_ms<=?3 AND EXISTS(SELECT 1 FROM recordings r "
         "WHERE r.channel=f.channel AND r.session=f.session AND "
         "f.time_ms>=COALESCE(r.media_started_ms,r.created) AND (r.active=1 OR (r.duration_ns>=0 "
@@ -216,9 +270,11 @@ std::vector<RecordedAnalysis> Catalog::analysis(const std::string &channel, int6
                            text(q.p, 3),
                            sqlite3_column_int64(q.p, 4),
                            unsigned(sqlite3_column_int(q.p, 5)),
-                           {}};
+                           {},
+                           text(q.p, 6)};
         Query b(db_,
-                "SELECT x,y,w,h,score,class_id,person,track FROM analysis_objects WHERE frame=?1");
+                "SELECT x,y,w,h,score,class_id,person,track,label,keypoints,attributes FROM "
+                "analysis_objects WHERE frame=?1");
         b.integer(1, sqlite3_column_int64(q.p, 0));
         while (sqlite3_step(b.p) == SQLITE_ROW) {
             RecordedObject o;
@@ -230,6 +286,9 @@ std::vector<RecordedAnalysis> Catalog::analysis(const std::string &channel, int6
             o.box.class_id = sqlite3_column_int(b.p, 5);
             o.person = sqlite3_column_int64(b.p, 6);
             o.track = sqlite3_column_int64(b.p, 7);
+            o.label = text(b.p, 8);
+            o.keypoints = decode_keypoints(text(b.p, 9));
+            o.attributes_json = text(b.p, 10);
             f.objects.push_back(o);
         }
         out.push_back(std::move(f));

@@ -116,3 +116,19 @@ use `get_analysis_meta(buffer)` to reach the AMD payload and
 `AnalysisMerge` semantics (`amd-analytics-merge`) when a custom element merges
 branches. Copies of `AmdAnalysisMeta` clone the attachment list and share GPU
 storage, so buffers may outlive the model that produced them.
+
+## Persisting results with recordings
+
+`amdva::streaming::Catalog` (`amdva/streaming/catalog.hpp`) stores analysis
+next to the recordings it describes and deletes it with them.
+`RecordedAnalysis` carries one frame: channel, session, run, time, validity, and a
+list of `RecordedObject` (normalized box, class id, person and track IDs).
+Optional detail is stored only when set: `RecordedObject::label`,
+`keypoints` (normalized x, y, confidence), `attributes_json` (any JSON value, for
+example classifications) and the frame-level `RecordedAnalysis::custom_json`.
+Databases created before this detail existed gain the nullable columns on open.
+
+```cpp
+catalog.enqueue_analysis(std::move(frame), runtime);   // bounded, written in batches
+auto frames = catalog.analysis("cam0", from_ms, to_ms); // only for live recordings
+```

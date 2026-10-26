@@ -1,5 +1,6 @@
 #include "amdva/streaming/catalog.hpp"
 #include <fstream>
+#include <sqlite3.h>
 #include <iostream>
 #include <unistd.h>
 using namespace amdva::streaming;
@@ -20,13 +21,28 @@ int main() {
             const auto before_bytes = c.bytes();
             c.store_analysis({frame});
             check(c.bytes() > before_bytes, "Metadata contributes to storage quota");
+            auto detailed = frame;
+            detailed.time_ms = 1550;
+            detailed.custom_json = "{\"people\":1}";
+            detailed.objects[0].label = "person";
+            detailed.objects[0].keypoints = {{.25f, .5f, .75f}, {.5f, .125f, .9f}};
+            detailed.objects[0].attributes_json = "{\"classifications\":[{\"label\":\"adult\"}]}";
+            c.store_analysis({detailed});
             auto empty = frame;
             empty.time_ms = 2000;
             empty.objects.clear();
             c.store_analysis({empty});
             auto rows = c.analysis("cam", 1000, 2500);
-            check(rows.size() == 2 && rows[0].objects.size() == 1 && rows[1].objects.empty(),
+            check(rows.size() == 3 && rows[0].objects.size() == 1 && rows[2].objects.empty(),
                   "Empty analysis clears detections");
+            check(rows[0].objects[0].label.empty() && rows[0].objects[0].keypoints.empty() &&
+                      rows[0].custom_json.empty(),
+                  "Plain detections carry no detail");
+            check(rows[1].custom_json == "{\"people\":1}" && rows[1].objects[0].label == "person" &&
+                      rows[1].objects[0].keypoints.size() == 2 &&
+                      rows[1].objects[0].keypoints[1].y == .125f &&
+                      rows[1].objects[0].attributes_json.find("adult") != std::string::npos,
+                  "Persist labels, keypoints, attributes and frame JSON");
             check(rows[0].objects[0].person == 7 && rows[0].objects[0].track == 11 &&
                       rows[0].objects[0].box.x == .1f,
                   "Persist normalized geometry and IDs");
@@ -36,11 +52,11 @@ int main() {
         }
         {
             Catalog c(root);
-            check(c.analysis("cam", 0, 3000).size() == 2, "Restart preserves analysis");
+            check(c.analysis("cam", 0, 3000).size() == 3, "Restart preserves analysis");
             auto pin = c.open_recording("one.mkv");
             auto job = c.begin_delete();
             c.delete_batch(job);
-            check(c.analysis("cam", 0, 3000).size() == 2, "Pinned recording preserves analysis");
+            check(c.analysis("cam", 0, 3000).size() == 3, "Pinned recording preserves analysis");
             pin.reset();
             job = c.begin_delete();
             c.delete_batch(job);
@@ -61,14 +77,40 @@ int main() {
             Catalog c(root);
             check(c.analysis("cam", 0, 3000).size() == 1, "Writer drains at shutdown");
         }
+        {
+            // A database from before object detail existed is upgraded in place.
+            sqlite3 *db{};
+            check(sqlite3_open((root / "catalog.sqlite").c_str(), &db) == SQLITE_OK, "Open legacy");
+            check(sqlite3_exec(db,
+                               "ALTER TABLE analysis_objects DROP COLUMN label;"
+                               "ALTER TABLE analysis_objects DROP COLUMN keypoints;"
+                               "ALTER TABLE analysis_objects DROP COLUMN attributes;"
+                               "ALTER TABLE analysis_frames DROP COLUMN custom;",
+                               nullptr, nullptr, nullptr) == SQLITE_OK,
+                  "Recreate the legacy schema");
+            sqlite3_close(db);
+            Catalog c(root);
+            auto rows = c.analysis("cam", 0, 3000);
+            check(rows.size() == 1 && rows[0].objects.size() == 1 &&
+                      rows[0].objects[0].label.empty() && rows[0].custom_json.empty(),
+                  "Legacy rows survive the column upgrade");
+            auto next = frame;
+            next.session = "new-session";
+            next.time_ms = 1800;
+            next.objects[0].label = "car";
+            c.store_analysis({next});
+            rows = c.analysis("cam", 0, 3000);
+            check(rows.size() == 2 && rows[1].objects[0].label == "car",
+                  "Upgraded database stores new detail");
+        }
         std::filesystem::remove(root / "two.mkv");
         {
             Catalog c(root);
             check(c.analysis("cam", 0, 3000).empty(), "Missing recording hides analysis");
         }
         std::filesystem::remove_all(root);
-        std::cout << "Recorded analysis persistence, session/time isolation, empty frames, writer "
-                     "drain and deletion passed\n";
+        std::cout << "Recorded analysis persistence, detail, legacy upgrade, session/time isolation, "
+                     "empty frames, writer drain and deletion passed\n";
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';
         std::filesystem::remove_all(root);

@@ -76,7 +76,7 @@ endif()
 
 if(BUILD_TESTING)
   add_executable(recorded-analysis-tests ../../tests/recorded_analysis_tests.cpp)
-  target_link_libraries(recorded-analysis-tests PRIVATE amdva_streaming)
+  target_link_libraries(recorded-analysis-tests PRIVATE amdva_streaming PkgConfig::SQLITE)
   add_test(NAME recorded-analysis-contract COMMAND recorded-analysis-tests)
 endif()
 
