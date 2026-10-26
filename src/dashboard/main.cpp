@@ -1,4 +1,5 @@
-#include "color.hpp"
+#include "amdva/rtsp_server.hpp"
+#include "amdva/vui.hpp"
 #include "renderer.hpp"
 #include <algorithm>
 #include <atomic>
@@ -221,8 +222,8 @@ void Media::start() {
         running = false;
     });
 }
-void configure(GstRTSPMediaFactory *, GstRTSPMedia *media, gpointer data) {
-    auto &app = *static_cast<App *>(data);
+void configure(GstRTSPMedia *media, App *data) {
+    auto &app = *data;
     auto state = std::make_shared<Media>(app);
     g_weak_ref_set(&state->media_ref, G_OBJECT(media));
     auto *pipeline = gst_rtsp_media_get_element(media);
@@ -336,28 +337,22 @@ int main(int argc, char **argv) {
         gst_init(nullptr, nullptr);
         App app(options);
         app.loop = g_main_loop_new(nullptr, FALSE);
-        auto *server = gst_rtsp_server_new();
-        g_object_set(server, "address", options.bind.c_str(), "service",
-                     std::to_string(options.port).c_str(), nullptr);
-        auto *factory = gst_rtsp_media_factory_new();
-        gst_rtsp_media_factory_set_shared(factory, TRUE);
+        RtspServer server({options.bind, options.port});
         const std::string launch =
             "( appsrc name=video ! queue max-size-buffers=2 max-size-bytes=0 max-size-time=0 ! "
             "vah264enc name=encoder bitrate=" +
             std::to_string(options.bitrate) +
             " b-frames=0 key-int-max=" + std::to_string(options.fps) +
             " ! h264parse ! rtph264pay name=pay0 pt=96 config-interval=-1 )";
-        gst_rtsp_media_factory_set_launch(factory, launch.c_str());
-        g_signal_connect(factory, "media-configure", G_CALLBACK(configure), &app);
-        auto *mounts = gst_rtsp_server_get_mount_points(server);
-        gst_rtsp_mount_points_add_factory(mounts, options.mount.c_str(), factory);
-        gst_object_unref(mounts);
-        const guint source = gst_rtsp_server_attach(server, nullptr);
-        if (!source) {
-            gst_object_unref(server);
+        server.add_mount(options.mount, launch, [&app](GstRTSPMedia *media, GstElement *) {
+            configure(media, &app);
+        });
+        try {
+            server.attach();
+        } catch (...) {
             g_main_loop_unref(app.loop);
             app.loop = nullptr;
-            throw std::runtime_error("Cannot bind RTSP listener");
+            throw;
         }
         auto quit = [](gpointer p) -> gboolean {
             g_main_loop_quit(static_cast<App *>(p)->loop);
@@ -412,31 +407,13 @@ int main(int argc, char **argv) {
         }
         for (auto &m : active)
             m->stop();
-        auto *filtered = gst_rtsp_server_client_filter(
-            server,
-            [](GstRTSPServer *, GstRTSPClient *client, gpointer) -> GstRTSPFilterResult {
-                gst_rtsp_client_close(client);
-                return GST_RTSP_FILTER_REMOVE;
-            },
-            nullptr);
-        g_list_free(filtered);
-        auto *sessions = gst_rtsp_server_get_session_pool(server);
-        auto *removed = gst_rtsp_session_pool_filter(
-            sessions,
-            [](GstRTSPSessionPool *, GstRTSPSession *, gpointer) -> GstRTSPFilterResult {
-                return GST_RTSP_FILTER_REMOVE;
-            },
-            nullptr);
-        g_list_free(removed);
-        gst_object_unref(sessions);
+        server.disconnect_clients();
         for (auto &m : active)
             m->unprepare();
-        g_source_remove(source);
         g_source_remove(sigint);
         g_source_remove(sigterm);
         if (timer)
             g_source_remove(timer);
-        gst_object_unref(server);
         g_main_loop_unref(app.loop);
         app.loop = nullptr;
         auto errors =

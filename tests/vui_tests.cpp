@@ -1,10 +1,10 @@
-#include "color.hpp"
+#include "amdva/vui.hpp"
 #include <array>
 #include <cstring>
 #include <gst/codecparsers/gsth264bitwriter.h>
 #include <iostream>
 #include <stdexcept>
-using namespace amdva::dashboard;
+using namespace amdva;
 void check(bool ok, const char *message) {
     if (!ok)
         throw std::runtime_error(message);

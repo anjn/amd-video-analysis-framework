@@ -23,6 +23,7 @@ option(AMDVA_BUILD_GVA_COMPAT "Build vendored DL Streamer gva* elements (gvatrac
 if(AMDVA_BUILD_GVA_COMPAT)
   add_subdirectory(third_party/dlstreamer)
 endif()
+add_subdirectory(src/media)
 if(AMDVA_BUILD_PLUGINS)
   add_subdirectory(src/gst)
 endif()

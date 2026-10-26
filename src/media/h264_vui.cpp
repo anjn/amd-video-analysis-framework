@@ -1,11 +1,11 @@
-#include "color.hpp"
+#include "amdva/vui.hpp"
 #include <array>
 #include <gst/codecparsers/gsth264bitwriter.h>
 #include <gst/codecparsers/gsth264parser.h>
 #include <memory>
 #include <stdexcept>
 #include <vector>
-namespace amdva::dashboard {
+namespace amdva {
 GstBuffer *signal_bt709(GstBuffer *input) {
     GstMapInfo map{};
     if (!gst_buffer_map(input, &map, GST_MAP_READ))
@@ -67,4 +67,4 @@ GstBuffer *signal_bt709(GstBuffer *input) {
     gst_buffer_copy_into(out, input, GST_BUFFER_COPY_METADATA, 0, -1);
     return out;
 }
-} // namespace amdva::dashboard
+} // namespace amdva
