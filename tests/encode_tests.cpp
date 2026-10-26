@@ -1,7 +1,8 @@
 // amdencode contract: VAMemory and DMA-BUF input, H.264/H.265/AV1 output, BT.709
 // signalling and frame accounting. Usage: encode-tests [VIDEO.h264 DETECT_DIR]
-// With the optional arguments the annotated decode -> detect -> watermark ->
-// encode path (BGRA DMA-BUF input) is also checked.
+// With the arguments only the annotated decode -> detect -> watermark -> encode path
+// (BGRA DMA-BUF input) runs, and checks the copy auditor counters when it is preloaded.
+#include "amdva/copy_audit.hpp"
 #include <filesystem>
 #include <gst/app/gstappsink.h>
 #include <gst/codecparsers/gsth264parser.h>
@@ -9,6 +10,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 static void require(bool value, const std::string &why) {
     if (!value)
@@ -94,9 +96,10 @@ int main(int argc, char **argv) {
         struct Codec {
             const char *name, *encoder, *media;
         };
-        for (const auto &codec : {Codec{"h264", "vah264enc", "video/x-h264"},
+        for (const auto &codec : argc == 3 ? std::vector<Codec>{}
+                                           : std::vector<Codec>{Codec{"h264", "vah264enc", "video/x-h264"},
                                   Codec{"h265", "vah265enc", "video/x-h265"},
-                                  Codec{"av1", "vaav1enc", "video/x-av1"}}) {
+                                                             Codec{"av1", "vaav1enc", "video/x-av1"}}) {
             auto *factory = gst_element_factory_find(codec.encoder);
             if (!factory) {
                 std::cout << "skip " << codec.name << ": " << codec.encoder << " unavailable\n";
@@ -120,7 +123,7 @@ int main(int argc, char **argv) {
                 std::cout << "ok " << codec.name << " " << format << "\n";
             }
         }
-        {
+        if (argc != 3) {
             Result result;
             run(source + "video/x-raw(memory:VAMemory),format=NV12 ! amdencode signal-bt709=false",
                 result);
@@ -131,6 +134,8 @@ int main(int argc, char **argv) {
         if (argc == 3) {
             std::filesystem::path detect = argv[2];
             Result result;
+            if (amdva_audit_start)
+                amdva_audit_start();
             run("filesrc location=" + std::string(argv[1]) +
                     " ! h264parse ! video/x-h264,framerate=30/1 ! vah264dec ! "
                     "video/x-raw(memory:VAMemory),format=NV12 ! amddetect model=" +
@@ -141,6 +146,13 @@ int main(int argc, char **argv) {
             require(result.frames >= 1 && result.media_type == "video/x-h264" &&
                         has_bt709_limited(result.first),
                     "Annotated DMA-BUF encode failed");
+            if (amdva_audit_errors) {
+                amdva_audit_stop();
+                require(amdva_audit_errors() == 0,
+                        "copy audit saw " + std::to_string(amdva_audit_errors()) +
+                            " CPU image transfers");
+                std::cout << "copy audit: 0 violations, " << amdva_audit_copies() << " copies\n";
+            }
             std::cout << "ok annotated DMA-BUF encode (" << result.frames << " frames)\n";
         }
     } catch (const std::exception &e) {
