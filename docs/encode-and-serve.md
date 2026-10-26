@@ -87,9 +87,12 @@ Fixed-length files with `splitmuxsink` (see `examples/pipelines/annotate-segment
 ```
 
 Keep `key-int-max` below the segment length so every file starts with a keyframe.
-Recording the camera's own compressed stream (no re-encode) is what the NVR does;
-the controller in `amdva_streaming` provides that with a catalog, retention and
-quota (`docs/vms.md`).
+Recording the camera's own compressed stream (no re-encode) is what the NVR does.
+`amdva::streaming::SegmentRecorder` (`amdva/streaming/recorder.hpp`) is that
+recorder as a reusable class: feed it H.264/H.265 access units from a keyframe with
+`push()`, pump `poll()`, and it writes rolling Matroska segments while keeping the
+`Catalog` (names, media start time, duration, interrupted segments) in step.
+Retention and quota live in the catalog and controller (`docs/vms.md`).
 
 ## Serving over RTSP
 

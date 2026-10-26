@@ -4,6 +4,7 @@
 #include "amdva/streaming/config.hpp"
 #include "amdva/streaming/keyframe.hpp"
 #include "amdva/streaming/playback.hpp"
+#include "amdva/streaming/recorder.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -86,121 +87,13 @@ Slot::~Slot() {
     }
 }
 struct Controller::Channel {
-    struct Recorder {
-        Channel *owner{};
-        GstElement *pipe{};
-        GstElement *input{};
-        std::string session{identifier()}, camera_name, channel;
-        GstClockTime origin{GST_CLOCK_TIME_NONE};
-        int64_t wall_origin_ms{-1};
-        bool ending{};
-        Clock::time_point deadline;
-        std::mutex mutex;
-        std::vector<std::string> files;
-        ~Recorder() {
-            owner->controller.request_reclaim();
-            if (input)
-                gst_object_unref(input);
-            destroy(pipe);
-            for (const auto &f : files) {
-                try {
-                    owner->controller.catalog_->interrupted(f);
-                } catch (...) {
-                }
-            }
-        }
-        static gchar *location(GstElement *, guint fragment, GstSample *first_sample,
-                               gpointer data) {
-            auto &r = *static_cast<Recorder *>(data);
-            const auto now = g_get_real_time();
-            const auto name = std::to_string(now) + "-" + r.channel + "-" + r.session + "-" +
-                              std::to_string(fragment) + ".mkv";
-            try {
-                std::string camera_name;
-                {
-                    std::lock_guard<std::mutex> l(r.mutex);
-                    camera_name = r.camera_name;
-                }
-                std::optional<int64_t> media_start;
-                if (first_sample && r.wall_origin_ms >= 0) {
-                    auto *buffer = gst_sample_get_buffer(first_sample);
-                    auto *segment = gst_sample_get_segment(first_sample);
-                    auto pts = buffer ? GST_BUFFER_PTS(buffer) : GST_CLOCK_TIME_NONE;
-                    auto time = segment && GST_CLOCK_TIME_IS_VALID(pts)
-                                    ? gst_segment_to_stream_time(segment, GST_FORMAT_TIME, pts)
-                                    : pts;
-                    if (GST_CLOCK_TIME_IS_VALID(time))
-                        media_start = r.wall_origin_ms + time / GST_MSECOND;
-                }
-                r.owner->controller.catalog_->opened(name, r.channel, camera_name, r.session,
-                                                     fragment, media_start);
-                std::lock_guard<std::mutex> l(r.mutex);
-                r.files.push_back(name);
-            } catch (...) {
-                r.owner->record_failed = true;
-                return g_strdup("/dev/full");
-            }
-            return g_strdup((r.owner->controller.catalog_->root() / name).c_str());
-        }
-        void end() {
-            if (ending)
-                return;
-            ending = true;
-            deadline = Clock::now() + std::chrono::seconds(5);
-            gst_app_src_end_of_stream(GST_APP_SRC(input));
-        }
-        bool poll() {
-            auto *bus = gst_element_get_bus(pipe);
-            bool done = false;
-            while (auto *m = gst_bus_pop(bus)) {
-                if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_ELEMENT) {
-                    auto *s = gst_message_get_structure(m);
-                    if (s && gst_structure_has_name(s, "splitmuxsink-fragment-closed")) {
-                        const char *loc = gst_structure_get_string(s, "location");
-                        if (loc) {
-                            const auto name = std::filesystem::path(loc).filename().string();
-                            guint64 duration = GST_CLOCK_TIME_NONE;
-                            gst_structure_get_uint64(s, "fragment-duration", &duration);
-                            guint64 offset = GST_CLOCK_TIME_NONE;
-                            gst_structure_get_uint64(s, "fragment-offset", &offset);
-                            if (wall_origin_ms >= 0 && GST_CLOCK_TIME_IS_VALID(offset))
-                                owner->controller.catalog_->media_start(
-                                    name, wall_origin_ms + offset / GST_MSECOND);
-                            owner->controller.catalog_->closed(
-                                name, GST_CLOCK_TIME_IS_VALID(duration) ? int64_t(duration) : -1);
-                            std::lock_guard<std::mutex> lock(mutex);
-                            files.erase(std::remove(files.begin(), files.end(), name), files.end());
-                        }
-                    }
-                } else if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_ERROR) {
-                    owner->record_failed = true;
-                    owner->state.recording = "error";
-                    owner->state.error =
-                        "Recording: " + public_error(message_error(m), owner->state.source);
-                    done = true;
-                } else if (GST_MESSAGE_TYPE(m) == GST_MESSAGE_EOS)
-                    done = true;
-                gst_message_unref(m);
-            }
-            gst_object_unref(bus);
-            if (ending && Clock::now() >= deadline)
-                done = true;
-            if (done) {
-                destroy(pipe);
-                std::lock_guard<std::mutex> l(mutex);
-                for (const auto &f : files)
-                    owner->controller.catalog_->interrupted(f);
-            }
-            return done;
-        }
-    };
     Controller &controller;
     Status state;
     std::shared_ptr<Telemetry> timing;
     std::unique_ptr<PipelineTelemetry> receive_timing, decode_timing;
     GstElement *receive{}, *decoder{}, *decode_input{};
-    std::vector<std::unique_ptr<Recorder>> recordings;
-    Recorder *recording{};
+    std::vector<std::unique_ptr<SegmentRecorder>> recordings;
+    SegmentRecorder *recording{};
     std::mutex encoded_mutex;
     std::deque<Sample> encoded;
     uint64_t queued{};
@@ -255,13 +148,11 @@ struct Controller::Channel {
     std::mutex search_stamp_mutex;
     std::map<GstClockTime, SearchStamp> search_stamps;
     void stamp(GstClockTime decoded_pts, GstClockTime original_pts) {
-        if (!recording || recording->origin == GST_CLOCK_TIME_NONE ||
-            original_pts < recording->origin || !GST_CLOCK_TIME_IS_VALID(original_pts))
+        const auto wall = recording ? recording->wall_time_ms(original_pts) : std::nullopt;
+        if (!wall)
             return;
         std::lock_guard<std::mutex> lock(search_stamp_mutex);
-        search_stamps[decoded_pts] = {recording->wall_origin_ms +
-                                          int64_t((original_pts - recording->origin) / GST_MSECOND),
-                                      recording->session};
+        search_stamps[decoded_pts] = {*wall, recording->session()};
         while (search_stamps.size() > 256)
             search_stamps.erase(search_stamps.begin());
     }
@@ -702,25 +593,14 @@ struct Controller::Channel {
         decode_wait = false;
     }
     void start_record(GstCaps *caps) {
-        auto r = std::make_unique<Recorder>();
-        r->owner = this;
-        r->camera_name = state.source.name;
-        r->channel = state.source.id;
-        r->pipe =
-            parse(std::string("appsrc name=input is-live=true format=time block=false ! ") +
-                  (codec == 1 ? "h264parse ! video/x-h264,stream-format=avc,alignment=au"
-                              : "h265parse ! video/x-h265,stream-format=hvc1,alignment=au") +
-                  " ! splitmuxsink name=segments muxer-factory=matroskamux async-finalize=true");
-        r->input = gst_bin_get_by_name(GST_BIN(r->pipe), "input");
-        gst_app_src_set_caps(GST_APP_SRC(r->input), caps);
-        g_object_set(r->input, "max-bytes", guint64(compressed_limit), nullptr);
-        auto *mux = gst_bin_get_by_name(GST_BIN(r->pipe), "segments");
-        g_object_set(mux, "max-size-time",
-                     guint64(controller.options_.segment_seconds) * GST_SECOND, nullptr);
-        g_signal_connect(mux, "format-location-full", G_CALLBACK(Recorder::location), r.get());
-        gst_object_unref(mux);
-        if (gst_element_set_state(r->pipe, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
-            throw std::runtime_error("Cannot start MKV recorder");
+        SegmentRecorder::Options options;
+        options.channel = state.source.id;
+        options.camera_name = state.source.name;
+        options.codec = codec == 1 ? RecordCodec::H264 : RecordCodec::H265;
+        options.segment_seconds = controller.options_.segment_seconds;
+        options.queue_limit_bytes = compressed_limit;
+        options.on_destroyed = [this] { controller.request_reclaim(); };
+        auto r = std::make_unique<SegmentRecorder>(*controller.catalog_, std::move(options), caps);
         recording = r.get();
         recordings.push_back(std::move(r));
         state.recording = "recording";
@@ -767,12 +647,19 @@ struct Controller::Channel {
                                  state.connection == "live");
         recordings.erase(std::remove_if(recordings.begin(), recordings.end(),
                                         [this](auto &r) {
-                                            if (r->poll()) {
-                                                if (recording == r.get())
-                                                    recording = nullptr;
-                                                return true;
+                                            const bool done = r->poll();
+                                            if (r->consume_failure()) {
+                                                record_failed = true;
+                                                const auto error = r->error();
+                                                if (!error.empty()) {
+                                                    state.recording = "error";
+                                                    state.error = "Recording: " +
+                                                                  public_error(error, state.source);
+                                                }
                                             }
-                                            return false;
+                                            if (done && recording == r.get())
+                                                recording = nullptr;
+                                            return done;
                                         }),
                          recordings.end());
         if (record_failed.exchange(false)) {
@@ -864,9 +751,7 @@ struct Controller::Channel {
                 if (space && Clock::now() >= record_retry) {
                     if (!recording && key)
                         start_record(gst_sample_get_caps(sample.get()));
-                    if (recording && recording->wall_origin_ms < 0)
-                        recording->wall_origin_ms = g_get_real_time() / 1000;
-                    if (recording && !push(recording->input, sample, recording->origin)) {
+                    if (recording && !recording->push(sample.get())) {
                         end_record();
                         state.gaps++;
                         state.recording = "waiting for keyframe";
@@ -1850,10 +1735,8 @@ void Controller::update_source(Source source) {
                     c->retries = 0;
                 }
                 c->state.source.name = source.name;
-                for (auto &r : c->recordings) {
-                    std::lock_guard<std::mutex> l(r->mutex);
-                    r->camera_name = source.name;
-                }
+                for (auto &r : c->recordings)
+                    r->camera_name(source.name);
                 return;
             }
     });
