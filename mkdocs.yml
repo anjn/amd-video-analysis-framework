@@ -1,0 +1,80 @@
+# Documentation site. Stage the sources first:
+#   python3 scripts/docs_site.py && mkdocs serve
+site_name: AMD Video Analysis Framework
+site_description: GStreamer video analytics for AMD APUs with VA, VPE, HIP and MIGraphX
+site_url: https://anjn.github.io/amd-video-analysis-framework/
+repo_url: https://github.com/anjn/amd-video-analysis-framework
+repo_name: anjn/amd-video-analysis-framework
+edit_uri: ""
+docs_dir: .site-src
+site_dir: site
+strict: true
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: red
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: red
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+
+markdown_extensions:
+  - tables
+  - admonition
+  - attr_list
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+
+validation:
+  links:
+    anchors: warn
+
+nav:
+  - Home: index.md
+  - Guides:
+      - Framework overview: docs/framework.md
+      - Coming from DL Streamer: docs/migration-from-dlstreamer.md
+      - Coming from DeepStream: docs/migration-from-deepstream.md
+      - SDK guide: docs/sdk-guide.md
+      - Encoding, recording and serving: docs/encode-and-serve.md
+      - Metadata and Python: docs/metadata-and-python.md
+  - Reference:
+      - Elements: docs/elements.md
+      - Model-info: docs/model-info.md
+      - Memory and execution contracts: docs/architecture.md
+      - Decode and presentation telemetry: docs/telemetry.md
+  - Validation:
+      - Validation and reproduction: docs/validation.md
+      - Framework validation: docs/framework-validation.md
+  - Examples:
+      - examples/README.md
+      - NVR:
+          - examples/nvr/README.md
+          - Desktop video management: examples/nvr/docs/vms.md
+          - Person search: examples/nvr/docs/nvr-search.md
+          - AI scheduling and evaluation: examples/nvr/docs/nvr-ai-performance.md
+          - Quality fixtures: examples/nvr/benchmarks/README.md
+      - Resource dashboard:
+          - examples/resource-dashboard/README.md
+          - Visual prototype: examples/resource-dashboard/PROTOTYPE.md
+      - File-to-RTSP server: examples/rtsp-files/README.md
+      - gst-launch recipes: examples/pipelines/README.md

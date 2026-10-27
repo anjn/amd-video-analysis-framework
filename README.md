@@ -26,6 +26,10 @@ the public headers and `AMDVA::` targets.
 
 ## Documentation
 
+Browse the documentation at <https://anjn.github.io/amd-video-analysis-framework/>.
+To preview it locally: `pip install -r requirements-docs.txt`, then
+`python3 scripts/docs_site.py && mkdocs serve`.
+
 | Topic | |
 | --- | --- |
 | Coming from DL Streamer | [element and property map, models, example](docs/migration-from-dlstreamer.md) |
