@@ -1,4 +1,4 @@
-# Documentation site. Stage the sources first:
+# Documentation site in English (/) and Japanese (/ja/). Stage the sources first:
 #   python3 scripts/docs_site.py && mkdocs serve
 site_name: AMD Video Analysis Framework
 site_description: GStreamer video analytics for AMD APUs with VA, VPE, HIP and MIGraphX
@@ -33,6 +33,47 @@ theme:
       toggle:
         icon: material/weather-sunny
         name: Light mode
+
+plugins:
+  - search:
+      lang: [en, ja]
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      languages:
+        - locale: en
+          name: English
+          default: true
+        - locale: ja
+          name: 日本語
+          site_name: AMD Video Analysis Framework
+          site_description: AMD APU 向けの GStreamer 映像解析フレームワーク（VA、VPE、HIP、MIGraphX）
+          nav_translations:
+            Home: ホーム
+            Guides: ガイド
+            Framework overview: フレームワークの概要
+            Coming from DL Streamer: DL Streamer からの移行
+            Coming from DeepStream: DeepStream からの移行
+            SDK guide: SDK ガイド
+            Encoding, recording and serving: エンコード、録画、配信
+            Metadata and Python: メタデータと Python
+            Reference: リファレンス
+            Elements: 要素
+            Model-info: model-info
+            Memory and execution contracts: メモリと実行の規約
+            Decode and presentation telemetry: デコードと表示のテレメトリ
+            Validation: 検証
+            Validation and reproduction: 検証と再現
+            Framework validation: フレームワークの検証
+            Examples: サンプル
+            Desktop video management: デスクトップの映像管理
+            Person search: 人物検索
+            AI scheduling and evaluation: AI のスケジューリングと評価
+            Quality fixtures: 品質評価用データ
+            Resource dashboard: リソースダッシュボード
+            Visual prototype: 外観プロトタイプ
+            File-to-RTSP server: ファイル RTSP サーバー
+            gst-launch recipes: gst-launch のレシピ
 
 markdown_extensions:
   - tables

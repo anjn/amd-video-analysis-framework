@@ -41,6 +41,8 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-docs.txt
       - run: pip install -r requirements-docs.txt
+      - name: Report translations older than their English source
+        run: python scripts/docs_site.py --check-translations
       - run: python scripts/docs_site.py --repo "${{ github.server_url }}/${{ github.repository }}" --ref "${{ github.ref_name }}"
       - run: mkdocs build --strict
       - uses: actions/upload-pages-artifact@v5

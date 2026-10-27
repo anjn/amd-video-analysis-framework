@@ -387,8 +387,8 @@ not a throughput benchmark. Logs are under `artifacts/mobileclip-combined/`.
 A 16-source 1440p test used 2 Hz tracking, a deliberately short 100 ms requested
 person interval and GPU/NPU budgets of 100%. Across approximately 90 seconds
 with 16, four and zero visible cameras, sampled embedding and tracking queue drop
-counters stayed at zero. The maximum sampled embedding queue depth was 51 of
-128. The final sample reported 4,838 stored observations and no search error;
+counters stayed at zero. The maximum sampled embedding queue depth was 51
+of 128. The final sample reported 4,838 stored observations and no search error;
 both backend namespaces were populated. The final rolling window measured mean
 GPU calls of 29.74 ms (batch 4) and NPU calls of 17.86 ms (batch 1).
 These figures describe this short run, not a guarantee for every input workload.

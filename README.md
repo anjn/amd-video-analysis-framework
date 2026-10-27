@@ -1,5 +1,7 @@
 # AMD Video Analysis Framework
 
+[日本語](README.ja.md)
+
 GStreamer video analytics for AMD APUs, using VA codecs/VPE, HIP image
 processing, MIGraphX inference and VA hardware encoding. A vendored subset of
 Intel DL Streamer (`gvatrack`, `gvastreammux`, `gvametaconvert`, ...) provides
