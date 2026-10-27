@@ -1,6 +1,6 @@
 # SDK でアプリケーションに組み込む
 
-フレームワークをインストールすると、CMake の `find_package(AMDVideoAnalysis)` で C++ のライブラリを使えます。GStreamer のパイプラインを自分のプログラムから動かすほか、RTSP カメラの受信、録画、録画の検索と再生、処理した映像の RTSP 配信を、Qt などの GUI ライブラリに依存せずに組み込めます。このページでは、SDK のインストール、付属サンプルのビルドと実行、主な API の構成を説明します。
+フレームワークをインストールすると、CMake の `find_package(AMDVideoAnalytics)` で C++ のライブラリを使えます。GStreamer のパイプラインを自分のプログラムから動かすほか、RTSP カメラの受信、録画、録画の検索と再生、処理した映像の RTSP 配信を、Qt などの GUI ライブラリに依存せずに組み込めます。このページでは、SDK のインストール、付属サンプルのビルドと実行、主な API の構成を説明します。
 
 ## 1. SDK をインストールする
 
@@ -10,7 +10,7 @@
 cmake --install build --prefix <インストール先>
 ```
 
-`<インストール先>` に `include/amdva/`、`lib/`（ライブラリと `gstreamer-1.0/` のプラグイン）、`lib/cmake/AMDVideoAnalysis/` ができれば成功です。
+`<インストール先>` に `include/amdva/`、`lib/`（ライブラリと `gstreamer-1.0/` のプラグイン）、`lib/cmake/AMDVideoAnalytics/` ができれば成功です。
 
 ## 2. 付属サンプルをビルドする
 
@@ -24,7 +24,7 @@ cmake --build build-sdk -j8
 `build-sdk/` に `transcode`、`telemetry`、`playback`、`timeline`、`keyframe-preview` ができれば成功です。自分のプロジェクトでは、次のように書きます。
 
 ```cmake
-find_package(AMDVideoAnalysis REQUIRED)
+find_package(AMDVideoAnalytics REQUIRED)
 add_executable(app main.cpp)
 target_link_libraries(app PRIVATE AMDVA::amdva_streaming)
 ```

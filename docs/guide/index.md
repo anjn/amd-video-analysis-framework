@@ -1,5 +1,5 @@
-<!-- source: docs/guide/index.ja.md 97b62adf34c077e4a091f5de0a7d98a703cd3e3a -->
-# AMD Video Analysis Framework
+<!-- source: docs/guide/index.ja.md 2d17fcf9287c2ce4c5723d3def30a4292c2da3ff -->
+# AMD Video Analytics Framework
 
 A GStreamer framework for analyzing camera feeds and video files on AMD APUs (validated on Ryzen AI 9 HX 370 / Radeon 890M). Decoding, inference, drawing and encoding all run on the GPU; only metadata such as detection results returns to the CPU. By linking GStreamer elements with `gst-launch-1.0`, you can run object detection, tracking, classification, segmentation and pose estimation, and output the results as video files, RTSP streams or JSON.
 

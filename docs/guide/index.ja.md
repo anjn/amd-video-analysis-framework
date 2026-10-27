@@ -1,4 +1,4 @@
-# AMD Video Analysis Framework
+# AMD Video Analytics Framework
 
 AMD の APU（Ryzen AI 9 HX 370 / Radeon 890M で検証）で、カメラ映像や動画ファイルの解析を行うための GStreamer フレームワークです。デコードから推論、描画、エンコードまでを GPU 上で処理し、CPU に戻すのは検出結果などのメタデータだけです。GStreamer の要素を `gst-launch-1.0` でつなぐだけで、物体検出、トラッキング、分類、セグメンテーション、姿勢推定を行い、結果を動画ファイルや RTSP、JSON として出力できます。
 

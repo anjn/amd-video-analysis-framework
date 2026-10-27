@@ -1,6 +1,6 @@
 # Applications built on the framework. They use only the installed headers and
 # AMDVA:: targets, so each directory also configures on its own against an
-# installed SDK (find_package(AMDVideoAnalysis)).
+# installed SDK (find_package(AMDVideoAnalytics)).
 option(AMDVA_BUILD_DASHBOARD "Build the hardware-encoded RTSP resource dashboard" ON)
 option(AMDVA_BUILD_RTSP_FILES "Build the file-to-RTSP test server" ON)
 option(AMDVA_BUILD_NVR "Build the NVR sample backend and headless service" ON)

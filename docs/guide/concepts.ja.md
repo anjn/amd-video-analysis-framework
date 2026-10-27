@@ -62,7 +62,7 @@ ONNX のモデルを `amdva-compile-model` でこの GPU 向けにコンパイ�
 
 ## ライブラリの構成
 
-アプリケーションから使う場合は、CMake パッケージ `AMDVideoAnalysis` のライブラリをリンクします。矢印は、どのライブラリを使っているかを表します。
+アプリケーションから使う場合は、CMake パッケージ `AMDVideoAnalytics` のライブラリをリンクします。矢印は、どのライブラリを使っているかを表します。
 
 ```mermaid
 flowchart BT

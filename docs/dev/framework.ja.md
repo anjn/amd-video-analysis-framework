@@ -1,4 +1,4 @@
-<!-- source: docs/dev/framework.md 9e00e711e47d8c0e011d37635b95619a6c90ee11 -->
+<!-- source: docs/dev/framework.md 44a9913636b96f303920c87cffe4701ea1f655f6 -->
 # 映像解析フレームワーク
 
 AMD フレームワークは、映像解析パイプラインの主要な処理を扱います。デコード、画像/ROI の前処理、推論、検出/分類/セグメンテーション/姿勢推定の後処理、トラッキング、メタデータ、描画、Python コールバック、結果の送信、ハードウェアエンコードです。トラッキング、メタデータ変換、ストリームの mux には DL Streamer の一部（`third_party/dlstreamer`、MIT）を同梱して使います。AMD の推論を `gvadetect` という名前に置き換えたり、上流の OpenVINO 推論に
@@ -160,7 +160,7 @@ cmake --install build-headless --prefix /path/to/amdva-sdk
 `-DAMDVA_BUILD_NVR_GUI=OFF` を指定すると、NVR のバックエンドとヘッドレスの
 `amdva-streams` サービスはビルドしたまま、Qt は不要になります。`-DAMDVA_BUILD_EXAMPLES=OFF` を指定するとフレームワークだけをビルドします。`amdva-streams` はソースを受信/録画し、選択中のソースとバックグラウンドの解析を行います。EGL プレビューの確保やディスプレイサーバーは必要ありません。実行時間に 0 を指定するか省略すると、SIGINT/SIGTERM を受けるまで実行します。
 
-外部の CMake プロジェクトは `find_package(AMDVideoAnalysis REQUIRED)` を使い、`AMDVA::amdva_streaming`、`AMDVA::amdva_gst_support`、`AMDVA::amdva_inference`、`AMDVA::amdva_media`、`AMDVA::amdva_monitor`、`AMDVA::amdva_runtime` のいずれかをリンクします。ソースツリーにも同じターゲットがあるため、`examples/` 以下の各ディレクトリは、インストール済みの SDK を使って単独で configure することもできます（[`examples/sdk/CMakeLists.txt`](../../examples/sdk/CMakeLists.txt) を参照）。インストールしたパッケージには、互換性のあるホストの VA/GStreamer/ROCm スタックが必要です。可搬なドライバーランタイムは同梱していません。互換性のあるインストール環境で HIP のヘッダーを探す場合は `AMDVA_ROCM_ROOT` を設定してください。
+外部の CMake プロジェクトは `find_package(AMDVideoAnalytics REQUIRED)` を使い、`AMDVA::amdva_streaming`、`AMDVA::amdva_gst_support`、`AMDVA::amdva_inference`、`AMDVA::amdva_media`、`AMDVA::amdva_monitor`、`AMDVA::amdva_runtime` のいずれかをリンクします。ソースツリーにも同じターゲットがあるため、`examples/` 以下の各ディレクトリは、インストール済みの SDK を使って単独で configure することもできます（[`examples/sdk/CMakeLists.txt`](../../examples/sdk/CMakeLists.txt) を参照）。インストールしたパッケージには、互換性のあるホストの VA/GStreamer/ROCm スタックが必要です。可搬なドライバーランタイムは同梱していません。互換性のあるインストール環境で HIP のヘッダーを探す場合は `AMDVA_ROCM_ROOT` を設定してください。
 
 ## デコードと表示のテレメトリ
 

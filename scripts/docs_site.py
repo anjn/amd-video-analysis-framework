@@ -86,7 +86,7 @@ def stamp(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / '.site-src')
-    parser.add_argument('--repo', default='https://github.com/anjn/amd-video-analysis-framework')
+    parser.add_argument('--repo', default='https://github.com/anjn/amd-video-analytics-framework')
     parser.add_argument('--ref', default='main')
     parser.add_argument('--check-translations', action='store_true',
                         help='list stale translations instead of staging')

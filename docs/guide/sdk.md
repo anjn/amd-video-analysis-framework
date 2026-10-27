@@ -1,7 +1,7 @@
-<!-- source: docs/guide/sdk.ja.md cbeaa691527bab43ee74fdb00aa8cce85c22bad1 -->
+<!-- source: docs/guide/sdk.ja.md b80c32baf505417d865c33d22f5c424267778b00 -->
 # Embedding the SDK in your application
 
-After you install the framework, you can use its C++ libraries through CMake's `find_package(AMDVideoAnalysis)`. Besides running GStreamer pipelines from your own program, you can embed RTSP camera ingest, recording, recording search and playback, and RTSP serving of processed video, without depending on GUI libraries such as Qt. This page covers installing the SDK, building and running the bundled samples, and the structure of the main APIs.
+After you install the framework, you can use its C++ libraries through CMake's `find_package(AMDVideoAnalytics)`. Besides running GStreamer pipelines from your own program, you can embed RTSP camera ingest, recording, recording search and playback, and RTSP serving of processed video, without depending on GUI libraries such as Qt. This page covers installing the SDK, building and running the bundled samples, and the structure of the main APIs.
 
 ## 1. Install the SDK
 
@@ -11,7 +11,7 @@ Install from the `build/` directory built in [Installation](install.md) to any l
 cmake --install build --prefix <prefix>
 ```
 
-The installation succeeded if `include/amdva/`, `lib/` (the libraries and the `gstreamer-1.0/` plugins) and `lib/cmake/AMDVideoAnalysis/` appear under `<prefix>`.
+The installation succeeded if `include/amdva/`, `lib/` (the libraries and the `gstreamer-1.0/` plugins) and `lib/cmake/AMDVideoAnalytics/` appear under `<prefix>`.
 
 ## 2. Build the bundled samples
 
@@ -25,7 +25,7 @@ cmake --build build-sdk -j8
 The build succeeded if `transcode`, `telemetry`, `playback`, `timeline` and `keyframe-preview` appear in `build-sdk/`. In your own project, write the following.
 
 ```cmake
-find_package(AMDVideoAnalysis REQUIRED)
+find_package(AMDVideoAnalytics REQUIRED)
 add_executable(app main.cpp)
 target_link_libraries(app PRIVATE AMDVA::amdva_streaming)
 ```

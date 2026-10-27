@@ -247,7 +247,7 @@ framework only. `amdva-streams` receives/records sources and performs
 selected/background analytics without allocating EGL previews or requiring a
 display server. A zero duration or omitted duration runs until SIGINT/SIGTERM.
 
-External CMake consumers use `find_package(AMDVideoAnalysis REQUIRED)` and
+External CMake consumers use `find_package(AMDVideoAnalytics REQUIRED)` and
 link `AMDVA::amdva_streaming`, `AMDVA::amdva_gst_support`,
 `AMDVA::amdva_inference`, `AMDVA::amdva_media`, `AMDVA::amdva_monitor` or
 `AMDVA::amdva_runtime`. The same targets exist in the source tree, so every

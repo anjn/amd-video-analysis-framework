@@ -1,4 +1,4 @@
-# AMD Video Analysis Framework
+# AMD Video Analytics Framework
 
 [English](README.md)
 
@@ -29,7 +29,7 @@ AMD の APU で動く、GStreamer ベースの映像解析フレームワーク�
 
 ## ドキュメント
 
-ドキュメントは <https://anjn.github.io/amd-video-analysis-framework/ja/> で読めます。
+ドキュメントは <https://anjn.github.io/amd-video-analytics-framework/ja/> で読めます。
 
 - 初めて使う場合: [インストール](docs/guide/install.ja.md) → [クイックスタート](docs/guide/quickstart.ja.md)
 - パイプラインの組み方: [パイプラインの作り方](docs/guide/pipelines.ja.md)

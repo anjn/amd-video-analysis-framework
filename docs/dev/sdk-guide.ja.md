@@ -1,4 +1,4 @@
-<!-- source: docs/dev/sdk-guide.md 8642f1b6998decc453889b46c6c1e74beb1866bc -->
+<!-- source: docs/dev/sdk-guide.md 9a273255a6ceeb5860bd81cbe37ba1d01a685a3c -->
 # SDK ガイド
 
 ## ライブラリ
@@ -44,7 +44,7 @@ cmake -S . -B build-min -DAMDVA_ROCM_ROOT="$AMDVA_ROCM_ROOT" -DAMDVA_BUILD_EXAMP
 ## CMake からの利用
 
 ```cmake
-find_package(AMDVideoAnalysis REQUIRED)
+find_package(AMDVideoAnalytics REQUIRED)
 add_executable(app main.cpp)
 target_link_libraries(app PRIVATE AMDVA::amdva_media)
 ```

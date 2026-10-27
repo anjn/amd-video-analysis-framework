@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(amd_video_analysis VERSION 0.1.0 LANGUAGES C CXX)
+project(amd_video_analytics VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -40,7 +40,7 @@ add_library(amdva_monitor SHARED src/resource_monitor.cpp)
 add_library(AMDVA::amdva_monitor ALIAS amdva_monitor)
 target_include_directories(amdva_monitor PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>")
 target_link_libraries(amdva_monitor PRIVATE PkgConfig::AMDGPU)
-install(TARGETS amdva_monitor EXPORT AMDVideoAnalysisTargets LIBRARY DESTINATION lib)
+install(TARGETS amdva_monitor EXPORT AMDVideoAnalyticsTargets LIBRARY DESTINATION lib)
 option(AMDVA_BUILD_STREAMING "Build the RTSP ingest, recording, catalog and playback library" ON)
 if(AMDVA_BUILD_STREAMING)
   if(NOT AMDVA_BUILD_PLUGINS)
@@ -70,16 +70,26 @@ foreach(library amdva_runtime amdva_monitor amdva_media amdva_inference amdva_gs
       SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR})
   endif()
 endforeach()
-install(TARGETS amdva_runtime EXPORT AMDVideoAnalysisTargets LIBRARY DESTINATION lib)
+install(TARGETS amdva_runtime EXPORT AMDVideoAnalyticsTargets LIBRARY DESTINATION lib)
 install(TARGETS amdva-probe RUNTIME DESTINATION bin)
 install(DIRECTORY include/ DESTINATION include)
 include(CMakePackageConfigHelpers)
-configure_package_config_file(cmake/AMDVideoAnalysisConfig.cmake.in
-  "${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalysisConfig.cmake"
-  INSTALL_DESTINATION lib/cmake/AMDVideoAnalysis)
+configure_package_config_file(cmake/AMDVideoAnalyticsConfig.cmake.in
+  "${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalyticsConfig.cmake"
+  INSTALL_DESTINATION lib/cmake/AMDVideoAnalytics)
+write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalyticsConfigVersion.cmake"
+  VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
+install(EXPORT AMDVideoAnalyticsTargets NAMESPACE AMDVA:: DESTINATION lib/cmake/AMDVideoAnalytics)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalyticsConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalyticsConfigVersion.cmake"
+  cmake/AmdvaHostLibraries.cmake DESTINATION lib/cmake/AMDVideoAnalytics)
+# The package was first published as AMDVideoAnalysis; keep that name working.
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalysisConfig.cmake" [=[
+# Deprecated: use find_package(AMDVideoAnalytics).
+include(CMakeFindDependencyMacro)
+find_dependency(AMDVideoAnalytics HINTS "${CMAKE_CURRENT_LIST_DIR}/../AMDVideoAnalytics")
+]=])
 write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalysisConfigVersion.cmake"
   VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
-install(EXPORT AMDVideoAnalysisTargets NAMESPACE AMDVA:: DESTINATION lib/cmake/AMDVideoAnalysis)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalysisConfig.cmake"
-  "${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalysisConfigVersion.cmake"
-  cmake/AmdvaHostLibraries.cmake DESTINATION lib/cmake/AMDVideoAnalysis)
+  "${CMAKE_CURRENT_BINARY_DIR}/AMDVideoAnalysisConfigVersion.cmake" DESTINATION lib/cmake/AMDVideoAnalysis)

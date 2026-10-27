@@ -1,9 +1,9 @@
-<!-- source: README.ja.md b2a7e30450861446ebe891714c8ecd219862e288 -->
-# AMD Video Analysis Framework
+<!-- source: README.ja.md ed3aac938cdc53cec89a49c57ce22e473ef846e7 -->
+# AMD Video Analytics Framework
 
 [日本語](README.ja.md)
 
-A GStreamer-based video analysis framework for AMD APUs. Decoding of camera feeds and video files, inference such as object detection, drawing of detection results, and encoding all run on the GPU; only metadata such as detection results returns to the CPU. Validated on Ryzen AI 9 HX 370 / Radeon 890M.
+A GStreamer-based video analytics framework for AMD APUs. Decoding of camera feeds and video files, inference such as object detection, drawing of detection results, and encoding all run on the GPU; only metadata such as detection results returns to the CPU. Validated on Ryzen AI 9 HX 370 / Radeon 890M.
 
 ## Demo
 
@@ -30,7 +30,7 @@ For details and launch instructions of the NVR demo, which records multiple came
 
 ## Documentation
 
-The documentation is available at <https://anjn.github.io/amd-video-analysis-framework/>.
+The documentation is available at <https://anjn.github.io/amd-video-analytics-framework/>.
 
 - First-time users: [Installation](docs/guide/install.md) → [Quick start](docs/guide/quickstart.md)
 - Building pipelines: [Building pipelines](docs/guide/pipelines.md)

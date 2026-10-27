@@ -49,7 +49,7 @@ the host GLib/SQLite runtime like the framework does.
 ## Consuming from CMake
 
 ```cmake
-find_package(AMDVideoAnalysis REQUIRED)
+find_package(AMDVideoAnalytics REQUIRED)
 add_executable(app main.cpp)
 target_link_libraries(app PRIVATE AMDVA::amdva_media)
 ```

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 project(amdva_headless_example LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
-find_package(AMDVideoAnalysis REQUIRED)
+find_package(AMDVideoAnalytics REQUIRED)
 add_executable(telemetry telemetry.cpp)
 target_link_libraries(telemetry PRIVATE AMDVA::amdva_gst_support)
 add_executable(playback playback.cpp)

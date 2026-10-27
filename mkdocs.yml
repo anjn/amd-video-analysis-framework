@@ -1,11 +1,11 @@
 # User guide (docs/guide/) at the site root and developer information (docs/dev/) under
 # /dev/, in English (/) and Japanese (/ja/). Stage the sources first:
 #   python3 scripts/docs_site.py && mkdocs serve
-site_name: AMD Video Analysis Framework
+site_name: AMD Video Analytics Framework
 site_description: GStreamer video analytics for AMD APUs with VA, VPE, HIP and MIGraphX
-site_url: https://anjn.github.io/amd-video-analysis-framework/
-repo_url: https://github.com/anjn/amd-video-analysis-framework
-repo_name: anjn/amd-video-analysis-framework
+site_url: https://anjn.github.io/amd-video-analytics-framework/
+repo_url: https://github.com/anjn/amd-video-analytics-framework
+repo_name: anjn/amd-video-analytics-framework
 edit_uri: ""
 docs_dir: .site-src
 site_dir: site
@@ -47,7 +47,7 @@ plugins:
           default: true
         - locale: ja
           name: 日本語
-          site_name: AMD Video Analysis Framework
+          site_name: AMD Video Analytics Framework
           site_description: AMD APU 向けの GStreamer 映像解析フレームワーク（VA、VPE、HIP、MIGraphX）
           nav_translations:
             Home: ホーム

@@ -1,4 +1,4 @@
-<!-- source: docs/guide/concepts.ja.md 521d88f0879a9745ea55d63815f8fd12604b1d0e -->
+<!-- source: docs/guide/concepts.ja.md b034c635696d38d7154e7a182342cd1277d1245b -->
 # Concepts
 
 This framework keeps decoded video in GPU memory all the way through processing. The CPU handles only compressed video data and small metadata such as detection results; it never copies or converts pixels. This page describes the data flow, the roles of the elements, models, metadata and the library structure.
@@ -63,7 +63,7 @@ Detection results are attached to frames as standard GStreamer GstAnalytics meta
 
 ## Library structure
 
-From an application, link the libraries in the CMake package `AMDVideoAnalysis`. Arrows show which library uses which.
+From an application, link the libraries in the CMake package `AMDVideoAnalytics`. Arrows show which library uses which.
 
 ```mermaid
 flowchart BT

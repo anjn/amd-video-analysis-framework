@@ -129,7 +129,7 @@ violations. A second run enables file publication and checks selected tracked
 observations, untracked background results and source identity.
 
 Validate packaging by installing to a temporary prefix and building
-`examples/sdk` with `AMDVideoAnalysis_DIR` set to that prefix. A separate
+`examples/sdk` with `AMDVideoAnalytics_DIR` set to that prefix. A separate
 `AMDVA_BUILD_NVR_GUI=OFF` build must succeed without Qt and its `amdva-streams`
 executable must process real RTSP sources without a display server. The test
 report records these results separately from GUI presentation evidence.
