@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Stage README.md, docs/ and examples/ Markdown as MkDocs sources.
+"""Stage the user guide (docs/guide/) and developer information (docs/dev/) as MkDocs sources.
 
-The repository keeps documentation next to the code it describes, which MkDocs
-cannot use directly. This copies tracked Markdown pages and images into
-.site-src/ with the same layout (README.md becomes the home page), and turns
-links to anything that is not part of the site (sources, configs, validation
-records) into links to the file on GitHub. Then run `mkdocs build`.
+The guide becomes the site root and the developer information /dev/. Pages and
+images are copied into .site-src/, and links to anything that is not part of
+the site (README, sources, configs, validation records) become links to the
+file on GitHub. Then run `mkdocs build`.
 
-Japanese translations sit next to their sources as `*.ja.md` and link to each
-other with `.ja.md` names, which work on GitHub; on the site the i18n plugin
-resolves plain `.md` links per language. Each translation starts with
-`<!-- source: <path> <git blob hash> -->` recording the source it was made
-from: --check-translations lists translations whose source changed since, and
---stamp FILE records the current source after a translation was updated.
+Pages come in pairs, `x.md` (English) and `x.ja.md` (Japanese). Pages link to
+the counterparts in their own language, which works on GitHub; on the site the
+i18n plugin resolves plain `.md` links per language. The page that was
+translated starts with `<!-- source: <path> <git blob hash> -->` naming the
+original it follows: the developer information is written in English, the
+guide and the READMEs in Japanese. --check-translations lists translations
+whose original changed since, and --stamp FILE records the current original
+after a translation was updated.
 """
 import argparse
 import os
@@ -23,10 +24,9 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SITE_DIRS = {'docs/guide/': '', 'docs/dev/': 'dev/'}
 ASSET_SUFFIXES = {'.png', '.jpg', '.jpeg', '.gif', '.svg'}
 # Static pages copied under another name: a directory's README.md becomes its index.html.
-# README language links for GitHub; the site has a language switcher instead.
-README_LANGUAGE_LINK = re.compile(r'^\[(English|日本語)\]\(README(\.ja)?\.md\)\n\n?', re.M)
 RENAMED = {'examples/resource-dashboard/index.html': 'examples/resource-dashboard/prototype.html'}
 LINK = re.compile(r'(!?\[[^\]]*\]\()([^)\s]+)(\))')
 STAMP = re.compile(r'^<!-- source: (\S+) ([0-9a-f]{40}) -->\n')
@@ -38,13 +38,14 @@ def tracked():
 
 
 def site_path(path):
-    if path in ('README.md', 'README.ja.md'):
-        return path.replace('README', 'index')
+    for prefix, target in SITE_DIRS.items():
+        if path.startswith(prefix):
+            return target + path[len(prefix):]
     return RENAMED.get(path, path)
 
 
-def source_of(translation):
-    return translation[:-len('.ja.md')] + '.md'
+def counterpart(path):
+    return path[:-len('.ja.md')] + '.md' if path.endswith('.ja.md') else path[:-3] + '.ja.md'
 
 
 def blob(path):
@@ -53,27 +54,32 @@ def blob(path):
 
 
 def check_translations(files):
-    """Print translations whose recorded source differs; return their count."""
+    """Print translations whose original changed or that lack a stamp; return their count."""
+    present = set(files)
     stale = 0
-    for path in sorted(f for f in files if f.endswith('.ja.md')):
-        match = STAMP.match((ROOT / path).read_text())
-        source = source_of(path)
-        if not match or match.group(1) != source:
-            problem = f'missing or wrong source stamp (expected {source})'
-        elif match.group(2) != blob(source):
-            problem = f'{source} changed since this translation'
+    for path in sorted(f for f in files if f.endswith('.ja.md') and counterpart(f) in present):
+        pair = [path, counterpart(path)]
+        stamped = [(p, m) for p in pair if (m := STAMP.match((ROOT / p).read_text()))]
+        if len(stamped) != 1:
+            problem, where = 'exactly one page of the pair needs a source stamp', path
         else:
-            continue
+            where, match = stamped[0]
+            if match.group(1) != counterpart(where):
+                problem = f'stamp names {match.group(1)}, expected {counterpart(where)}'
+            elif match.group(2) != blob(match.group(1)):
+                problem = f'{match.group(1)} changed since this translation'
+            else:
+                continue
         stale += 1
-        print(f'::warning file={path}::{problem}' if os.environ.get('GITHUB_ACTIONS')
-              else f'{path}: {problem}')
+        print(f'::warning file={where}::{problem}' if os.environ.get('GITHUB_ACTIONS')
+              else f'{where}: {problem}')
     return stale
 
 
 def stamp(path):
     text = (ROOT / path).read_text()
-    source = source_of(path)
-    line = f'<!-- source: {source} {blob(source)} -->\n'
+    original = counterpart(path)
+    line = f'<!-- source: {original} {blob(original)} -->\n'
     (ROOT / path).write_text(line + STAMP.sub('', text, count=1))
 
 
@@ -84,8 +90,8 @@ def main():
     parser.add_argument('--ref', default='main')
     parser.add_argument('--check-translations', action='store_true',
                         help='list stale translations instead of staging')
-    parser.add_argument('--stamp', nargs='+', metavar='FILE.ja.md',
-                        help='record the current source of updated translations')
+    parser.add_argument('--stamp', nargs='+', metavar='FILE',
+                        help='record the current original of updated translations')
     args = parser.parse_args()
 
     files = tracked()
@@ -97,8 +103,7 @@ def main():
         stale = check_translations(files)
         print(f'{stale} stale translation(s)')
         return
-    pages = [f for f in files if f.endswith('.md') and
-             (f in ('README.md', 'README.ja.md') or f.startswith(('docs/', 'examples/')))]
+    pages = [f for f in files if f.endswith('.md') and f.startswith(tuple(SITE_DIRS))]
     assets = [f for f in files if f.startswith(('docs/', 'examples/')) and
               (Path(f).suffix.lower() in ASSET_SUFFIXES or f in RENAMED)]
     staged = set(pages) | set(assets)
@@ -110,7 +115,7 @@ def main():
             return match.group(0)
         resolved = posixpath.normpath(posixpath.join(posixpath.dirname(source), path))
         if resolved.endswith('.ja.md'):
-            resolved = source_of(resolved)  # The i18n plugin picks the page language.
+            resolved = counterpart(resolved)  # The i18n plugin picks the page language.
         if resolved in staged or (resolved + '/README.md') in staged:
             if resolved not in staged:
                 resolved += '/README.md'
@@ -125,10 +130,7 @@ def main():
     if args.output.exists():
         shutil.rmtree(args.output)
     for path in pages:
-        text = (ROOT / path).read_text()
-        if path in ('README.md', 'README.ja.md'):
-            text = README_LANGUAGE_LINK.sub('', text)
-        text = LINK.sub(lambda m, p=path: rewrite(p, m), text)
+        text = LINK.sub(lambda m, p=path: rewrite(p, m), (ROOT / path).read_text())
         target = args.output / site_path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)

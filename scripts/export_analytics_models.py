@@ -2,7 +2,7 @@
 """Export representative static ONNX models with their AMD preprocessing contract.
 Run in scripts/setup_model_export.py's separate CPU export environment.
 Downloads model weights from their upstream publishers into the given directory.
-Model weight licenses remain those of their publishers; see docs/framework.md.
+Model weight licenses remain those of their publishers; see docs/dev/framework.md.
 """
 import argparse
 import hashlib

@@ -15,7 +15,7 @@ The source videos remain local in `~/work/videos`. Recreate frames, crops and
 independent 30-second 1080p RTSP fixtures with `examples/nvr/scripts/prepare_ai_fixture.py`.
 The default output is ignored under `artifacts/ai-benchmark`; original videos
 are never overwritten. Quality scripts require the local model-export Python
-environment. See [AI performance](../docs/nvr-ai-performance.md) for execution
+environment. See [AI performance](../../../docs/dev/nvr/nvr-ai-performance.md) for execution
 and interpretation. Model checkpoints and compiled models are not checked in.
 
 The user reports 40 people in total across the original sixteen 10-minute

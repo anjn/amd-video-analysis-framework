@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" font-family="'Noto Sans CJK JP','Noto Sans JP','Hiragino Sans','Yu Gothic',sans-serif" font-size="14" role="img" aria-labelledby="t">
+  <title id="t">NVR デモの 1 画面表示と録画のタイムライン（模式図）</title>
+  <defs>
+    <pattern id="video" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#3c4043"/><path d="M0,12 L12,0" stroke="#4a4e52" stroke-width="2"/></pattern>
+  </defs>
+  <rect width="960" height="420" fill="#ffffff"/>
+  <rect x="10" y="10" width="940" height="400" rx="10" fill="#f8f9fa" stroke="#9aa0a6"/>
+  <!-- timeline sidebar -->
+  <rect x="24" y="24" width="190" height="372" rx="6" fill="#ffffff" stroke="#dadce0"/>
+  <rect x="36" y="34" width="166" height="32" rx="6" fill="#d93025"/>
+  <text x="119" y="55" text-anchor="middle" fill="#ffffff" font-weight="bold">Back to Live</text>
+  <text x="36" y="88" font-size="12" fill="#5f6368">現在</text>
+  <text x="36" y="384" font-size="12" fill="#5f6368">最も古い録画</text>
+  <rect x="120" y="96" width="24" height="276" fill="#e8eaed"/>
+  <g fill="#34a853"><rect x="120" y="96" width="24" height="90"/><rect x="120" y="206" width="24" height="70"/><rect x="120" y="300" width="24" height="72"/></g>
+  <line x1="108" y1="240" x2="156" y2="240" stroke="#d93025" stroke-width="3"/>
+  <g font-size="12" fill="#202124"><text x="160" y="140">録画あり</text><text x="160" y="198" fill="#5f6368">欠落</text><text x="160" y="244" fill="#d93025">再生位置</text></g>
+  <!-- video -->
+  <rect x="228" y="24" width="708" height="372" fill="url(#video)"/>
+  <text x="244" y="60" font-size="26" font-weight="bold" fill="#ffffff">Camera 3</text>
+  <text x="920" y="380" text-anchor="end" font-size="16" fill="#ffffff">2026-10-27 14:05:12</text>
+  <g fill="none" stroke="#34a853" stroke-width="2"><rect x="420" y="140" width="90" height="200"/><rect x="600" y="160" width="80" height="180"/></g>
+  <g font-size="13" fill="#ffffff" font-weight="bold"><text x="422" y="134">#3</text><text x="602" y="154">#5</text></g>
+  <g font-size="13" fill="#e8eaed"><text x="244" y="380">クリックで一時停止・再開　／　タイムラインにマウスを重ねるとプレビュー</text></g>
+</svg>

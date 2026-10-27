@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" font-family="'Noto Sans CJK JP','Noto Sans JP','Hiragino Sans','Yu Gothic',sans-serif" font-size="15" role="img" aria-labelledby="t">
+  <title id="t">フレームワークの全体像</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker>
+  </defs>
+  <rect width="960" height="440" fill="#ffffff"/>
+  <!-- inputs -->
+  <text x="80" y="38" text-anchor="middle" font-weight="bold" fill="#202124">入力</text>
+  <rect x="20" y="60" width="120" height="48" rx="8" fill="#f1f3f4" stroke="#9aa0a6"/>
+  <text x="80" y="89" text-anchor="middle" fill="#202124">RTSP カメラ</text>
+  <rect x="20" y="128" width="120" height="48" rx="8" fill="#f1f3f4" stroke="#9aa0a6"/>
+  <text x="80" y="157" text-anchor="middle" fill="#202124">動画ファイル</text>
+  <!-- GPU box -->
+  <rect x="180" y="24" width="580" height="196" rx="12" fill="#fdecea" stroke="#d93025" stroke-width="1.5"/>
+  <text x="470" y="50" text-anchor="middle" font-weight="bold" fill="#a50e0e">GPU 上の処理（GStreamer 要素）</text>
+  <g fill="#ffffff" stroke="#d93025">
+    <rect x="200" y="72" width="118" height="56" rx="8"/>
+    <rect x="342" y="72" width="118" height="56" rx="8"/>
+    <rect x="484" y="72" width="118" height="56" rx="8"/>
+    <rect x="626" y="72" width="118" height="56" rx="8"/>
+  </g>
+  <g text-anchor="middle" fill="#202124">
+    <text x="259" y="97">デコード</text><text x="259" y="117" font-size="12" fill="#5f6368">VA</text>
+    <text x="401" y="97">推論</text><text x="401" y="117" font-size="11" fill="#5f6368">VPE/HIP/MIGraphX</text>
+    <text x="543" y="97">描画</text><text x="543" y="117" font-size="12" fill="#5f6368">amdwatermark</text>
+    <text x="685" y="97">エンコード</text><text x="685" y="117" font-size="12" fill="#5f6368">amdencode</text>
+  </g>
+  <g stroke="#5f6368" stroke-width="1.5" marker-end="url(#a)">
+    <line x1="318" y1="100" x2="340" y2="100"/>
+    <line x1="460" y1="100" x2="482" y2="100"/>
+    <line x1="602" y1="100" x2="624" y2="100"/>
+    <line x1="140" y1="84" x2="198" y2="96"/>
+    <line x1="140" y1="152" x2="198" y2="108"/>
+  </g>
+  <rect x="342" y="150" width="260" height="50" rx="8" fill="#ffffff" stroke="#9aa0a6" stroke-dasharray="4 3"/>
+  <text x="472" y="172" text-anchor="middle" fill="#202124">メタデータ（検出結果・ID）</text>
+  <text x="472" y="191" text-anchor="middle" font-size="12" fill="#5f6368">CPU に戻るのはこれだけ</text>
+  <line x1="401" y1="128" x2="401" y2="148" stroke="#5f6368" stroke-width="1.5" marker-end="url(#a)"/>
+  <!-- outputs -->
+  <text x="870" y="38" text-anchor="middle" font-weight="bold" fill="#202124">出力</text>
+  <rect x="800" y="60" width="140" height="48" rx="8" fill="#f1f3f4" stroke="#9aa0a6"/>
+  <text x="870" y="89" text-anchor="middle" fill="#202124">動画ファイル</text>
+  <rect x="800" y="120" width="140" height="48" rx="8" fill="#f1f3f4" stroke="#9aa0a6"/>
+  <text x="870" y="149" text-anchor="middle" fill="#202124">RTSP 配信</text>
+  <rect x="800" y="180" width="140" height="48" rx="8" fill="#f1f3f4" stroke="#9aa0a6"/>
+  <text x="870" y="203" text-anchor="middle" fill="#202124">JSON・MQTT</text>
+  <text x="870" y="220" text-anchor="middle" font-size="12" fill="#5f6368">Kafka</text>
+  <g stroke="#5f6368" stroke-width="1.5" marker-end="url(#a)">
+    <line x1="744" y1="96" x2="798" y2="84"/>
+    <line x1="744" y1="108" x2="798" y2="140"/>
+    <line x1="602" y1="180" x2="798" y2="204"/>
+  </g>
+  <!-- SDK band -->
+  <rect x="180" y="250" width="580" height="64" rx="12" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
+  <text x="470" y="276" text-anchor="middle" font-weight="bold" fill="#174ea6">C++ SDK</text>
+  <text x="470" y="299" text-anchor="middle" fill="#202124">推論・前処理 ／ RTSP 受信・録画・再生・カタログ ／ RTSP 配信 ／ リソース計測</text>
+  <!-- examples band -->
+  <rect x="180" y="340" width="580" height="72" rx="12" fill="#e6f4ea" stroke="#188038" stroke-width="1.5"/>
+  <text x="470" y="366" text-anchor="middle" font-weight="bold" fill="#0d652d">SDK で作ったサンプル</text>
+  <text x="470" y="391" text-anchor="middle" fill="#202124">NVR デモ ／ リソースダッシュボード ／ ファイル RTSP サーバー</text>
+  <line x1="470" y1="338" x2="470" y2="316" stroke="#5f6368" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="470" y1="248" x2="470" y2="222" stroke="#5f6368" stroke-width="1.5" marker-end="url(#a)"/>
+</svg>

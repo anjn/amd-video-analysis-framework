@@ -28,11 +28,14 @@ def main():
     model = YOLO(str(local))
     if model.task != 'detect' or len(model.names) != 80:
         parser.error('YOLOv8 COCO detection weights required')
+    # A CPU export sets CUDA_VISIBLE_DEVICES=-1, which would also hide the GPU from HIP.
+    env = dict(os.environ)
     onnx = model.export(format='onnx', imgsz=640, dynamic=True, batch=args.batch,
                         opset=13, simplify=True, device='cpu')
     for batch in sorted({1, args.batch}):
         target = args.output / f'yolov8n-b{batch}.mxr'
-        subprocess.run(['amdva-compile-model', str(onnx), str(target), f'--batch={batch}'], check=True)
+        subprocess.run(['amdva-compile-model', str(onnx), str(target), f'--batch={batch}'],
+                       check=True, env=env)
     (args.output / 'coco80.txt').write_text(''.join(model.names[i] + '\n' for i in range(80)))
     root = Path(__file__).resolve().parents[3]
     shutil.copyfile(root / 'examples/yolov8n.json', args.output / 'model-info.json')

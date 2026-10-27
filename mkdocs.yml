@@ -1,4 +1,5 @@
-# Documentation site in English (/) and Japanese (/ja/). Stage the sources first:
+# User guide (docs/guide/) at the site root and developer information (docs/dev/) under
+# /dev/, in English (/) and Japanese (/ja/). Stage the sources first:
 #   python3 scripts/docs_site.py && mkdocs serve
 site_name: AMD Video Analysis Framework
 site_description: GStreamer video analytics for AMD APUs with VA, VPE, HIP and MIGraphX
@@ -50,40 +51,51 @@ plugins:
           site_description: AMD APU 向けの GStreamer 映像解析フレームワーク（VA、VPE、HIP、MIGraphX）
           nav_translations:
             Home: ホーム
-            Guides: ガイド
-            Framework overview: フレームワークの概要
-            Coming from DL Streamer: DL Streamer からの移行
-            Coming from DeepStream: DeepStream からの移行
-            SDK guide: SDK ガイド
-            Encoding, recording and serving: エンコード、録画、配信
-            Metadata and Python: メタデータと Python
-            Reference: リファレンス
+            Guide: ガイド
+            Installation: インストール
+            Quick start: クイックスタート
+            Concepts: 仕組み
+            Building pipelines: パイプラインの作り方
+            Using the SDK: SDK の組み込み
+            NVR demo: NVR デモ
+            Migrating from other frameworks: 他のフレームワークからの移行
+            Developer information: 開発者向け情報
+            Framework: フレームワーク
+            Overview: 概要
+            Host build and reference runs: ホストでのビルドと基準実行
+            Memory and execution contracts: メモリと実行の規約
             Elements: 要素
             Model-info: model-info
-            Memory and execution contracts: メモリと実行の規約
+            Metadata and Python: メタデータと Python
+            Encoding, recording and serving: エンコード、録画、配信
+            SDK reference: SDK リファレンス
+            Coming from DL Streamer: DL Streamer からの移行
+            Coming from DeepStream: DeepStream からの移行
             Decode and presentation telemetry: デコードと表示のテレメトリ
-            Validation: 検証
-            Validation and reproduction: 検証と再現
-            Framework validation: フレームワークの検証
-            Examples: サンプル
             Desktop video management: デスクトップの映像管理
             Person search: 人物検索
             AI scheduling and evaluation: AI のスケジューリングと評価
-            Quality fixtures: 品質評価用データ
             Resource dashboard: リソースダッシュボード
             Visual prototype: 外観プロトタイプ
             File-to-RTSP server: ファイル RTSP サーバー
-            gst-launch recipes: gst-launch のレシピ
+            Validation: 検証
+            Validation and reproduction: 検証と再現
+            Framework validation: フレームワークの検証
 
 markdown_extensions:
   - tables
   - admonition
   - attr_list
+  - md_in_html
   - toc:
       permalink: true
   - pymdownx.highlight
-  - pymdownx.superfences
   - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 
 validation:
   links:
@@ -91,31 +103,36 @@ validation:
 
 nav:
   - Home: index.md
-  - Guides:
-      - Framework overview: docs/framework.md
-      - Coming from DL Streamer: docs/migration-from-dlstreamer.md
-      - Coming from DeepStream: docs/migration-from-deepstream.md
-      - SDK guide: docs/sdk-guide.md
-      - Encoding, recording and serving: docs/encode-and-serve.md
-      - Metadata and Python: docs/metadata-and-python.md
-  - Reference:
-      - Elements: docs/elements.md
-      - Model-info: docs/model-info.md
-      - Memory and execution contracts: docs/architecture.md
-      - Decode and presentation telemetry: docs/telemetry.md
-  - Validation:
-      - Validation and reproduction: docs/validation.md
-      - Framework validation: docs/framework-validation.md
-  - Examples:
-      - examples/README.md
-      - NVR:
-          - examples/nvr/README.md
-          - Desktop video management: examples/nvr/docs/vms.md
-          - Person search: examples/nvr/docs/nvr-search.md
-          - AI scheduling and evaluation: examples/nvr/docs/nvr-ai-performance.md
-          - Quality fixtures: examples/nvr/benchmarks/README.md
+  - Guide:
+      - Installation: install.md
+      - Quick start: quickstart.md
+      - Concepts: concepts.md
+      - Building pipelines: pipelines.md
+      - Using the SDK: sdk.md
+      - NVR demo: nvr-demo.md
+      - Migrating from other frameworks: migration.md
+  - Developer information:
+      - Framework:
+          - Overview: dev/framework.md
+          - Host build and reference runs: dev/host-build.md
+          - Memory and execution contracts: dev/architecture.md
+          - Elements: dev/elements.md
+          - Model-info: dev/model-info.md
+          - Metadata and Python: dev/metadata-and-python.md
+          - Encoding, recording and serving: dev/encode-and-serve.md
+          - SDK reference: dev/sdk-guide.md
+          - Coming from DL Streamer: dev/migration-from-dlstreamer.md
+          - Coming from DeepStream: dev/migration-from-deepstream.md
+          - Decode and presentation telemetry: dev/telemetry.md
+      - NVR demo:
+          - dev/nvr/README.md
+          - Desktop video management: dev/nvr/vms.md
+          - Person search: dev/nvr/nvr-search.md
+          - AI scheduling and evaluation: dev/nvr/nvr-ai-performance.md
       - Resource dashboard:
-          - examples/resource-dashboard/README.md
-          - Visual prototype: examples/resource-dashboard/PROTOTYPE.md
-      - File-to-RTSP server: examples/rtsp-files/README.md
-      - gst-launch recipes: examples/pipelines/README.md
+          - dev/resource-dashboard/README.md
+          - Visual prototype: dev/resource-dashboard/PROTOTYPE.md
+      - File-to-RTSP server: dev/rtsp-files/README.md
+      - Validation:
+          - Validation and reproduction: dev/validation.md
+          - Framework validation: dev/framework-validation.md

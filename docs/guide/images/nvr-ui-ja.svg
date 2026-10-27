@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" font-family="'Noto Sans CJK JP','Noto Sans JP','Hiragino Sans','Yu Gothic',sans-serif" font-size="14" role="img" aria-labelledby="t">
+  <title id="t">NVR デモの画面構成（模式図）</title>
+  <defs>
+    <pattern id="video" width="12" height="12" patternUnits="userSpaceOnUse"><rect width="12" height="12" fill="#3c4043"/><path d="M0,12 L12,0" stroke="#4a4e52" stroke-width="2"/></pattern>
+  </defs>
+  <rect width="960" height="520" fill="#ffffff"/>
+  <!-- window -->
+  <rect x="10" y="10" width="940" height="500" rx="10" fill="#f8f9fa" stroke="#9aa0a6"/>
+  <!-- tabs -->
+  <g font-weight="bold">
+    <rect x="24" y="22" width="90" height="30" rx="6" fill="#d93025"/><text x="69" y="42" text-anchor="middle" fill="#ffffff">Live</text>
+    <rect x="120" y="22" width="100" height="30" rx="6" fill="#e8eaed"/><text x="170" y="42" text-anchor="middle" fill="#202124">Cameras</text>
+    <rect x="226" y="22" width="90" height="30" rx="6" fill="#e8eaed"/><text x="271" y="42" text-anchor="middle" fill="#202124">Search</text>
+    <rect x="322" y="22" width="120" height="30" rx="6" fill="#e8eaed"/><text x="382" y="42" text-anchor="middle" fill="#202124">AI Statistics</text>
+  </g>
+  <!-- toolbar -->
+  <rect x="200" y="64" width="736" height="30" rx="6" fill="#ffffff" stroke="#dadce0"/>
+  <text x="212" y="84" fill="#5f6368">表示数 1 / 4 / 9 / 16　・　Clear tile　・　Show stream info</text>
+  <!-- left camera list -->
+  <rect x="24" y="64" width="164" height="300" rx="6" fill="#ffffff" stroke="#dadce0"/>
+  <text x="36" y="86" font-weight="bold" fill="#202124">カメラ一覧</text>
+  <g fill="#202124"><text x="36" y="112">● Camera 0</text><text x="36" y="136">● Camera 1</text><text x="36" y="160">● Camera 2</text><text x="36" y="184">● Camera 3</text><text x="36" y="208" fill="#9aa0a6">○ Camera 4（非表示）</text></g>
+  <rect x="24" y="376" width="164" height="120" rx="6" fill="#ffffff" stroke="#dadce0"/>
+  <text x="36" y="398" font-weight="bold" fill="#202124">ストレージ</text>
+  <g font-size="12" fill="#5f6368"><text x="36" y="420">録画済み</text><text x="36" y="440">空き容量</text><text x="36" y="460">容量上限</text><text x="36" y="480">予約</text></g>
+  <!-- 2x2 grid -->
+  <g>
+    <rect x="200" y="104" width="364" height="196" fill="url(#video)"/>
+    <rect x="572" y="104" width="364" height="196" fill="url(#video)"/>
+    <rect x="200" y="308" width="364" height="196" fill="url(#video)"/>
+    <rect x="572" y="308" width="364" height="196" fill="url(#video)" stroke="#d93025" stroke-width="3"/>
+  </g>
+  <g font-size="12" fill="#ffffff"><text x="208" y="120">Camera 0 ・ live</text><text x="580" y="120">Camera 1 ・ live</text><text x="208" y="324">Camera 2 ・ live</text><text x="580" y="324">Camera 3 ・ live（選択中）</text></g>
+  <!-- detections -->
+  <g fill="none" stroke="#34a853" stroke-width="2">
+    <rect x="250" y="150" width="56" height="120"/><rect x="330" y="160" width="50" height="110"/>
+    <rect x="640" y="140" width="60" height="130"/>
+    <rect x="300" y="350" width="54" height="120"/>
+    <rect x="660" y="360" width="58" height="118"/><rect x="760" y="356" width="52" height="122"/>
+  </g>
+  <g font-size="11" fill="#ffffff" font-weight="bold"><text x="252" y="146">#1</text><text x="332" y="156">#2</text><text x="642" y="136">#3</text><text x="302" y="346">#4</text><text x="662" y="356">#5</text><text x="762" y="352">#6</text></g>
+  <g font-size="11" fill="#e8eaed"><text x="208" y="294">H.264 1920x1080 30.0 fps 4.2 Mbps</text></g>
+  <!-- callouts -->
+  <rect x="612" y="446" width="210" height="44" rx="6" fill="#ffffff" stroke="#d93025"/>
+  <g font-size="12" fill="#a50e0e">
+    <text x="622" y="464">ダブルクリックで 1 画面表示と</text>
+    <text x="622" y="481">録画のタイムラインへ</text>
+  </g>
+</svg>

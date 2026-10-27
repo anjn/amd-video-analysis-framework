@@ -29,7 +29,7 @@ if(BUILD_TESTING AND AMDVA_HARDWARE_TESTS)
   target_link_libraries(playback-tests PRIVATE amdva_streaming)
   add_test(NAME playback-error-contract COMMAND playback-tests)
   set_tests_properties(playback-error-contract PROPERTIES TIMEOUT 30)
-  # Manual hardware checks; see docs/validation.md.
+  # Manual hardware checks; see docs/dev/validation.md.
   add_executable(keyframe-tests ../../tests/keyframe_tests.cpp)
   target_link_libraries(keyframe-tests PRIVATE amdva_streaming PkgConfig::APP)
   add_executable(amdva-timeline-validate ../../tools/timeline_validate.cpp)
