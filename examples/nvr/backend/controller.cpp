@@ -86,6 +86,12 @@ struct Controller::Channel {
     GstElement *decoder{}, *decode_input{};
     std::vector<std::unique_ptr<SegmentRecorder>> recordings;
     SegmentRecorder *recording{};
+    // With Source::transcode, received samples go through the transcoder and the
+    // recorder opens on its first output. transcode_wall keeps the receive time of each
+    // pushed PTS so the recording clock does not include the encode delay.
+    std::unique_ptr<Transcoder> transcoder;
+    std::map<GstClockTime, int64_t> transcode_wall;
+    uint64_t output_bytes{}, output_bytes_base{}, output_frames{}, output_frames_base{};
     // 0 until the stream is seen, 1 H.264, 2 H.265, -1 unsupported.
     int codec_id() const { return ingest ? ingest->codec() : 0; }
     uint64_t input_frames_base{}, input_bytes_base{};
@@ -97,6 +103,13 @@ struct Controller::Channel {
         state.input_codec.clear();
         state.input_width = state.input_height = 0;
         state.input_fps = state.input_mbps = 0;
+        reset_output_metrics();
+    }
+    void reset_output_metrics() {
+        output_bytes = output_bytes_base = output_frames = output_frames_base = 0;
+        state.output_codec.clear();
+        state.output_width = state.output_height = 0;
+        state.output_fps = state.output_mbps = state.encode_ms = 0;
     }
     void update_input_rates() {
         const auto now = Clock::now();
@@ -106,8 +119,13 @@ struct Controller::Channel {
         const auto frames = ingest ? ingest->frames() : 0, bytes = ingest ? ingest->bytes() : 0;
         state.input_fps = (frames - input_frames_base) / seconds;
         state.input_mbps = (bytes - input_bytes_base) * 8.0 / seconds / 1000000.0;
+        state.output_mbps = (output_bytes - output_bytes_base) * 8.0 / seconds / 1000000.0;
+        state.output_fps = (output_frames - output_frames_base) / seconds;
+        state.encode_ms = transcoder ? transcoder->latency_ms() : 0;
         input_frames_base = frames;
         input_bytes_base = bytes;
+        output_bytes_base = output_bytes;
+        output_frames_base = output_frames;
         input_rates_at = now;
     }
     void input_format(GstCaps *caps) {
@@ -297,9 +315,9 @@ struct Controller::Channel {
             return;
         }
         try {
-            if (!decoder && key)
+            if (!transcoder && !decoder && key)
                 start_decoder(gst_sample_get_caps(sample.get()));
-            if (decoder && !push(decode_input, sample, decode_origin)) {
+            if (!transcoder && decoder && !push(decode_input, sample, decode_origin)) {
                 cancel_background();
                 state.background_state = "continuous decode backlog";
             } else
@@ -373,6 +391,9 @@ struct Controller::Channel {
             background_deadline = background_captured + std::chrono::seconds(2);
             state.background_attempts++;
             state.background_state = "decoding keyframe";
+            // A re-encoded camera already decodes every frame; the next one is used.
+            if (transcoder)
+                return;
             try {
                 start_decoder(gst_sample_get_caps(sample.get()));
                 auto *buffer = keyframes.input(gst_sample_get_buffer(sample.get()));
@@ -395,6 +416,9 @@ struct Controller::Channel {
         state.background_state = "waiting for capacity";
     }
     void stop_decode() {
+        // The transcoder owns the decode while it runs; see end_record().
+        if (transcoder)
+            return;
         if (decoder)
             controller.request_reclaim();
         if (decode_input) {
@@ -419,6 +443,14 @@ struct Controller::Channel {
             recording->end();
             recording = nullptr;
         }
+        // Frames still inside the transcoder are dropped; the next segment starts at
+        // the next keyframe like any recording restart, and display falls back to its
+        // own decoder meanwhile.
+        if (transcoder) {
+            transcoder.reset();
+            stop_decode();
+        }
+        transcode_wall.clear();
     }
     void failed(const std::string &error) {
         if (state.received && recording)
@@ -489,10 +521,84 @@ struct Controller::Channel {
         decode_wait = false;
     }
     void start_record(GstCaps *caps) {
+        const auto &t = state.source.transcode;
+        if (!t.enabled) {
+            open_recorder(caps, codec_id() == 1 ? RecordCodec::H264 : RecordCodec::H265);
+            return;
+        }
+        // The transcoder's decode also feeds display and AI, shown or hidden, so the
+        // stream is decoded once.
+        stop_decode();
+        decode_timing = std::make_unique<PipelineTelemetry>(timing);
+        decode_timing->background(state.slot < 0);
+        // Keyframes every two seconds, as most cameras send.
+        const unsigned key = state.input_fps > 1 ? unsigned(std::lround(state.input_fps * 2)) : 60;
+        Transcoder::Options options{t.codec,  t.rate_control,   t.bitrate_kbps, t.height,
+                                    key,      compressed_limit, true};
+        options.on_input = [this](GstBuffer *b) {
+            if (decode_timing)
+                decode_timing->submit(b);
+        };
+        transcoder = std::make_unique<Transcoder>(controller.display_, std::move(options), caps);
+        decode_timing->attach_decoder(transcoder->decoder());
+        auto *pad = gst_element_get_static_pad(transcoder->frames(), "sink");
+        gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_QUERY_DOWNSTREAM, allocation, nullptr, nullptr);
+        gst_object_unref(pad);
+        GstAppSinkCallbacks cb{};
+        cb.new_sample = decoded;
+        gst_app_sink_set_callbacks(GST_APP_SINK(transcoder->frames()), &cb, this, nullptr);
+        state.recording = "encoding";
+    }
+    // Moves re-encoded access units into the recorder.
+    void drain_transcoder() {
+        if (!transcoder)
+            return;
+        if (!transcoder->poll())
+            throw std::runtime_error(transcoder->error());
+        while (auto *raw = transcoder->pull()) {
+            Sample sample(raw, gst_sample_unref);
+            auto *buffer = gst_sample_get_buffer(raw);
+            const auto pts = GST_BUFFER_PTS(buffer);
+            std::optional<int64_t> wall;
+            // Output is in presentation order; earlier entries were dropped frames.
+            for (auto it = transcode_wall.begin();
+                 it != transcode_wall.end() && it->first <= pts;) {
+                if (it->first == pts)
+                    wall = it->second;
+                it = transcode_wall.erase(it);
+            }
+            output_format(gst_sample_get_caps(raw));
+            output_bytes += gst_buffer_get_size(buffer);
+            output_frames++;
+            if (!recording) {
+                if (GST_BUFFER_FLAG_IS_SET(buffer, GST_BUFFER_FLAG_DELTA_UNIT))
+                    continue;
+                open_recorder(gst_sample_get_caps(raw), state.source.transcode.codec);
+            }
+            if (!recording->push(raw, wall)) {
+                end_record();
+                state.gaps++;
+                state.recording = "waiting for keyframe";
+                return;
+            }
+        }
+    }
+    void output_format(GstCaps *caps) {
+        if (!caps || gst_caps_is_empty(caps))
+            return;
+        const auto *format = gst_caps_get_structure(caps, 0);
+        state.output_codec = codec_label(state.source.transcode.codec);
+        int width = 0, height = 0;
+        gst_structure_get_int(format, "width", &width);
+        gst_structure_get_int(format, "height", &height);
+        state.output_width = unsigned(std::max(0, width));
+        state.output_height = unsigned(std::max(0, height));
+    }
+    void open_recorder(GstCaps *caps, RecordCodec codec) {
         SegmentRecorder::Options options;
         options.channel = state.source.id;
         options.camera_name = state.source.name;
-        options.codec = codec_id() == 1 ? RecordCodec::H264 : RecordCodec::H265;
+        options.codec = codec;
         options.segment_seconds = controller.options_.segment_seconds;
         options.queue_limit_bytes = compressed_limit;
         options.on_destroyed = [this] { controller.request_reclaim(); };
@@ -536,6 +642,9 @@ struct Controller::Channel {
     void tick(bool space) {
         if (receive_timing)
             receive_timing->background(state.slot < 0);
+        // The shared transcoder decode outlives display changes.
+        if (transcoder && decode_timing)
+            decode_timing->background(state.slot < 0);
         timing->availability(TimingStage::PreviewReady, controller.options_.preview_enabled,
                              controller.options_.preview_enabled &&
                                  controller.presentation_observed_.load() && state.slot >= 0 &&
@@ -629,9 +738,23 @@ struct Controller::Channel {
                                                      GST_BUFFER_FLAG_DELTA_UNIT);
             try {
                 if (space && Clock::now() >= record_retry) {
-                    if (!recording && key)
+                    if (!recording && !transcoder && key)
                         start_record(gst_sample_get_caps(sample.get()));
-                    if (recording && !recording->push(sample.get())) {
+                    if (transcoder) {
+                        auto *buffer = gst_sample_get_buffer(sample.get());
+                        if (transcoder->push(sample.get())) {
+                            // PTS pass through the shared decode unchanged.
+                            stamp(GST_BUFFER_PTS(buffer), GST_BUFFER_PTS(buffer));
+                            transcode_wall[GST_BUFFER_PTS(buffer)] = g_get_real_time() / 1000;
+                            if (transcode_wall.size() > 512)
+                                transcode_wall.erase(transcode_wall.begin());
+                        } else {
+                            // The video engine cannot keep up (or the PTS was invalid).
+                            end_record();
+                            state.gaps++;
+                            state.recording = "encoder overloaded; waiting for keyframe";
+                        }
+                    } else if (recording && !recording->push(sample.get())) {
                         end_record();
                         state.gaps++;
                         state.recording = "waiting for keyframe";
@@ -654,7 +777,7 @@ struct Controller::Channel {
                 else
                     background(sample, independent);
             }
-            if (state.slot >= 0) {
+            if (state.slot >= 0 && !transcoder) {
                 try {
                     if (!decoder && key)
                         start_decoder(gst_sample_get_caps(sample.get()));
@@ -667,6 +790,15 @@ struct Controller::Channel {
                     state.error = e.what();
                 }
             }
+        }
+        try {
+            drain_transcoder();
+        } catch (const std::exception &e) {
+            state.recording = "error";
+            state.error = "Recording: " + public_error(e.what(), state.source);
+            end_record();
+            state.gaps++;
+            record_retry = Clock::now() + std::chrono::seconds(5);
         }
         if (state.slot >= 0) {
             auto &slot = controller.slots_[state.slot];
@@ -1631,6 +1763,13 @@ void Controller::update_source(Source source) {
                 c->state.source.name = source.name;
                 for (auto &r : c->recordings)
                     r->camera_name(source.name);
+                if (c->state.source.transcode != source.transcode) {
+                    // The next keyframe opens a segment with the new settings.
+                    c->end_record();
+                    c->state.source.transcode = source.transcode;
+                    c->reset_output_metrics();
+                    c->state.recording = "waiting for keyframe";
+                }
                 return;
             }
     });

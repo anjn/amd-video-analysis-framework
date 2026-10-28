@@ -1,6 +1,8 @@
 #include "backend/config.hpp"
 #include "backend/json.hpp"
+#include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <fcntl.h>
 #include <filesystem>
 #include <set>
@@ -27,6 +29,51 @@ std::string validated_uri(std::string uri) {
     if (!valid)
         throw std::runtime_error("Source URI must use RTSP with a host");
     return uri;
+}
+const char *codec_name(RecordCodec codec) {
+    switch (codec) {
+    case RecordCodec::H264: return "h264";
+    case RecordCodec::H265: return "h265";
+    case RecordCodec::AV1: break;
+    }
+    return "av1";
+}
+const char *codec_label(RecordCodec codec) {
+    switch (codec) {
+    case RecordCodec::H264: return "H.264";
+    case RecordCodec::H265: return "H.265";
+    case RecordCodec::AV1: break;
+    }
+    return "AV1";
+}
+const char *rate_control_name(RateControl mode) {
+    switch (mode) {
+    case RateControl::CBR: return "cbr";
+    case RateControl::VBR: return "vbr";
+    case RateControl::QVBR: break;
+    }
+    return "qvbr";
+}
+RecordCodec parse_codec(const std::string &name) {
+    for (auto codec : {RecordCodec::H264, RecordCodec::H265, RecordCodec::AV1})
+        if (name == codec_name(codec))
+            return codec;
+    throw std::runtime_error("transcode codec must be h264, h265 or av1");
+}
+RateControl parse_rate_control(const std::string &name) {
+    for (auto mode : {RateControl::CBR, RateControl::VBR, RateControl::QVBR})
+        if (name == rate_control_name(mode))
+            return mode;
+    throw std::runtime_error("transcode rate_control must be cbr, vbr or qvbr");
+}
+std::string transcode_summary(const Transcode &t) {
+    char bitrate[32];
+    std::snprintf(bitrate, sizeof(bitrate), "%.1f", t.bitrate_kbps / 1000.);
+    auto mode = std::string(rate_control_name(t.rate_control));
+    for (auto &c : mode)
+        c = char(std::toupper(c));
+    return std::string(codec_label(t.codec)) + " " + mode + " " + bitrate + " Mbps " +
+           (t.height ? std::to_string(t.height) + "p" : std::string("original size"));
 }
 Options load_config(const std::string &path) {
     Parser p(path);
@@ -271,6 +318,25 @@ Options load_config(const std::string &path) {
                     throw std::runtime_error("selected must be boolean");
                 s.selected = json_object_get_boolean_member(source, "selected");
             }
+            if (json_object_has_member(source, "transcode")) {
+                auto *t = json_object_get_object_member(source, "transcode");
+                if (!t)
+                    throw std::runtime_error("transcode must be an object");
+                auto &tc = s.transcode;
+                tc.enabled = json_object_get_boolean_member_with_default(t, "enabled", false);
+                if (json_object_has_member(t, "codec"))
+                    tc.codec = parse_codec(required_string(t, "codec"));
+                if (json_object_has_member(t, "rate_control"))
+                    tc.rate_control = parse_rate_control(required_string(t, "rate_control"));
+                const auto bitrate = json_object_get_int_member_with_default(t, "bitrate_kbps",
+                                                                             tc.bitrate_kbps);
+                const auto height = json_object_get_int_member_with_default(t, "height", 0);
+                if (bitrate < 100 || bitrate > 100000 || height < 0 || height > 4320 ||
+                    height % 2)
+                    throw std::runtime_error("Invalid transcode bitrate_kbps or height");
+                tc.bitrate_kbps = unsigned(bitrate);
+                tc.height = unsigned(height);
+            }
             o.sources.push_back(std::move(s));
         }
     }
@@ -340,6 +406,14 @@ void save_config(const std::string &path, const Options &o) {
         json_object_set_string_member(source, "name", s.name.c_str());
         json_object_set_string_member(source, "uri", s.uri.c_str());
         json_object_set_boolean_member(source, "selected", s.selected);
+        auto *t = json_object_new();
+        json_object_set_boolean_member(t, "enabled", s.transcode.enabled);
+        json_object_set_string_member(t, "codec", codec_name(s.transcode.codec));
+        json_object_set_string_member(t, "rate_control",
+                                      rate_control_name(s.transcode.rate_control));
+        json_object_set_int_member(t, "bitrate_kbps", s.transcode.bitrate_kbps);
+        json_object_set_int_member(t, "height", s.transcode.height);
+        json_object_set_object_member(source, "transcode", t);
         json_array_add_object_element(sources, source);
     }
     json_object_set_array_member(root, "sources", sources);

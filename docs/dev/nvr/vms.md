@@ -23,10 +23,14 @@ keeps its border.
 **Show stream info** toggles codec, received resolution, input frame rate and
 bitrate on every live image. It defaults to on and persists in `<config>.ui.json`.
 The lower-left overlay uses one line, for example
-`H.264 1920x1080 30.0 fps 4.2 Mbps  decode 12.3 ms`.
+`H.264 1920x1080 30.0 fps 4.2 Mbps  decode 12.3 ms`. A camera whose recording is
+re-encoded adds an encoder line below it, for example
+`→ AV1  1280x720  29.6 fps  1.9 Mbps  -73%  encode 96 ms`: the output codec and
+size, the encoded frame rate and bitrate, the change from the received bitrate, and
+the mean delay from handing a frame to the transcoder to receiving it encoded.
 Decode latency is the existing rolling mean from application input to decode output,
 not camera capture latency; unavailable telemetry displays `decode N/A`. Grid
-text uses a 14px target size, while single view uses 22px. Rates update approximately once per second from received
+text uses a 12px target size, while single view uses 22px. Rates update approximately once per second from received
 parser-output compressed access units before queue drops, decoding and recording
 selection.
 Bitrate is encoded video payload in decimal Mbit/s, displayed to one decimal;
@@ -96,6 +100,37 @@ already removed files. Each batch handles at most 32 entries and checks a 10ms t
 files. Individual filesystem/database operations can exceed that budget. External
 files and symlinks are never followed or removed. Other SDK consumers holding
 files can cause a partial result; release them and repeat the operation.
+
+## Re-encoded recordings
+
+To save storage, **Edit camera** can re-encode that camera's recording on the GPU
+instead of storing the received stream: check **Re-encode recording on the GPU** and
+choose the codec (H.264, H.265, AV1), rate control (VBR, QVBR, CBR), bitrate and
+resolution (original, 1080p, 720p; never enlarged). The settings are saved in the
+configuration as `sources[].transcode` and take effect at the next keyframe; the
+Cameras list shows them in the Recording column. Timeline, playback, previews,
+recorded overlays and search use the re-encoded files like any other recording.
+AV1 output snaps to a width multiple of 64 and a height multiple of 16 (1080p is
+recorded as 1920x1088).
+
+A re-encoded camera is decoded once, whether or not it is on screen: the
+transcoder's decode also feeds the live tile, background AI and search, and the
+camera's separate display decoder is not started. Each re-encoded camera adds an
+encode, and its full-rate decode when it is hidden, to the video engine. When the
+engine cannot keep up, frames are dropped before the encoder instead of the decode
+falling behind, so the recording continues at a lower frame rate (shown in the
+encoder line) and the timestamps stay those of the camera. On the Radeon 890M with
+sixteen 1440p30 HEVC cameras on screen, which keep the video engine near 100%, four
+re-encoded cameras record at about 22 fps with about 170 ms encode delay, and all
+sixteen at about 10 fps with about 250 ms, continuously. A camera re-encodes at its
+full rate with about 10 ms delay when the engine has headroom. If the input backlog
+still exceeds its limit, the Recording column shows **encoder overloaded; waiting
+for keyframe** and the recording restarts at the next keyframe.
+
+On the demo footage at the full frame rate, 2 Mbps H.265 VBR at 1080p recorded at
+1.8 Mbps, 1.5 Mbps AV1 CBR at 720p at 1.4 Mbps and 4 Mbps H.264 CBR at the original
+1440p at 3.9 Mbps, compared with 6.7 to 7.2 Mbps for the cameras' own streams.
+Dropped frames lower the recorded bitrate further.
 
 ## Recording timeline and playback
 

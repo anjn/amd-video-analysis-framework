@@ -62,20 +62,28 @@ source and output regions different.
 | Property | Default | Notes |
 | --- | --- | --- |
 | `codec` | `h264` | `h264`, `h265`, `av1` (needs `vah264enc`, `vah265enc`, `vaav1enc`) |
-| `bitrate` | 4000 | kbit/s |
+| `bitrate` | 4000 | kbit/s; the target, or the cap for `vbr` and `qvbr` |
+| `rate-control` | `cbr` | `cbr`, `vbr` or `qvbr` (quality-defined VBR); `vbr`/`qvbr` spend fewer bits on easy scenes |
 | `key-int-max` | 30 | frames between keyframes |
 | `b-frames` | 0 | H.264/H.265 only; 0 keeps latency low |
-| `signal-bt709` | true | H.264 only: rewrite the SPS VUI to BT.709 limited range |
+| `signal-bt709` | true | Encode and signal BT.709 limited range (caps for all codecs; H.264 SPS VUI rewrite) |
 
 Properties are writable in NULL/READY. Output is byte-stream, access-unit
 aligned (AV1: OBU stream). There is no software fallback: when the hardware
 encoder is missing the element fails the state change with a missing-plugin
 error.
 
-`signal-bt709` exists because the VA encoder does not write colour VUI fields
-from caps. `amdva::signal_bt709` (`amdva/vui.hpp`) rewrites only the SPS and
-leaves slice data and timing untouched. H.265 and AV1 streams are not rewritten;
-players assume BT.709 for HD content.
+`signal-bt709` exists because the frame import drops the colorimetry, so the VA
+encoders would label the stream BT.601. With it, the encoder input caps say
+BT.709, which reaches the H.265/AV1 headers and the container colour fields, and
+`amdva::signal_bt709` (`amdva/vui.hpp`) also rewrites the H.264 SPS VUI, leaving
+slice data and timing untouched. The NVR player only accepts BT.709 (or unsignalled)
+recordings. The import has no colorimetry, so the processor assumes BT.601 below
+720 lines; encode at 720p or more when the source is BT.709.
+
+The radeonsi AV1 encoder pads the width to a multiple of 64 and mis-sizes heights
+that are not a multiple of 16 (1080 is decoded as 1082). Feed AV1 frames whose size
+already meets both, as `Transcoder` does.
 
 ## Recording
 
@@ -93,6 +101,35 @@ recorder as a reusable class: feed it H.264/H.265 access units from a keyframe w
 `push()`, pump `poll()`, and it writes rolling Matroska segments while keeping the
 `Catalog` (names, media start time, duration, interrupted segments) in step.
 Retention and quota live in the catalog and controller (`docs/dev/nvr/vms.md`).
+`SegmentRecorder` also writes AV1 (`RecordCodec::AV1`), and `push(sample, wall_ms)`
+takes the receive time of the first sample when it went through a delaying stage.
+
+### Re-encoding a recording
+
+`amdva::streaming::Transcoder` (`amdva/streaming/transcoder.hpp`) re-encodes one
+camera's H.264/H.265 access units on the GPU to save storage:
+
+```
+appsrc ! h26xparse ! vah26xdec [! tee ! appsink frames] ! queue leaky
+       ! [vapostproc ! width,height] ! amdencode ! appsink
+```
+
+Options are the output codec (H.264, H.265, AV1), rate control, bitrate, an output
+height (0 keeps the size; it never enlarges and keeps the aspect ratio) and the
+keyframe interval. AV1 sizes snap to a width multiple of 64 and a height multiple of
+16 (1080p becomes 1920x1088). `push()` the received samples from a keyframe on one
+thread and drain `pull()` on the same thread into a `SegmentRecorder` opened with
+the first output's caps. The four-frame queue before the encoder drops the oldest
+frame when the video engine falls behind, so the output frame rate drops instead of
+the decode stalling; `encoded()` counts the output. `false` from `push()` means the
+input backlog limit was still reached, and the caller restarts at the next keyframe.
+With `Options::frames`, `frames()` is an appsink of the decoded NV12 VAMemory frames
+(latest only) so a display or analysis consumer shares the decode. The
+source PTS travel through decode and encode as reference timestamp metadata, so the
+output keeps the camera timeline; `latency_ms()` is the push-to-output delay. Pass
+the receive time of the first output's PTS to `SegmentRecorder::push` so recorded
+analysis stays aligned. `transcode-contract` re-encodes generated streams to all
+three codecs and plays them back.
 
 `amdva::streaming::RtspIngest` (`amdva/streaming/ingest.hpp`) is the matching
 receive side: it pulls one RTSP camera as byte-stream, AU-aligned H.264/H.265 access

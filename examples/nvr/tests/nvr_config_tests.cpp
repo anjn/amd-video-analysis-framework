@@ -38,6 +38,36 @@ int main(int argc, char **argv) {
         require(o.retention_minutes == 60, "Retention default");
         require(!o.search.enabled && o.search.image_size == 384 && o.search.queue_limit == 128,
                 "Search defaults");
+        require(!o.sources[0].transcode.enabled && o.sources[0].transcode.height == 0,
+                "Recordings are not re-encoded by default");
+        {
+            auto t = o;
+            t.sources[0].transcode = {true, RecordCodec::AV1, RateControl::QVBR, 1500, 720};
+            save_config(path, t);
+            const auto loaded = load_config(path).sources[0].transcode;
+            require(loaded == t.sources[0].transcode, "Transcode settings round trip");
+            require(transcode_summary(loaded) == "AV1 QVBR 1.5 Mbps 720p", "Transcode summary");
+            for (auto bad : {QJsonObject{{"enabled", true}, {"codec", "vp9"}},
+                             QJsonObject{{"enabled", true}, {"rate_control", "cqp"}},
+                             QJsonObject{{"enabled", true}, {"bitrate_kbps", 10}},
+                             QJsonObject{{"enabled", true}, {"height", 721}}}) {
+                auto value = base;
+                auto sources = value["sources"].toArray();
+                auto source = sources[0].toObject();
+                source["transcode"] = bad;
+                sources[0] = source;
+                value["sources"] = sources;
+                write(value);
+                bool rejected = false;
+                try {
+                    load_config(path);
+                } catch (const std::exception &) {
+                    rejected = true;
+                }
+                require(rejected, "Invalid transcode settings rejected");
+            }
+            write(base);
+        }
         {
             auto value = base;
             value["search"] = QJsonObject{{"enabled", true},

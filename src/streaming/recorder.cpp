@@ -28,6 +28,14 @@ void destroy(GstElement *&p) {
         p = nullptr;
     }
 }
+const char *parser(RecordCodec codec) {
+    switch (codec) {
+    case RecordCodec::H264: return "h264parse ! video/x-h264,stream-format=avc,alignment=au";
+    case RecordCodec::H265: return "h265parse ! video/x-h265,stream-format=hvc1,alignment=au";
+    case RecordCodec::AV1: break;
+    }
+    return "av1parse ! video/x-av1,stream-format=obu-stream,alignment=tu";
+}
 } // namespace
 
 SegmentRecorder::SegmentRecorder(Catalog &catalog, Options options, GstCaps *caps)
@@ -37,9 +45,7 @@ SegmentRecorder::SegmentRecorder(Catalog &catalog, Options options, GstCaps *cap
     GError *error{};
     pipeline_ = gst_parse_launch(
         (std::string("appsrc name=input is-live=true format=time block=false ! ") +
-         (options_.codec == RecordCodec::H264
-              ? "h264parse ! video/x-h264,stream-format=avc,alignment=au"
-              : "h265parse ! video/x-h265,stream-format=hvc1,alignment=au") +
+         parser(options_.codec) +
          " ! splitmuxsink name=segments muxer-factory=matroskamux async-finalize=true")
             .c_str(),
         &error);
@@ -109,7 +115,7 @@ gchar *SegmentRecorder::location(GstElement *, guint fragment, GstSample *first_
     }
     return g_strdup((r.catalog_.root() / name).c_str());
 }
-bool SegmentRecorder::push(GstSample *sample) {
+bool SegmentRecorder::push(GstSample *sample, std::optional<int64_t> wall_ms) {
     guint64 level{};
     g_object_get(input_, "current-level-bytes", &level, nullptr);
     if (level > options_.queue_limit_bytes)
@@ -122,7 +128,7 @@ bool SegmentRecorder::push(GstSample *sample) {
     }
     if (origin_ == GST_CLOCK_TIME_NONE) {
         origin_ = pts;
-        wall_origin_ms_ = g_get_real_time() / 1000;
+        wall_origin_ms_ = wall_ms ? *wall_ms : g_get_real_time() / 1000;
     }
     GST_BUFFER_PTS(b) = pts - origin_;
     GST_BUFFER_DTS(b) = GST_CLOCK_TIME_IS_VALID(GST_BUFFER_DTS(b)) && GST_BUFFER_DTS(b) >= origin_

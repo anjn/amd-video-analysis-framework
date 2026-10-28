@@ -1,4 +1,4 @@
-<!-- source: docs/guide/sdk.ja.md b80c32baf505417d865c33d22f5c424267778b00 -->
+<!-- source: docs/guide/sdk.ja.md 2deabaa1bb1c5f1d831535a7f83594401cb8d70d -->
 # Embedding the SDK in your application
 
 After you install the framework, you can use its C++ libraries through CMake's `find_package(AMDVideoAnalytics)`. Besides running GStreamer pipelines from your own program, you can embed RTSP camera ingest, recording, recording search and playback, and RTSP serving of processed video, without depending on GUI libraries such as Qt. This page covers installing the SDK, building and running the bundled samples, and the structure of the main APIs.
@@ -78,6 +78,7 @@ flowchart TB
 | --- | --- |
 | `RtspIngest` | Receives H.264/H.265 compressed data from one RTSP camera and puts it into a bounded queue. The application decides the reconnection policy |
 | `SegmentRecorder` | Saves compressed data into fixed-duration MKV files and registers them in the catalog |
+| `Transcoder` | Decodes received H.264/H.265 on the GPU and re-encodes it with a given codec (H.264, H.265, AV1), bitrate and resolution, to reduce recording storage |
 | `Catalog` | Manages recording files and analysis results in SQLite. Provides deletion of the oldest recordings that exceed the capacity limit, and deletion of recordings older than a given time |
 | `PlaybackSession`, `TimelinePlaybackSession` | Plays back recordings with hardware decoding. The timeline version automatically skips file boundaries and periods with no recording |
 | `KeyframePreviewSession` | Creates a preview image for a given time on the GPU |

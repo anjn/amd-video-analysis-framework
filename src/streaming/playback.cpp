@@ -87,18 +87,19 @@ struct PlaybackSession::Impl {
             return;
         const char *name = gst_structure_get_name(gst_caps_get_structure(caps, 0));
         const bool h264 = g_str_equal(name, "video/x-h264"),
-                   h265 = g_str_equal(name, "video/x-h265");
-        if (g_str_has_prefix(name, "video/") && !h264 && !h265)
+                   h265 = g_str_equal(name, "video/x-h265"), av1 = g_str_equal(name, "video/x-av1");
+        if (g_str_has_prefix(name, "video/") && !h264 && !h265 && !av1)
             s.unsupported = true;
         gst_caps_unref(caps);
-        if ((!h264 && !h265) || s.linked.exchange(true))
+        if ((!h264 && !h265 && !av1) || s.linked.exchange(true))
             return;
         GError *error{};
         auto *branch = gst_parse_bin_from_description(
-            h264 ? "h264parse ! vah264dec ! capsfilter "
-                   "caps=\"video/x-raw(memory:VAMemory),format=NV12\""
-                 : "h265parse ! vah265dec ! capsfilter "
-                   "caps=\"video/x-raw(memory:VAMemory),format=NV12\"",
+            (std::string(h264   ? "h264parse ! vah264dec"
+                         : h265 ? "h265parse ! vah265dec"
+                                : "av1parse ! vaav1dec") +
+             " ! capsfilter caps=\"video/x-raw(memory:VAMemory),format=NV12\"")
+                .c_str(),
             TRUE, &error);
         if (!branch || error) {
             g_clear_error(&error);

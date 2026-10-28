@@ -291,7 +291,7 @@ static void amd_va_import_init(AmdVaImport *s) {
 // ---- amdencode bin ------------------------------------------------------------
 typedef struct {
     GstBin parent;
-    gint codec;
+    gint codec, rate_control;
     guint bitrate, key_int_max, b_frames;
     gboolean signal_bt709;
     GstPad *sink, *src;
@@ -302,8 +302,21 @@ typedef struct {
     GstBinClass parent;
 } AmdEncodeClass;
 G_DEFINE_TYPE(AmdEncode, amd_encode, GST_TYPE_BIN)
-enum { P_NONE, P_CODEC, P_BITRATE, P_KEY_INT_MAX, P_B_FRAMES, P_SIGNAL_BT709 };
+enum { P_NONE, P_CODEC, P_BITRATE, P_KEY_INT_MAX, P_B_FRAMES, P_SIGNAL_BT709, P_RATE_CONTROL };
 enum { CODEC_H264, CODEC_H265, CODEC_AV1 };
+enum { RATE_CBR, RATE_VBR, RATE_QVBR };
+static GType rate_control_type() {
+    static GType type;
+    if (g_once_init_enter(&type)) {
+        static const GEnumValue values[] = {
+            {RATE_CBR, "Constant bitrate", "cbr"},
+            {RATE_VBR, "Variable bitrate up to the target", "vbr"},
+            {RATE_QVBR, "Quality-defined variable bitrate", "qvbr"},
+            {0, nullptr, nullptr}};
+        g_once_init_leave(&type, g_enum_register_static("AmdEncodeRateControl", values));
+    }
+    return type;
+}
 static GType codec_type() {
     static GType type;
     if (g_once_init_enter(&type)) {
@@ -334,6 +347,7 @@ static void set_property(GObject *o, guint p, const GValue *v, GParamSpec *spec)
     case P_KEY_INT_MAX: s->key_int_max = g_value_get_uint(v); break;
     case P_B_FRAMES: s->b_frames = g_value_get_uint(v); break;
     case P_SIGNAL_BT709: s->signal_bt709 = g_value_get_boolean(v); break;
+    case P_RATE_CONTROL: s->rate_control = g_value_get_enum(v); break;
     default: G_OBJECT_WARN_INVALID_PROPERTY_ID(o, p, spec);
     }
 }
@@ -345,6 +359,7 @@ static void get_property(GObject *o, guint p, GValue *v, GParamSpec *spec) {
     case P_KEY_INT_MAX: g_value_set_uint(v, s->key_int_max); break;
     case P_B_FRAMES: g_value_set_uint(v, s->b_frames); break;
     case P_SIGNAL_BT709: g_value_set_boolean(v, s->signal_bt709); break;
+    case P_RATE_CONTROL: g_value_set_enum(v, s->rate_control); break;
     default: G_OBJECT_WARN_INVALID_PROPERTY_ID(o, p, spec);
     }
 }
@@ -397,10 +412,26 @@ static bool build(AmdEncode *s) {
                 gst_object_unref(e);
         return false;
     }
-    auto *nv12 = gst_caps_from_string("video/x-raw(memory:VAMemory),format=NV12");
+    // Import drops the colorimetry; without it the VA encoders label the stream BT.601
+    // in caps and in the H.265/AV1 headers, which BT.709 players reject.
+    auto *nv12 = gst_caps_from_string(
+        s->signal_bt709 ? "video/x-raw(memory:VAMemory),format=NV12,colorimetry=bt709"
+                        : "video/x-raw(memory:VAMemory),format=NV12");
     g_object_set(caps, "caps", nv12, nullptr);
     gst_caps_unref(nv12);
     g_object_set(enc, "bitrate", s->bitrate, "key-int-max", s->key_int_max, nullptr);
+    // The VA encoders list only the rate-control modes the driver supports.
+    static const char *modes[] = {"cbr", "vbr", "qvbr"};
+    auto *mode = g_object_class_find_property(G_OBJECT_GET_CLASS(enc), "rate-control");
+    if (!mode || !G_IS_PARAM_SPEC_ENUM(mode) ||
+        !g_enum_get_value_by_nick(G_PARAM_SPEC_ENUM(mode)->enum_class, modes[s->rate_control])) {
+        GST_ELEMENT_ERROR(s, CORE, NOT_IMPLEMENTED, ("Unsupported rate control"),
+                          ("%s does not offer %s", encoders[s->codec], modes[s->rate_control]));
+        for (auto *e : {import, post, caps, enc, parse})
+            gst_object_unref(e);
+        return false;
+    }
+    gst_util_set_object_arg(G_OBJECT(enc), "rate-control", modes[s->rate_control]);
     if (g_object_class_find_property(G_OBJECT_GET_CLASS(enc), "b-frames"))
         g_object_set(enc, "b-frames", s->b_frames, nullptr);
     gst_bin_add_many(GST_BIN(s), import, post, caps, enc, parse, nullptr);
@@ -455,9 +486,16 @@ static void amd_encode_class_init(AmdEncodeClass *k) {
         g_param_spec_uint("b-frames", "B frames", "Consecutive B frames (0 for low latency)", 0,
                           4, 0, flags));
     g_object_class_install_property(
+        object, P_RATE_CONTROL,
+        g_param_spec_enum("rate-control", "Rate control",
+                          "cbr keeps the bitrate, vbr and qvbr spend fewer bits on easy scenes",
+                          rate_control_type(), RATE_CBR, flags));
+    g_object_class_install_property(
         object, P_SIGNAL_BT709,
         g_param_spec_boolean("signal-bt709", "Signal BT.709",
-                             "Rewrite the H.264 SPS VUI to signal BT.709 limited range", TRUE,
+                             "Encode and signal BT.709 limited range (caps, and the H.264 SPS "
+                             "VUI)",
+                             TRUE,
                              flags));
     auto *element = GST_ELEMENT_CLASS(k);
     element->change_state = change_state;
@@ -469,6 +507,7 @@ static void amd_encode_class_init(AmdEncodeClass *k) {
 }
 static void amd_encode_init(AmdEncode *s) {
     s->codec = CODEC_H264;
+    s->rate_control = RATE_CBR;
     s->bitrate = 4000;
     s->key_int_max = 30;
     s->b_frames = 0;

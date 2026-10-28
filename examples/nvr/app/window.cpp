@@ -571,6 +571,7 @@ void Tiles::paintGL() {
     displayed_analysis_objects_ = 0;
     displayed_playback_time_ = 0;
     displayed_stream_info_.fill({});
+    displayed_encode_info_.fill({});
     if (!playback_)
         controller_.presentation_active(isExposed() && visibility() != QWindow::Minimized);
     for (const auto &pending : pending_swap_)
@@ -832,9 +833,30 @@ void Tiles::paintGL() {
                 text += latency == decode_latency.end()
                             ? "  decode N/A"
                             : QString("  decode %1 ms").arg(latency->second, 0, 'f', 1);
-                draw_text_overlay(text, x, y, w, h, true, false, Qt::white,
-                                  active.size() == 1 ? 22 : grid_text);
-                displayed_stream_info_[focus_ >= 0 ? unsigned(focus_) : tile] = text;
+                const double size = active.size() == 1 ? 22 : grid_text;
+                const unsigned cell = focus_ >= 0 ? unsigned(focus_) : tile;
+                // A re-encoded camera adds its encoder line below the decoder line.
+                float above = 0;
+                displayed_encode_info_[cell].clear();
+                if (source->source.transcode.enabled && !source->output_codec.empty()) {
+                    auto encode = QString("→ %1  %2x%3  %4 fps  %5 Mbps")
+                                      .arg(qs(source->output_codec))
+                                      .arg(source->output_width)
+                                      .arg(source->output_height)
+                                      .arg(source->output_fps, 0, 'f', 1)
+                                      .arg(source->output_mbps, 0, 'f', 1);
+                    // As short as the decoder line so both keep the same text size.
+                    if (source->input_mbps > 0)
+                        encode += QString("  %1%").arg(
+                            std::lround((source->output_mbps / source->input_mbps - 1) * 100));
+                    encode += QString("  encode %1 ms").arg(std::lround(source->encode_ms));
+                    draw_text_overlay(encode, x, y, w, h, true, false, Qt::white, size);
+                    displayed_encode_info_[cell] = encode;
+                    // One overlay line: glyph height, padding and the gap between lines.
+                    above = float(2 * (size * 1.25 + 10) / height());
+                }
+                draw_text_overlay(text, x, y, w, h - above, true, false, Qt::white, size);
+                displayed_stream_info_[cell] = text;
             }
         }
     }

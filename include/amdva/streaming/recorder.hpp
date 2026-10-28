@@ -9,13 +9,13 @@
 #include <vector>
 
 namespace amdva::streaming {
-enum class RecordCodec { H264, H265 };
+enum class RecordCodec { H264, H265, AV1 };
 
-// Records one camera's compressed H.264/H.265 stream into rolling Matroska
+// Records one camera's compressed H.264/H.265/AV1 stream into rolling Matroska
 // segments (`splitmuxsink`) and keeps the Catalog in step: every segment is
 // registered when it opens, timed from the recorder's media clock, closed with its
 // duration, and marked interrupted if the process stops before it is finalized. The
-// stream is never decoded or re-encoded.
+// stream is never decoded or re-encoded here; see Transcoder for re-encoding.
 //
 // Feed access units with push(), starting at a keyframe; call poll() periodically
 // (for example once per control tick) to pump the pipeline bus. After end() the
@@ -42,7 +42,9 @@ class SegmentRecorder {
     // Queues one access unit. Timestamps are rebased to the first accepted PTS.
     // Returns false when the sample was not queued (invalid or earlier PTS, or the
     // backlog is over the limit); the caller should end() and wait for a keyframe.
-    bool push(GstSample *sample);
+    // `wall_ms` is when the first accepted sample was received; it defaults to now and
+    // matters when the sample went through a delaying stage such as a Transcoder.
+    bool push(GstSample *sample, std::optional<int64_t> wall_ms = {});
     void end();
     // Pumps messages. Returns true once the recorder has finished (EOS, error or the
     // five second finalize deadline); open segments are then closed or interrupted.

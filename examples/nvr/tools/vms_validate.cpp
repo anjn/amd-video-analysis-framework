@@ -133,6 +133,13 @@ int main(int argc, char **argv) {
                     window.live_view()->presented() > 0) {
                     if (audit)
                         audit();
+                    // Widget grabs omit the native video; keep the rendered grid as well,
+                    // before the panel toggles below resize the video window.
+                    window.live_view()->grabFramebuffer().save(
+                        QString::fromStdString(std::string(argv[1]) + ".grid-video.png"));
+                    for (const auto &line : window.live_view()->displayed_encode_info())
+                        if (!line.isEmpty())
+                            std::cout << "encode info: " << line.toStdString() << std::endl;
                     // The camera panel starts closed; the boundary button opens and closes
                     // it. Leave it open for the later grid checks.
                     auto *toggle = window.findChild<QAbstractButton *>("live-panel-toggle");
@@ -148,9 +155,6 @@ int main(int argc, char **argv) {
                     toggle->click();
                     QCoreApplication::sendPostedEvents(nullptr, QEvent::LayoutRequest);
                     window.grab().save(QString::fromStdString(std::string(argv[1]) + ".grid.png"));
-                    // Widget grabs omit the native video; keep the rendered grid as well.
-                    window.live_view()->grabFramebuffer().save(
-                        QString::fromStdString(std::string(argv[1]) + ".grid-video.png"));
                     std::cout << "PASS camera panel toggle" << std::endl;
                     layout->setCurrentIndex(layout->findData(16));
                     QMetaObject::invokeMethod(layout, "activated",

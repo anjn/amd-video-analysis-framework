@@ -278,6 +278,43 @@ struct Window::Vms {
         uri->setMinimumWidth(440);
         form->addRow("Name", name);
         form->addRow("RTSP URL", uri);
+        // Hardware re-encoding replaces the received stream in the recordings.
+        auto *transcode = new QCheckBox("Re-encode recording on the GPU");
+        transcode->setObjectName("camera-transcode");
+        transcode->setChecked(source.transcode.enabled);
+        auto *codec = new QComboBox, *rate = new QComboBox, *size = new QComboBox;
+        codec->setObjectName("camera-transcode-codec");
+        rate->setObjectName("camera-transcode-rate");
+        size->setObjectName("camera-transcode-size");
+        for (auto c : {RecordCodec::H264, RecordCodec::H265, RecordCodec::AV1})
+            codec->addItem(codec_label(c), int(c));
+        rate->addItem("VBR (variable)", int(RateControl::VBR));
+        rate->addItem("QVBR (quality-defined)", int(RateControl::QVBR));
+        rate->addItem("CBR (constant)", int(RateControl::CBR));
+        size->addItem("Original", 0);
+        size->addItem("1080p", 1080);
+        size->addItem("720p", 720);
+        codec->setCurrentIndex(codec->findData(int(source.transcode.codec)));
+        rate->setCurrentIndex(rate->findData(int(source.transcode.rate_control)));
+        size->setCurrentIndex(std::max(0, size->findData(int(source.transcode.height))));
+        auto *bitrate = new QSpinBox;
+        bitrate->setObjectName("camera-transcode-bitrate");
+        bitrate->setRange(100, 100000);
+        bitrate->setSingleStep(250);
+        bitrate->setSuffix(" kbps");
+        bitrate->setValue(int(source.transcode.bitrate_kbps));
+        form->addRow(transcode);
+        form->addRow("Codec", codec);
+        form->addRow("Rate control", rate);
+        form->addRow("Bitrate", bitrate);
+        form->addRow("Resolution", size);
+        auto enable = [=](bool on) {
+            for (QWidget *widget : {static_cast<QWidget *>(codec), static_cast<QWidget *>(rate),
+                                    static_cast<QWidget *>(bitrate), static_cast<QWidget *>(size)})
+                widget->setEnabled(on);
+        };
+        enable(transcode->isChecked());
+        QObject::connect(transcode, &QCheckBox::toggled, &dialog, enable);
         auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
         form->addRow(buttons);
         QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
@@ -289,6 +326,9 @@ struct Window::Vms {
             if (source.name.empty())
                 throw std::runtime_error("Camera name is required");
             source.uri = validated_uri(uri->text().toStdString());
+            source.transcode = {transcode->isChecked(), RecordCodec(codec->currentData().toInt()),
+                                RateControl(rate->currentData().toInt()),
+                                unsigned(bitrate->value()), unsigned(size->currentData().toInt())};
             if (edit)
                 w.controller_.update_source(source);
             else
@@ -940,7 +980,8 @@ void Window::persist(bool force) {
         for (unsigned i = 0; i < sources.size(); ++i) {
             const auto &a = sources[i];
             const auto &b = options_.sources[i];
-            same &= a.id == b.id && a.name == b.name && a.uri == b.uri && a.selected == b.selected;
+            same &= a.id == b.id && a.name == b.name && a.uri == b.uri &&
+                    a.selected == b.selected && a.transcode == b.transcode;
         }
     if (same && !force)
         return;
@@ -973,7 +1014,10 @@ void Window::refresh() {
         table_->item(row, 1)->setText(qs(s.source.name));
         table_->item(row, 1)->setData(Qt::UserRole, qs(s.source.id));
         table_->item(row, 2)->setText(qs(s.connection));
-        table_->item(row, 3)->setText(qs(s.recording));
+        table_->item(row, 3)->setText(
+            s.source.transcode.enabled
+                ? qs(s.recording + " · " + transcode_summary(s.source.transcode))
+                : qs(s.recording));
         table_->item(row, 4)->setText(
             QString("%1 / %2").arg(s.display_fps, 0, 'f', 1).arg(s.ai_fps, 0, 'f', 1));
         for (const auto &metrics : timing_snapshots)

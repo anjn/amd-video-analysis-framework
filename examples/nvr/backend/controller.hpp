@@ -5,6 +5,7 @@
 #include "amdva/runtime.hpp"
 #include "amdva/streaming/catalog.hpp"
 #include "amdva/streaming/preview.hpp"
+#include "amdva/streaming/transcoder.hpp"
 #include "amdva/tracking.hpp"
 #include "backend/search.hpp"
 #include <array>
@@ -22,9 +23,23 @@
 #include <thread>
 namespace amdva::nvr {
 using namespace amdva::streaming;
+// Re-encode the recording instead of storing the received stream.
+struct Transcode {
+    bool enabled{};
+    RecordCodec codec{RecordCodec::H265};
+    RateControl rate_control{RateControl::VBR};
+    unsigned bitrate_kbps{2000};
+    unsigned height{}; // 0 keeps the camera resolution
+    bool operator==(const Transcode &o) const {
+        return enabled == o.enabled && codec == o.codec && rate_control == o.rate_control &&
+               bitrate_kbps == o.bitrate_kbps && height == o.height;
+    }
+    bool operator!=(const Transcode &o) const { return !(*this == o); }
+};
 struct Source {
     std::string id, name, uri;
     bool selected{};
+    Transcode transcode;
 };
 struct Options {
     std::string model, single_model, model_info, recording_root{"recordings"};
@@ -49,6 +64,10 @@ struct Status {
     std::string input_codec;
     unsigned input_width{}, input_height{};
     double input_fps{}, input_mbps{}; // Received AUs/s and encoded payload Mbit/s over ~1s.
+    // Re-encoded recording, when Source::transcode is enabled.
+    std::string output_codec;
+    unsigned output_width{}, output_height{};
+    double output_fps{}, output_mbps{}, encode_ms{}; // Over ~1s; push-to-output latency.
     unsigned ai_age_ms{};
     std::string background_state{"disabled"};
     uint64_t background_decoded{}, background_ai{}, background_attempts{};

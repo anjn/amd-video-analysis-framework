@@ -4,7 +4,8 @@ pkg_check_modules(GST REQUIRED IMPORTED_TARGET gstreamer-1.0>=1.28.2 gstreamer-v
 pkg_check_modules(SQLITE REQUIRED IMPORTED_TARGET sqlite3)
 amdva_use_host_sqlite(PkgConfig::SQLITE)
 find_package(Threads REQUIRED)
-add_library(amdva_streaming SHARED ingest.cpp recorder.cpp catalog.cpp analysis_catalog.cpp keyframe.cpp preview.cpp playback.cpp)
+add_library(amdva_streaming SHARED ingest.cpp recorder.cpp transcoder.cpp catalog.cpp
+  analysis_catalog.cpp keyframe.cpp preview.cpp playback.cpp)
 add_library(AMDVA::amdva_streaming ALIAS amdva_streaming)
 target_compile_definitions(amdva_streaming PUBLIC GST_USE_UNSTABLE_API)
 target_link_libraries(amdva_streaming PUBLIC amdva_gst_support PkgConfig::GST PkgConfig::CODECPARSERS Threads::Threads PRIVATE PkgConfig::APP PkgConfig::SQLITE)
@@ -29,6 +30,11 @@ if(BUILD_TESTING AND AMDVA_HARDWARE_TESTS)
   target_link_libraries(playback-tests PRIVATE amdva_streaming)
   add_test(NAME playback-error-contract COMMAND playback-tests)
   set_tests_properties(playback-error-contract PROPERTIES TIMEOUT 30)
+  add_executable(transcode-tests ../../tests/transcode_tests.cpp)
+  target_link_libraries(transcode-tests PRIVATE amdva_streaming PkgConfig::APP)
+  add_test(NAME transcode-contract COMMAND transcode-tests)
+  set_tests_properties(transcode-contract PROPERTIES
+    ENVIRONMENT "GST_PLUGIN_PATH=${CMAKE_BINARY_DIR}/plugins" TIMEOUT 120)
   # Manual hardware checks; see docs/dev/validation.md.
   add_executable(keyframe-tests ../../tests/keyframe_tests.cpp)
   target_link_libraries(keyframe-tests PRIVATE amdva_streaming PkgConfig::APP)

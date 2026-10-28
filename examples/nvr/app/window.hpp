@@ -69,6 +69,8 @@ class Tiles final : public QOpenGLWindow {
         update();
     }
     const std::array<QString, 16> &displayed_stream_info() const { return displayed_stream_info_; }
+    // Second stream info line of re-encoded cameras; empty otherwise.
+    const std::array<QString, 16> &displayed_encode_info() const { return displayed_encode_info_; }
 
   protected:
     void initializeGL() override;
@@ -130,7 +132,7 @@ class Tiles final : public QOpenGLWindow {
     bool stream_info_visible_{true};
     VectorText overlay_font_;
     void draw_detection_overlay(const OverlayFrame &, const QRectF &);
-    std::array<QString, 16> displayed_stream_info_{};
+    std::array<QString, 16> displayed_stream_info_{}, displayed_encode_info_{};
     int64_t displayed_playback_time_{};
     unsigned picked(const QPointF &) const;
     std::array<std::array<Texture, 3>, 16> textures_{};

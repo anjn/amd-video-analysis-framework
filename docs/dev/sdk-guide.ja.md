@@ -1,4 +1,4 @@
-<!-- source: docs/dev/sdk-guide.md 9a273255a6ceeb5860bd81cbe37ba1d01a685a3c -->
+<!-- source: docs/dev/sdk-guide.md 3a17ed7e5742d52190dae6254daa587fd3c139f8 -->
 # SDK ガイド
 
 ## ライブラリ
@@ -9,7 +9,7 @@
 | `AMDVA::amdva_inference` | `model.hpp`、`batching.hpp`、`inference.hpp` | `ModelInfo`、`ModelExecutor`、タスクごとの後処理器、共有バッチの実行器 |
 | `AMDVA::amdva_gst_support` | `tensor_meta.hpp`、`video_preprocess.hpp`、`tracking.hpp`、`overlay.hpp`、`publishing.hpp`、`gst_telemetry.hpp` | GstAnalytics との相互運用、トラッキング、描画、結果の送信 |
 | `AMDVA::amdva_media` | `vui.hpp`、`rtsp_server.hpp`、`egl_import.hpp`、`copy_audit.hpp` | エンコードの補助機能、RTSP 配信、EGL インポート |
-| `AMDVA::amdva_streaming` | `streaming/*.hpp` | `RtspIngest`、`SegmentRecorder`、`Catalog`（録画、録画の解析結果、アプリケーションのテーブル）、再生セッション、`PreviewSlot` |
+| `AMDVA::amdva_streaming` | `streaming/*.hpp` | `RtspIngest`、`SegmentRecorder`、`Transcoder`、`Catalog`（録画、録画の解析結果、アプリケーションのテーブル）、再生セッション、`PreviewSlot` |
 | `AMDVA::amdva_monitor` | `resource_monitor.hpp` | CPU/GPU/メモリ/電力と DRM エンジンの負荷 |
 
 共有ライブラリの SONAME は `lib<name>.so.<major>.<minor>` です。0.x のマイナーリリースでは
