@@ -101,9 +101,13 @@ int main(int argc, char **argv) {
         check("search-person-hair-length-2");
         check("search-person-hat-1");
         check("search-person-bag-0");
-        require(last == "A person, with an average build, with long dark brown hair, wearing "
-                        "T-shirt, wearing a beanie, without a bag.",
+        require(last == "A person, with an average build, with long brown hair, wearing "
+                        "T-shirt, wearing a brimmed hat, without a bag.",
                 "Build, hair, hat and bag phrases");
+        require(c.alternatives() ==
+                    QStringList{"A person, with an average build, with long dark brown hair, "
+                                "wearing T-shirt, wearing a fedora."},
+                "Grouped values add an alternative phrasing");
         require(c.findChild<QAbstractButton *>("search-person-glasses-0")->text() == "none" &&
                     !c.findChild<QAbstractButton *>("search-person-glasses-2"),
                 "None follows any and sunglasses are removed");

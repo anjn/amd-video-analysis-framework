@@ -110,6 +110,12 @@ int main() {
             require(std::abs(norm - 1) < 1e-6 && q[1] < .6f * q[0] / .8f,
                     "Negatives are subtracted and the query stays normalized");
             require(compose_text_query(person, {}) == person, "No negatives keeps the query");
+            std::array<float, 768> other{};
+            other[0] = .6f;
+            other[1] = .8f;
+            const auto mean = compose_text_query(std::vector{person, other}, {});
+            require(std::abs(mean[0] - mean[1]) < 1e-6 && std::abs(mean[0] - std::sqrt(.5)) < 1e-6,
+                    "Phrasings are averaged and normalized");
         }
         std::vector<SearchObservation> hits;
         for (int i = 0; i <= 7; ++i) {

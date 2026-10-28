@@ -69,6 +69,10 @@ inline constexpr float negative_query_weight = .5f;
 std::array<float, 768> compose_text_query(const std::array<float, 768> &positive,
                                           const std::vector<std::array<float, 768>> &negatives,
                                           float weight = negative_query_weight);
+// Several phrasings of one query (prompt ensemble): their mean is the positive query.
+std::array<float, 768> compose_text_query(const std::vector<std::array<float, 768>> &phrasings,
+                                          const std::vector<std::array<float, 768>> &negatives,
+                                          float weight = negative_query_weight);
 // GPU crop/resize with bounded RGB readback; no CPU mapping of source video.
 class SearchCropper {
   public:
@@ -114,8 +118,10 @@ class SearchService {
     SearchService(SearchIndex &, GstVaDisplay *, SearchOptions, std::shared_ptr<AiRuntime> = {});
     ~SearchService();
     void submit(const Frame &, const std::string &channel, const std::vector<Detection> &);
-    // Negatives are positive descriptions of excluded attributes; see compose_text_query.
-    uint64_t text(std::string, std::vector<std::string> negatives = {});
+    // Negatives are positive descriptions of excluded attributes and alternatives are other
+    // phrasings of the same query; see compose_text_query.
+    uint64_t text(std::string, std::vector<std::string> negatives = {},
+                  std::vector<std::string> alternatives = {});
     uint64_t image(SearchImage);
     void cancel();
     SearchResult result() const;

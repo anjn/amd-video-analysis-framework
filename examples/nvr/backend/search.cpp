@@ -114,6 +114,17 @@ std::array<float, 768> compose_text_query(const std::array<float, 768> &positive
         v *= scale;
     return out;
 }
+std::array<float, 768> compose_text_query(const std::vector<std::array<float, 768>> &phrasings,
+                                          const std::vector<std::array<float, 768>> &negatives,
+                                          float weight) {
+    if (phrasings.empty())
+        throw std::invalid_argument("Empty text query");
+    std::array<float, 768> mean{};
+    for (const auto &phrasing : phrasings)
+        for (size_t i = 0; i < mean.size(); ++i)
+            mean[i] += phrasing[i] / float(phrasings.size());
+    return compose_text_query(mean, negatives, weight);
+}
 struct SearchCropper::Impl {
     VaSession va;
     VASurfaceID converted{VA_INVALID_SURFACE};
@@ -463,15 +474,19 @@ struct SearchService::Impl {
         uint64_t id{};
         std::string text;
         SearchImage image;
-        std::vector<std::string> negatives;
+        std::vector<std::string> negatives, alternatives;
     };
     template <class Encode>
     static std::array<float, 768> text_query(const Request &r, Encode encode) {
         std::vector<std::array<float, 768>> negatives;
         for (const auto &text : r.negatives)
             negatives.push_back(encode(text));
-        const auto positive = encode(r.text);
-        return negatives.empty() ? positive : compose_text_query(positive, negatives);
+        std::vector<std::array<float, 768>> phrasings{encode(r.text)};
+        for (const auto &text : r.alternatives)
+            phrasings.push_back(encode(text));
+        return negatives.empty() && phrasings.size() == 1
+                   ? phrasings.front()
+                   : compose_text_query(phrasings, negatives);
     }
     Request query;
     uint64_t serial{};
@@ -1129,7 +1144,8 @@ void SearchService::submit(const Frame &f, const std::string &channel,
     p.cv.notify_all();
 }
 
-uint64_t SearchService::text(std::string text, std::vector<std::string> negatives) {
+uint64_t SearchService::text(std::string text, std::vector<std::string> negatives,
+                             std::vector<std::string> alternatives) {
     auto &p = *impl_;
     std::lock_guard<std::mutex> l(p.mutex);
     auto id = ++p.serial;
@@ -1139,7 +1155,7 @@ uint64_t SearchService::text(std::string text, std::vector<std::string> negative
             id, p.status.error.empty() ? "Search unavailable or empty query" : p.status.error, {}};
         return id;
     }
-    p.query = {id, std::move(text), {}, std::move(negatives)};
+    p.query = {id, std::move(text), {}, std::move(negatives), std::move(alternatives)};
     p.cv.notify_one();
     return id;
 }

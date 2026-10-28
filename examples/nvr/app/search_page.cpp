@@ -233,12 +233,17 @@ struct SearchPage::Impl {
             return;
         request = conditions->current_mode() == SearchConditions::Image
                       ? service->image(conditions->image)
-                      : service->text(conditions->query_text().toStdString(), negatives());
+                      : service->text(conditions->query_text().toStdString(), negatives(),
+                                      alternatives());
         status->setText("Searching…");
     }
-    std::vector<std::string> negatives() const {
+    std::vector<std::string> negatives() const { return strings(conditions->negatives()); }
+    std::vector<std::string> alternatives() const {
+        return strings(conditions->alternatives());
+    }
+    static std::vector<std::string> strings(const QStringList &list) {
         std::vector<std::string> out;
-        for (const auto &text : conditions->negatives())
+        for (const auto &text : list)
             out.push_back(text.toStdString());
         return out;
     }

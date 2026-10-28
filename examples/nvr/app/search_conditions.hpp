@@ -16,6 +16,7 @@
 #include <QVBoxLayout>
 #include <algorithm>
 #include <functional>
+#include <map>
 namespace amdva::nvr {
 class SearchTextInput : public QLineEdit {
   public:
@@ -116,31 +117,22 @@ class SearchConditions : public QWidget {
         clear->setObjectName("search-person-clear");
         pl->addWidget(clear);
         pl->addSpacing(12);
-        // "none" comes first so that it is displayed right after "any".
+        // "none" comes first so that it is displayed right after "any". Values are coarse
+        // groups that remain distinguishable in ~256-pixel person crops.
         attributes = {
             {"gender", "Gender", {"man", "woman"}},
             {"age", "Age", {"teenager", "young adult", "middle-aged adult", "older adult"}},
             {"build", "Build", {"slim", "average", "stocky"}},
             {"skin", "Skin tone", {"light", "medium", "dark"}},
-            {"hair",
-             "Hair color",
-             {"black", "dark brown", "brown", "ash brown", "gray-brown", "dark gray", "gray",
-              "silver"}},
+            {"hair", "Hair color", {"black", "brown", "gray"}},
             {"hair-length", "Hair length", {"short", "medium-length", "long"}},
-            {"upper",
-             "Upper",
-             {"T-shirt", "cropped T-shirt", "collared shirt", "collared knit top", "jacket",
-              "quilted jacket"}},
+            {"upper", "Upper", {"T-shirt", "shirt", "jacket"}},
             {"lower", "Lower", {"trousers", "shorts", "leggings", "skirt"}},
             {"upper-color", "Upper color", colors(), true},
             {"lower-color", "Lower color", colors(), true},
             {"glasses", "Eyewear", {"none", "eyeglasses"}},
-            {"hat",
-             "Hat",
-             {"none", "beanie", "knitted hat", "flat cap", "fedora", "cloche hat", "fishing hat"}},
-            {"bag",
-             "Bag",
-             {"none", "backpack", "shoulder bag", "sling bag", "handbag", "paper shopping bag"}}};
+            {"hat", "Hat", {"none", "brimmed hat", "cap"}},
+            {"bag", "Bag", {"none", "backpack", "shoulder bag", "hand bag"}}};
         auto *grid = new QGridLayout;
         grid->setHorizontalSpacing(8);
         grid->setVerticalSpacing(12);
@@ -272,13 +264,26 @@ class SearchConditions : public QWidget {
             }
         return {};
     }
+    // Grouped values are also searched under a second phrasing; the query embeds one
+    // sentence per phrasing and averages them. Phrasing 0 is the displayed label.
+    static constexpr int phrasings = 2;
+    QString phrase(const QString &id, int phrasing) const {
+        static const std::map<std::pair<QString, QString>, QString> alternatives = {
+            {{"hair", "brown"}, "dark brown"},     {{"hair", "gray"}, "silver"},
+            {{"upper", "shirt"}, "collared shirt"}, {{"upper", "jacket"}, "quilted jacket"},
+            {{"hat", "brimmed hat"}, "fedora"},     {{"hat", "cap"}, "beret"},
+            {{"bag", "shoulder bag"}, "sling bag"}, {{"bag", "hand bag"}, "shopping bag"}};
+        const auto label = value(id);
+        const auto it = alternatives.find({id, label});
+        return phrasing && it != alternatives.end() ? it->second : label;
+    }
     static QString article(const QString &word) {
         return QString("aeiou").contains(word.front()) ? "an " : "a ";
     }
     // The displayed description includes "without ..." phrases. CLIP-style text encoders
     // treat negation as the mentioned object, so the query omits them (negations = false)
     // and subtracts negatives() instead.
-    QString person_text(bool negations = true) const {
+    QString person_text(bool negations = true, int phrasing = 0) const {
         if (std::all_of(attributes.begin(), attributes.end(),
                         [](const auto &a) { return a.group->checkedId() <= 0; }))
             return {};
@@ -293,10 +298,11 @@ class SearchConditions : public QWidget {
         QString text = article(subject) + subject;
         text[0] = text[0].toUpper();
         QStringList details;
-        const auto build = value("build"), skin = value("skin"), hair = value("hair"),
-                   length = value("hair-length"), upper = value("upper"), lower = value("lower"),
-                   upper_color = value("upper-color"), lower_color = value("lower-color"),
-                   glasses = value("glasses"), hat = value("hat"), bag = value("bag");
+        const auto build = value("build"), skin = value("skin"), hair = phrase("hair", phrasing),
+                   length = value("hair-length"), upper = phrase("upper", phrasing),
+                   lower = value("lower"), upper_color = value("upper-color"),
+                   lower_color = value("lower-color"), glasses = value("glasses"),
+                   hat = phrase("hat", phrasing), bag = phrase("bag", phrasing);
         if (!build.isEmpty())
             details << "with " + article(build) + build + " build";
         if (!skin.isEmpty())
@@ -325,6 +331,18 @@ class SearchConditions : public QWidget {
     }
     QString query_text() const {
         return current_mode() == Person ? person_text(false) : input->text().trimmed();
+    }
+    // Further phrasings of query_text() whose embeddings are averaged with it.
+    QStringList alternatives() const {
+        QStringList out;
+        if (current_mode() != Person)
+            return out;
+        for (int phrasing = 1; phrasing < phrasings; ++phrasing) {
+            const auto text = person_text(false, phrasing);
+            if (text != query_text() && !out.contains(text))
+                out << text;
+        }
+        return out;
     }
     // Descriptions of what a "none" choice excludes, subtracted from the query embedding.
     QStringList negatives() const {
