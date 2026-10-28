@@ -659,6 +659,10 @@ void Tiles::paintGL() {
                 }
         }
     }
+    // Grid labels match the stream info overlay; tiles without a picture get theirs below.
+    constexpr double grid_text = 12;
+    const bool grid = !playback_ && active.size() > 1;
+    std::vector<bool> named(active.size());
     for (unsigned tile = 0; tile < active.size(); ++tile) {
         if (active[tile] < 0)
             continue;
@@ -802,6 +806,12 @@ void Tiles::paintGL() {
                                   held_ ? QColor(255, 220, 70) : QColor(90, 255, 125));
             if ((held_ || paused_) && !preview_mode_)
                 draw_pause(video_rect_);
+        } else if (grid) {
+            for (const auto &status : statuses)
+                if (status.source.id == s.channel)
+                    draw_text_overlay(qs(status.source.name), x, y, w, h, false, false,
+                                      Qt::white, grid_text);
+            named[tile] = true;
         }
         if (!playback_ && stream_info_visible_) {
             const auto source =
@@ -823,10 +833,21 @@ void Tiles::paintGL() {
                             ? "  decode N/A"
                             : QString("  decode %1 ms").arg(latency->second, 0, 'f', 1);
                 draw_text_overlay(text, x, y, w, h, true, false, Qt::white,
-                                  active.size() == 1 ? 22 : 14);
+                                  active.size() == 1 ? 22 : grid_text);
                 displayed_stream_info_[focus_ >= 0 ? unsigned(focus_) : tile] = text;
             }
         }
+    }
+    if (grid) {
+        const unsigned side = unsigned(std::ceil(std::sqrt(active.size())));
+        const float cell = 2.f / side;
+        for (unsigned tile = 0; tile < active.size() && tile < cells_.size(); ++tile)
+            if (!named[tile])
+                for (const auto &status : statuses)
+                    if (!cells_[tile].empty() && status.source.id == cells_[tile])
+                        draw_text_overlay(qs(status.source.name), -1 + (tile % side) * cell,
+                                          1 - (tile / side) * cell, cell, cell, false, false,
+                                          Qt::white, grid_text);
     }
     gl_->glFlush();
     if (cell_count_ > 1 && focus_ < 0 && !playback_) {
@@ -837,16 +858,6 @@ void Tiles::paintGL() {
             const unsigned cell = focus_ >= 0 ? unsigned(focus_) : tile;
             QRect rect(int(tile % side) * width() / side, int(tile / side) * height() / side,
                        width() / side, height() / side);
-            QString label = QString("%1 · Empty tile").arg(cell + 1);
-            for (const auto &s : statuses)
-                if (s.source.id == cells_[cell])
-                    label = QString("%1 · %2 · %3")
-                                .arg(cell + 1)
-                                .arg(qs(s.source.name), qs(s.connection));
-            painter.fillRect(QRect(rect.left(), rect.top(), rect.width(), 26),
-                             QColor(15, 20, 28, 215));
-            painter.setPen(Qt::white);
-            painter.drawText(rect.adjusted(8, 2, -8, -2), Qt::AlignLeft | Qt::AlignTop, label);
             painter.setPen(QPen(cell == selected_ ? QColor(75, 170, 255) : QColor(75, 80, 90),
                                 cell == selected_ ? 3 : 1));
             painter.drawRect(rect.adjusted(1, 1, -2, -2));

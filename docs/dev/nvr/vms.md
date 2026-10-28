@@ -8,11 +8,17 @@ services of the Qt-free NVR backend (`backend/`), built on `amdva_streaming`.
 ## Live monitoring
 
 Choose 1, 4, 9 or 16 views. A tile is selected immediately on mouse press,
-without waiting for double-click detection. Click a tile, then choose its camera in the toolbar,
-or double-click a camera in the left list. **Clear tile** removes that mapping.
+without waiting for double-click detection. The view count, tile camera, **Single / grid**
+and **Show stream info** controls sit above the camera list on the left. Click a tile,
+then choose its camera there, or double-click a camera in the list. Choosing
+**Empty tile** removes that mapping. **Exit Application** at the top of that panel
+quits immediately, through the same shutdown path as SIGINT. The panel starts
+closed at every launch; the narrow button between the panel and the video shows
+or hides it.
 Assigning a camera already used elsewhere exchanges the two tiles. Empty and
-disconnected tiles keep their position. Camera titles, connection states and the
-selected border remain visible over the grid.
+disconnected tiles keep their position. Each grid tile shows only its camera
+name in the upper-left corner, drawn like the stream info, and the selected tile
+keeps its border.
 
 **Show stream info** toggles codec, received resolution, input frame rate and
 bitrate on every live image. It defaults to on and persists in `<config>.ui.json`.
@@ -95,10 +101,10 @@ files can cause a partial result; release them and repeat the operation.
 
 Single view on **Live** contains the recording timeline. Double-click a tile
 (or choose one view) to enter it; double-click or Esc returns to the grid.
-Single view hides the grid toolbar, camera list, camera selector and storage panel.
-Its vertical timeline is on the left, newest at the top, with **Back to Live** above. The timeline sidebar is 165–225px wide.
-There is no coverage legend or duplicate live status outside the image. The camera name uses the large GPU text overlay in single view; black title strips
-remain only in the grid. The timeline spans the oldest finalized recording to
+Single view hides the left panel with the grid controls, camera list and storage.
+Its vertical timeline is on the left, newest at the top, with **Back to Tile** and **Back to Live** above. **Back to Tile** returns to the grid, like Esc. The timeline sidebar is 165–225px wide.
+There is no coverage legend or duplicate live status outside the image. The camera name uses the large GPU text overlay in single view and a smaller one
+in the grid. The timeline spans the oldest finalized recording to
 now, with green recorded intervals and grey gaps. Coverage refreshes each second.
 
 Click the timeline to start playback at that wall time, including when previously

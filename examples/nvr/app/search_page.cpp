@@ -20,7 +20,7 @@
 namespace amdva::nvr {
 using namespace amdva::nvr;
 namespace {
-constexpr int card_width = 156, card_image_width = 140, card_image_height = 170;
+constexpr int card_width = 212, card_image_width = 196, card_image_height = 238;
 constexpr int strip_image_width = 45, strip_image_height = 80;
 QString full_time(int64_t t) {
     return QDateTime::fromMSecsSinceEpoch(t).toString("yyyy-MM-dd HH:mm:ss");
@@ -161,7 +161,7 @@ struct SearchPage::Impl {
     void build_player() {
         player_panel = new QWidget;
         player_panel->setObjectName("search-player");
-        player_panel->setMinimumWidth(320);
+        player_panel->setMinimumWidth(400);
         auto *vl = new QVBoxLayout(player_panel);
         player_title = new QLabel;
         player_title->setObjectName("search-player-title");
@@ -316,12 +316,6 @@ struct SearchPage::Impl {
                                 "background:palette(base)}"
                                 "QToolButton:hover{border-color:#1565c0}"
                                 "QToolButton:checked{border:3px solid #1565c0}");
-            const auto person = person_number(g);
-            card->setToolTip(QString("%1%2\n%3 – %4\n%5 images · similarity %6")
-                                 .arg(person.isEmpty() ? "" : "Person " + person + " · ",
-                                      camera(g), full_time(g.from_ms), full_time(g.to_ms))
-                                 .arg(g.images.size())
-                                 .arg(g.similarity, 0, 'f', 3));
             auto *l = new QVBoxLayout(card);
             l->setContentsMargins(7, 7, 7, 7);
             l->setSpacing(3);
@@ -401,7 +395,6 @@ struct SearchPage::Impl {
                 auto *button = new QToolButton;
                 button->setObjectName(QString("search-strip-%1").arg(n));
                 button->setCheckable(true);
-                button->setToolTip(full_time(g.images[n].time_ms));
                 button->setStyleSheet("QToolButton{border:1px solid palette(mid)}"
                                       "QToolButton:checked{border:3px solid #1565c0}");
                 auto *bl = new QVBoxLayout(button);
@@ -427,8 +420,8 @@ struct SearchPage::Impl {
         if (!player_panel->isVisible()) {
             player_panel->show();
             auto sizes = splitter->sizes();
-            const int share = std::clamp((sizes[1] + sizes[2]) * 45 / 100, 360,
-                                         std::max(360, sizes[1] + sizes[2] - card_width - 60));
+            const int share = std::clamp((sizes[1] + sizes[2]) * 55 / 100, 440,
+                                         std::max(440, sizes[1] + sizes[2] - card_width - 60));
             splitter->setSizes({sizes[0], sizes[1] + sizes[2] - share, share});
         }
         play(index, 0);
@@ -556,13 +549,6 @@ struct SearchPage::Impl {
                 status->setText(QString::fromStdString(r.error));
         }
         auto s = service->status();
-        page.setToolTip(QString("%1 · stored %2 · skipped %3 · queued %4 · %5 ms\n%6")
-                            .arg(QString::fromStdString(s.state))
-                            .arg(s.stored)
-                            .arg(s.dropped)
-                            .arg(s.pending)
-                            .arg(s.inference_ms, 0, 'f', 1)
-                            .arg(QString::fromStdString(s.error)));
         if (!request)
             status->setText(s.state == "ready" ? idle_status
                                                : QString::fromStdString(s.state + ": " + s.error));
@@ -606,7 +592,7 @@ void SearchPage::search_image(SearchImage im) {
     QImage image(source.rgb.data(), source.width, source.height, source.width * 3,
                  QImage::Format_RGB888);
     p.conditions->preview->setPixmap(
-        QPixmap::fromImage(image).scaled(256, 192, Qt::KeepAspectRatio));
+        QPixmap::fromImage(image).scaled(384, 288, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     if (p.conditions->current_mode() != SearchConditions::Image)
         p.conditions->set_mode(SearchConditions::Image);
     else

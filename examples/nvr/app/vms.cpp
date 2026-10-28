@@ -29,6 +29,7 @@
 #include <QStackedWidget>
 #include <QTabWidget>
 #include <QTimer>
+#include <QToolButton>
 #include <QUuid>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -55,9 +56,10 @@ struct Window::Vms {
     QComboBox *layout{}, *assignment{}, *filter{};
     QLabel *tile_label{}, *storage{}, *play_status{};
     RecordingTimeline *timeline{};
-    QWidget *play_container{}, *live_container{}, *timeline_panel{}, *manage_page{};
+    QWidget *play_container{}, *live_container{}, *timeline_panel{};
     QStackedWidget *video_stack{};
     QWidget *settings_bar{}, *camera_panel{};
+    QToolButton *panel_toggle{};
     bool recorded{}, hover_resume{}, selection_resume{}, search_resume{};
     std::string viewing_camera;
     QPushButton *back_live{};
@@ -124,7 +126,8 @@ struct Window::Vms {
     unsigned count{4}, selected{};
     int focus{-1};
     bool ui_ready{}, dirty{}, query_pending{true};
-    bool show_stream_info{true};
+    // The camera panel always starts closed; it is opened on demand and not persisted.
+    bool show_stream_info{true}, show_live_panel{};
     uint64_t revision{};
     int64_t cursor_ms{};
     bool camera_changed{true}, camera_playing{};
@@ -200,7 +203,6 @@ struct Window::Vms {
         auto data = QJsonDocument(QJsonObject{{"version", 1},
                                               {"layout", int(count)},
                                               {"cells", array},
-
                                               {"show_stream_info", show_stream_info}})
                         .toJson();
         if (f.write(data) != data.size() || !f.commit())
@@ -225,8 +227,11 @@ struct Window::Vms {
         w.tiles_->select_tile(selected);
         if (timeline_panel) {
             timeline_panel->setVisible(single_view());
-            settings_bar->setVisible(!single_view());
-            camera_panel->setVisible(!single_view());
+            // Single view shows the timeline on the left instead of the camera panel.
+            camera_panel->setVisible(!single_view() && show_live_panel);
+            panel_toggle->setVisible(!single_view());
+            panel_toggle->setText(show_live_panel ? "◀" : "▶");
+            panel_toggle->setToolTip(show_live_panel ? "Hide camera panel" : "Show camera panel");
             if (single_view()) {
                 const auto id = cells[focus >= 0 ? unsigned(focus) : 0];
                 if (id != viewing_camera) {
@@ -314,9 +319,17 @@ struct Window::Vms {
         storage->setObjectName("storage-status");
         auto *live_page = new QWidget;
         auto *live_layout = new QVBoxLayout(live_page);
+        // Live controls sit above the camera list so the video gets the full height.
         settings_bar = new QWidget;
         settings_bar->setObjectName("live-settings");
-        auto *bar = new QHBoxLayout(settings_bar);
+        auto *bar = new QVBoxLayout(settings_bar);
+        bar->setContentsMargins(0, 0, 0, 0);
+        auto *exit = new QPushButton("Exit Application");
+        exit->setObjectName("exit-application");
+        // Same path as SIGINT/SIGTERM: the window saves its state and stops recording.
+        QObject::connect(exit, &QPushButton::clicked, &w, [] { QCoreApplication::quit(); });
+        bar->addWidget(exit);
+        bar->addSpacing(8);
         layout = new QComboBox;
         layout->setObjectName("live-layout");
         for (unsigned n : {1, 4, 9, 16})
@@ -326,21 +339,15 @@ struct Window::Vms {
         assignment = new QComboBox;
         assignment->setObjectName("tile-camera");
         assignment->setMinimumWidth(240);
-        auto *clear = new QPushButton("Clear tile"), *single = new QPushButton("Single / grid"),
-             *settings = new QPushButton("Manage cameras");
-        clear->setObjectName("tile-clear");
+        auto *single = new QPushButton("Single / grid");
         bar->addWidget(layout);
         bar->addWidget(tile_label);
         bar->addWidget(assignment);
-        bar->addWidget(clear);
         bar->addWidget(single);
         auto *info_toggle = new QCheckBox("Show stream info");
         info_toggle->setObjectName("live-show-stream-info");
         info_toggle->setChecked(show_stream_info);
         bar->addWidget(info_toggle);
-        bar->addStretch();
-        bar->addWidget(settings);
-        live_layout->addWidget(settings_bar);
         auto *split = new QSplitter;
         cameras = new QListWidget;
         cameras->setObjectName("live-cameras");
@@ -350,9 +357,23 @@ struct Window::Vms {
         camera_panel->setMaximumWidth(310);
         auto *camera_layout = new QVBoxLayout(camera_panel);
         camera_layout->setContentsMargins(0, 0, 0, 0);
+        camera_layout->addWidget(settings_bar);
+        camera_layout->addSpacing(8);
         camera_layout->addWidget(cameras, 1);
         camera_layout->addWidget(storage);
         split->addWidget(camera_panel);
+        panel_toggle = new QToolButton;
+        panel_toggle->setObjectName("live-panel-toggle");
+        panel_toggle->setFixedWidth(16);
+        panel_toggle->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
+        panel_toggle->setText("▶");
+        panel_toggle->setToolTip("Show camera panel");
+        camera_panel->setVisible(show_live_panel);
+        split->addWidget(panel_toggle);
+        QObject::connect(panel_toggle, &QToolButton::clicked, &w, [this] {
+            show_live_panel = !show_live_panel;
+            apply();
+        });
         w.tiles_ = new Tiles(w.controller_);
         w.tiles_->stream_info_visible(show_stream_info);
         QObject::connect(info_toggle, &QCheckBox::toggled, &w, [this](bool checked) {
@@ -364,7 +385,7 @@ struct Window::Vms {
         live_container = QWidget::createWindowContainer(w.tiles_);
         video_stack->addWidget(live_container);
         split->addWidget(video_stack);
-        split->setStretchFactor(1, 1);
+        split->setStretchFactor(split->indexOf(video_stack), 1);
         live_layout->addWidget(split, 1);
         tabs->addTab(live_page, "Live");
         search_page = new SearchPage(w.controller_);
@@ -374,7 +395,7 @@ struct Window::Vms {
         timeline_panel->setMinimumWidth(165);
         timeline_panel->setMaximumWidth(225);
         split->insertWidget(1, timeline_panel);
-        split->setStretchFactor(2, 1);
+        split->setStretchFactor(split->indexOf(video_stack), 1);
         timeline_panel->hide();
         // Internal camera selection follows the focused tile; it has no single-view control.
         filter = new QComboBox(live_page);
@@ -461,6 +482,11 @@ struct Window::Vms {
         video_stack->addWidget(play_container);
         timeline = new RecordingTimeline;
         auto *controls = new QHBoxLayout;
+        auto *back_tile = new QPushButton("Back to Tile");
+        back_tile->setObjectName("playback-tile");
+        // Same as Esc or double-click: leave single view for the grid.
+        QObject::connect(back_tile, &QPushButton::clicked, &w, [this] { grid(); });
+        rl->addWidget(back_tile);
         back_live = new QPushButton("Back to Live");
         back_live->setObjectName("playback-live");
         controls->addWidget(back_live);
@@ -500,7 +526,6 @@ struct Window::Vms {
             view()->preview_image(true, preview->status());
         };
         auto *manage = new QWidget;
-        manage_page = manage;
         auto *ml = new QVBoxLayout(manage);
         ml->addLayout(management);
         ml->addWidget(deletion_info);
@@ -604,8 +629,6 @@ struct Window::Vms {
         }
         QObject::connect(add, &QPushButton::clicked, &w, [this] { edit_camera(false); });
         QObject::connect(edit, &QPushButton::clicked, &w, [this] { edit_camera(true); });
-        QObject::connect(settings, &QPushButton::clicked, &w,
-                         [this] { tabs->setCurrentWidget(manage_page); });
         QObject::connect(remove, &QPushButton::clicked, &w, [this] {
             int row = w.table_->currentRow();
             if (row < 0)
@@ -634,7 +657,6 @@ struct Window::Vms {
         });
         QObject::connect(assignment, qOverload<int>(&QComboBox::activated), &w,
                          [this] { assign(assignment->currentData().toString().toStdString()); });
-        QObject::connect(clear, &QPushButton::clicked, &w, [this] { assign(""); });
         w.tiles_->activated = [this](unsigned index, bool twice) {
             selected = std::min(index, count - 1);
             if (twice) {

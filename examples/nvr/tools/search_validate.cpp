@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
         QTimer timer;
         int tick = 0, stage = 0, region_tick = 0, strip_tick = 0;
         int64_t loop_peak = 0;
+        bool exiting = false;
         int unrelated_tick = 0, unrelated_cards = 0;
         QPointF drag_end;
         auto capture_live = [&](const char *name) {
@@ -452,7 +453,9 @@ int main(int argc, char **argv) {
                                                  std::to_string(cards));
                     std::cout << "PASS: deletion pruned results; cards=" << cards << " status="
                               << text.toStdString() << std::endl;
-                    app.quit();
+                    exiting = true;
+                    stage = 99;
+                    window.findChild<QPushButton *>("exit-application")->click();
                 }
             } catch (const std::exception &e) {
                 std::cerr << e.what() << std::endl;
@@ -462,6 +465,8 @@ int main(int argc, char **argv) {
         });
         timer.start(200);
         app.exec();
+        if (exiting && !failed)
+            std::cout << "PASS: Exit Application quit the event loop" << std::endl;
     } catch (const std::exception &e) {
         std::cerr << e.what() << std::endl;
         return 1;

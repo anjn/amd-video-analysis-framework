@@ -133,6 +133,25 @@ int main(int argc, char **argv) {
                     window.live_view()->presented() > 0) {
                     if (audit)
                         audit();
+                    // The camera panel starts closed; the boundary button opens and closes
+                    // it. Leave it open for the later grid checks.
+                    auto *toggle = window.findChild<QAbstractButton *>("live-panel-toggle");
+                    auto *panel = window.findChild<QWidget *>("tile-camera-panel");
+                    check(toggle && panel && toggle->isVisible() && !panel->isVisible(),
+                          "Camera panel did not start closed");
+                    window.grab().save(
+                        QString::fromStdString(std::string(argv[1]) + ".grid-hidden.png"));
+                    toggle->click();
+                    check(panel->isVisible(), "Panel toggle did not open");
+                    toggle->click();
+                    check(!panel->isVisible(), "Panel toggle did not close");
+                    toggle->click();
+                    QCoreApplication::sendPostedEvents(nullptr, QEvent::LayoutRequest);
+                    window.grab().save(QString::fromStdString(std::string(argv[1]) + ".grid.png"));
+                    // Widget grabs omit the native video; keep the rendered grid as well.
+                    window.live_view()->grabFramebuffer().save(
+                        QString::fromStdString(std::string(argv[1]) + ".grid-video.png"));
+                    std::cout << "PASS camera panel toggle" << std::endl;
                     layout->setCurrentIndex(layout->findData(16));
                     QMetaObject::invokeMethod(layout, "activated",
                                               Q_ARG(int, layout->currentIndex()));
@@ -236,8 +255,17 @@ int main(int argc, char **argv) {
                         cycle = phase;
                         if (phase % 4 == 0) {
                             back->click();
-                            QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
-                            QApplication::sendEvent(window.live_view(), &escape);
+                            // The first cycle leaves single view with Back to Tile, later
+                            // cycles with Esc.
+                            if (phase == 0) {
+                                auto *tile = window.findChild<QPushButton *>("playback-tile");
+                                check(tile && tile->isVisible(), "Missing Back to Tile");
+                                tile->click();
+                            } else {
+                                QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape,
+                                                 Qt::NoModifier);
+                                QApplication::sendEvent(window.live_view(), &escape);
+                            }
                         }
                         if (phase % 4 == 0) {
                             check(layout->isVisible() &&
@@ -282,7 +310,7 @@ int main(int argc, char **argv) {
                         std::cout << "PASS unified live/recording/hover/click/overlay; seconds="
                                   << elapsed << " warmup_tracking_drops=" << warmup_tracking_drops
                                   << std::endl;
-                        app.quit();
+                        window.findChild<QPushButton *>("exit-application")->click();
                     }
                 }
                 if (elapsed > duration + 90)

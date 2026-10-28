@@ -116,10 +116,13 @@ int main(int argc, char **argv) {
                         throw std::runtime_error("Missing live layout control");
                     layout->setCurrentIndex(layout->findData(mode == 0 ? 16 : mode == 1 ? 4 : 1));
                     if (mode == 2) {
-                        auto *clear = window.findChild<QPushButton *>("tile-clear");
-                        if (!clear)
-                            throw std::runtime_error("Missing tile clear control");
-                        clear->click();
+                        // Choosing "Empty tile" clears the selected tile.
+                        auto *assignment = window.findChild<QComboBox *>("tile-camera");
+                        const int empty = assignment ? assignment->findData(QString()) : -1;
+                        if (empty < 0)
+                            throw std::runtime_error("Missing empty tile choice");
+                        assignment->setCurrentIndex(empty);
+                        emit assignment->activated(empty);
                     }
                     mode_changed = Clock::now();
                 }
