@@ -1,16 +1,18 @@
 #pragma once
 #include "backend/search.hpp"
-#include <QCheckBox>
-#include <QComboBox>
+#include "flow_layout.hpp"
+#include <QButtonGroup>
 #include <QGridLayout>
-#include <QGroupBox>
+#include <QHBoxLayout>
 #include <QInputMethodEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <functional>
@@ -32,27 +34,46 @@ class SearchTextInput : public QLineEdit {
 class SearchConditions : public QWidget {
   public:
     enum Mode { Image, Text, Person };
-    QComboBox *mode{};
+    QButtonGroup *mode{};
     SearchTextInput *input{};
     QLabel *preview{}, *description{};
     QTimer debounce;
     SearchImage image;
     std::function<void(bool)> invalidate;
     std::function<void()> submit;
+    // Button id 0 is "any"; id i + 1 selects words[i].
     struct Attribute {
         QString id, title;
         QStringList words;
-        std::vector<QCheckBox *> checks;
+        bool swatches{};
+        QButtonGroup *group{};
+        QAbstractButton *any{};
+        std::vector<QAbstractButton *> checks;
     };
     std::vector<Attribute> attributes;
     explicit SearchConditions(QWidget *parent = nullptr) : QWidget(parent) {
         setObjectName("search-conditions");
         auto *layout = new QVBoxLayout(this);
-        mode = new QComboBox;
-        mode->setObjectName("search-mode");
-        mode->addItems({"Image search", "Text search", "Person search"});
-        mode->setCurrentIndex(Text);
-        layout->addWidget(mode);
+        auto *modes = new QWidget;
+        modes->setObjectName("search-mode");
+        modes->setStyleSheet("QPushButton{padding:5px}"
+                             "QPushButton:checked{background:palette(highlight);"
+                             "color:palette(highlighted-text);border:1px solid palette(dark)}");
+        auto *ml = new QHBoxLayout(modes);
+        ml->setContentsMargins(0, 0, 0, 0);
+        ml->setSpacing(0);
+        mode = new QButtonGroup(this);
+        const char *names[] = {"image", "text", "person"};
+        const char *titles[] = {"Image", "Text", "Person"};
+        for (int i = Image; i <= Person; ++i) {
+            auto *button = new QPushButton(titles[i]);
+            button->setObjectName(QString("search-mode-%1").arg(names[i]));
+            button->setCheckable(true);
+            mode->addButton(button, i);
+            ml->addWidget(button);
+        }
+        mode->button(Person)->setChecked(true);
+        layout->addWidget(modes);
         auto *stack = new QStackedWidget;
         layout->addWidget(stack);
         auto *image_page = new QWidget;
@@ -79,60 +100,115 @@ class SearchConditions : public QWidget {
         stack->addWidget(text_page);
         auto *person_page = new QWidget;
         auto *pl = new QVBoxLayout(person_page);
-        auto *hint_person =
-            new QLabel("Find people with a similar appearance. Attributes are not exact filters.");
-        hint_person->setWordWrap(true);
-        pl->addWidget(hint_person);
-        auto *clear = new QPushButton("Clear conditions");
-        clear->setObjectName("search-person-clear");
-        pl->addWidget(clear);
-        attributes = {
-            {"age", "Age group", {"child", "young adult", "middle-aged adult", "older adult"}, {}},
-            {"skin", "Skin tone", {"light", "medium", "dark"}, {}},
-            {"hair", "Hair color", {"black", "brown", "blond", "red", "gray", "white"}, {}},
-            {"upper",
-             "Upper clothing",
-             {"T-shirt", "shirt", "sweater", "hoodie", "jacket", "coat"},
-             {}},
-            {"lower", "Lower clothing", {"long pants", "shorts", "skirt"}, {}},
-            {"upper-color", "Upper clothing color", colors(), {}},
-            {"lower-color", "Lower clothing color", colors(), {}},
-            {"glasses", "Eyewear", {"eyeglasses", "sunglasses", "none"}, {}},
-            {"bag",
-             "Bag",
-             {"backpack", "shoulder bag", "handbag", "tote bag", "suitcase", "none"},
-             {}}};
-        for (size_t a = 0; a < attributes.size(); ++a) {
-            auto &attribute = attributes[a];
-            auto *box = new QGroupBox(attribute.title);
-            auto *choices = new QGridLayout(box);
-            for (int i = 0; i < attribute.words.size(); ++i) {
-                auto *check = new QCheckBox(attribute.words[i]);
-                check->setObjectName(QString("search-person-%1-%2").arg(attribute.id).arg(i));
-                attribute.checks.push_back(check);
-                choices->addWidget(check, i / 2, i % 2);
-                connect(check, &QCheckBox::toggled, this, [this, a, check](bool checked) {
-                    if (checked)
-                        for (auto *other : attributes[a].checks)
-                            if (other != check) {
-                                QSignalBlocker block(other);
-                                other->setChecked(false);
-                            }
-                    refresh_description();
-                    if (mode->currentIndex() == Person)
-                        changed(false, true);
-                });
-            }
-            pl->addWidget(box);
-        }
+        pl->setSpacing(6);
         description = new QLabel;
         description->setObjectName("search-person-description");
         description->setTextFormat(Qt::PlainText);
         description->setWordWrap(true);
-        pl->insertWidget(2, description);
+        description->setFrameShape(QFrame::StyledPanel);
+        description->setMargin(8);
+        auto description_font = description->font();
+        description_font.setPointSizeF(description_font.pointSizeF() * 1.25);
+        description->setFont(description_font);
+        pl->addWidget(description);
+        pl->addSpacing(8);
+        auto *clear = new QPushButton("Clear conditions");
+        clear->setObjectName("search-person-clear");
+        pl->addWidget(clear);
+        pl->addSpacing(12);
+        // "none" comes first so that it is displayed right after "any".
+        attributes = {
+            {"gender", "Gender", {"man", "woman"}},
+            {"age", "Age", {"teenager", "young adult", "middle-aged adult", "older adult"}},
+            {"build", "Build", {"slim", "average", "stocky"}},
+            {"skin", "Skin tone", {"light", "medium", "dark"}},
+            {"hair",
+             "Hair color",
+             {"black", "dark brown", "brown", "ash brown", "gray-brown", "dark gray", "gray",
+              "silver"}},
+            {"hair-length", "Hair length", {"short", "medium-length", "long"}},
+            {"upper",
+             "Upper",
+             {"T-shirt", "cropped T-shirt", "collared shirt", "collared knit top", "jacket",
+              "quilted jacket"}},
+            {"lower", "Lower", {"trousers", "shorts", "leggings", "skirt"}},
+            {"upper-color", "Upper color", colors(), true},
+            {"lower-color", "Lower color", colors(), true},
+            {"glasses", "Eyewear", {"none", "eyeglasses"}},
+            {"hat",
+             "Hat",
+             {"none", "beanie", "knitted hat", "flat cap", "fedora", "cloche hat", "fishing hat"}},
+            {"bag",
+             "Bag",
+             {"none", "backpack", "shoulder bag", "sling bag", "handbag", "paper shopping bag"}}};
+        auto *grid = new QGridLayout;
+        grid->setHorizontalSpacing(8);
+        grid->setVerticalSpacing(12);
+        grid->setColumnStretch(1, 1);
+        for (size_t a = 0; a < attributes.size(); ++a) {
+            auto &attribute = attributes[a];
+            auto *title = new QLabel(attribute.title);
+            auto font = title->font();
+            font.setBold(true);
+            title->setFont(font);
+            grid->addWidget(title, int(a), 0, Qt::AlignTop | Qt::AlignLeft);
+            auto *choices = new QWidget;
+            auto *flow = new FlowLayout(choices, 4);
+            attribute.group = new QButtonGroup(this);
+            attribute.any = new QRadioButton("any");
+            attribute.any->setObjectName(QString("search-person-%1-any").arg(attribute.id));
+            attribute.any->setChecked(true);
+            attribute.group->addButton(attribute.any, 0);
+            flow->addWidget(attribute.any);
+            for (int i = 0; i < attribute.words.size(); ++i) {
+                QAbstractButton *button;
+                if (attribute.swatches) {
+                    auto *swatch = new QToolButton;
+                    swatch->setCheckable(true);
+                    swatch->setFixedSize(22, 22);
+                    swatch->setToolTip(attribute.words[i]);
+                    swatch->setStyleSheet(
+                        QString("QToolButton{background:%1;border:1px solid #808080;"
+                                "border-radius:3px}"
+                                "QToolButton:checked{border:3px solid palette(highlight)}")
+                            .arg(color_value(attribute.words[i])));
+                    button = swatch;
+                } else {
+                    button = new QRadioButton(attribute.words[i]);
+                    // Highlight chosen values; "any" stays plain. Style sheets cannot
+                    // change the font per state, so boldness follows the toggle.
+                    button->setStyleSheet("QRadioButton:checked{color:#1565c0}");
+                    connect(button, &QAbstractButton::toggled, button, [button](bool on) {
+                        auto font = button->font();
+                        font.setBold(on);
+                        button->setFont(font);
+                    });
+                }
+                button->setObjectName(QString("search-person-%1-%2").arg(attribute.id).arg(i));
+                // Choosing the selected value again returns the condition to "any".
+                connect(button, &QAbstractButton::pressed, button,
+                        [button] { button->setProperty("was-checked", button->isChecked()); });
+                connect(button, &QAbstractButton::clicked, this, [button, any = attribute.any] {
+                    if (button->property("was-checked").toBool())
+                        any->setChecked(true);
+                });
+                attribute.checks.push_back(button);
+                attribute.group->addButton(button, i + 1);
+                flow->addWidget(button);
+            }
+            grid->addWidget(choices, int(a), 1);
+            connect(attribute.group, &QButtonGroup::idToggled, this, [this](int, bool checked) {
+                if (!checked)
+                    return;
+                refresh_description();
+                if (current_mode() == Person)
+                    changed(false, true);
+            });
+        }
+        pl->addLayout(grid);
         pl->addStretch();
         stack->addWidget(person_page);
-        stack->setCurrentIndex(Text);
+        stack->setCurrentIndex(Person);
         // Do not let the tall inactive person page determine the other modes' height.
         auto resize_pages = [stack](int current) {
             for (int i = 0; i < stack->count(); ++i)
@@ -141,9 +217,11 @@ class SearchConditions : public QWidget {
                                                                             : QSizePolicy::Ignored);
             stack->adjustSize();
         };
-        resize_pages(Text);
-        connect(mode, qOverload<int>(&QComboBox::currentIndexChanged), this,
-                [this, stack, resize_pages](int index) {
+        resize_pages(Person);
+        connect(mode, &QButtonGroup::idToggled, this,
+                [this, stack, resize_pages](int index, bool checked) {
+                    if (!checked)
+                        return;
                     stack->setCurrentIndex(index);
                     resize_pages(index);
                     changed(true, true);
@@ -151,81 +229,105 @@ class SearchConditions : public QWidget {
         debounce.setSingleShot(true);
         debounce.setInterval(350);
         connect(&debounce, &QTimer::timeout, this, [this] {
-            if (submit && mode->currentIndex() == Text && !input->composing)
+            if (submit && current_mode() == Text && !input->composing)
                 submit();
         });
         auto edited = [this] {
-            if (mode->currentIndex() == Text)
+            if (current_mode() == Text)
                 changed(false, false);
         };
         connect(input, &QLineEdit::textChanged, this, [edited](const QString &) { edited(); });
         input->composition_changed = edited;
         connect(input, &QLineEdit::returnPressed, this, [this] {
-            if (mode->currentIndex() == Text && !input->composing)
+            if (current_mode() == Text && !input->composing)
                 changed(false, true);
         });
         connect(clear, &QPushButton::clicked, this, [this] {
-            for (auto &a : attributes)
-                for (auto *c : a.checks) {
-                    QSignalBlocker block(c);
-                    c->setChecked(false);
-                }
+            for (auto &a : attributes) {
+                QSignalBlocker block(a.group);
+                a.any->setChecked(true);
+            }
             refresh_description();
             changed(false, true);
         });
         refresh_description();
     }
+    int current_mode() const { return mode->checkedId(); }
+    void set_mode(Mode m) { mode->button(m)->setChecked(true); }
     static QStringList colors() {
         return {"black",  "white", "gray",  "red",  "blue",   "green",
                 "yellow", "brown", "beige", "pink", "purple", "orange"};
     }
+    static QString color_value(const QString &name) {
+        static const QStringList values = {"#000000", "#ffffff", "#808080", "#d32f2f",
+                                           "#1e5bd8", "#2e8b3d", "#f2d21b", "#7b4a26",
+                                           "#e8d8b0", "#f4a6c1", "#7e3fa0", "#f08a1c"};
+        return values.value(colors().indexOf(name));
+    }
+    QString value(const QString &id) const {
+        for (const auto &a : attributes)
+            if (a.id == id) {
+                const int checked = a.group->checkedId();
+                return checked > 0 ? a.words[checked - 1] : QString();
+            }
+        return {};
+    }
+    static QString article(const QString &word) {
+        return QString("aeiou").contains(word.front()) ? "an " : "a ";
+    }
     QString person_text() const {
-        QStringList selected;
-        for (const auto &a : attributes) {
-            QString value;
-            for (size_t i = 0; i < a.checks.size(); ++i)
-                if (a.checks[i]->isChecked())
-                    value = a.words[int(i)];
-            selected << value;
-        }
-        if (std::all_of(selected.begin(), selected.end(),
-                        [](const auto &s) { return s.isEmpty(); }))
+        if (std::all_of(attributes.begin(), attributes.end(),
+                        [](const auto &a) { return a.group->checkedId() <= 0; }))
             return {};
-        QString text = selected[0].isEmpty()
-                           ? "A person"
-                           : (selected[0] == "older adult" ? "An " : "A ") + selected[0];
+        const auto gender = value("gender"), age = value("age");
+        QString subject;
+        if (gender.isEmpty())
+            subject = age.isEmpty() ? "person" : age;
+        else if (age == "teenager")
+            subject = gender == "man" ? "teenage boy" : "teenage girl";
+        else
+            subject = age.isEmpty() ? gender : QString(age).remove(" adult") + " " + gender;
+        QString text = article(subject) + subject;
+        text[0] = text[0].toUpper();
         QStringList details;
-        if (!selected[1].isEmpty())
-            details << "with " + selected[1] + " skin";
-        if (!selected[2].isEmpty())
-            details << "with " + selected[2] + " hair";
-        if (!selected[3].isEmpty() || !selected[5].isEmpty())
-            details << "wearing " + (selected[5].isEmpty() ? "" : selected[5] + " ") +
-                           (selected[3].isEmpty() ? "upper-body clothing" : selected[3]);
-        if (!selected[4].isEmpty() || !selected[6].isEmpty())
-            details << "wearing " + (selected[6].isEmpty() ? "" : selected[6] + " ") +
-                           (selected[4].isEmpty() ? "lower-body clothing" : selected[4]);
-        if (!selected[7].isEmpty())
-            details << (selected[7] == "none" ? "without glasses" : "wearing " + selected[7]);
-        if (!selected[8].isEmpty())
-            details << (selected[8] == "none" ? "without a bag" : "carrying a " + selected[8]);
+        const auto build = value("build"), skin = value("skin"), hair = value("hair"),
+                   length = value("hair-length"), upper = value("upper"), lower = value("lower"),
+                   upper_color = value("upper-color"), lower_color = value("lower-color"),
+                   glasses = value("glasses"), hat = value("hat"), bag = value("bag");
+        if (!build.isEmpty())
+            details << "with " + article(build) + build + " build";
+        if (!skin.isEmpty())
+            details << "with " + skin + " skin";
+        if (!hair.isEmpty() || !length.isEmpty())
+            details << "with " + (length.isEmpty() ? "" : length + " ") +
+                           (hair.isEmpty() ? "" : hair + " ") + "hair";
+        if (!upper.isEmpty() || !upper_color.isEmpty())
+            details << "wearing " + (upper_color.isEmpty() ? "" : upper_color + " ") +
+                           (upper.isEmpty() ? "upper-body clothing" : upper);
+        if (!lower.isEmpty() || !lower_color.isEmpty())
+            details << "wearing " + (lower_color.isEmpty() ? "" : lower_color + " ") +
+                           (lower.isEmpty() ? "lower-body clothing" : lower);
+        if (!glasses.isEmpty())
+            details << (glasses == "none" ? "without glasses" : "wearing " + glasses);
+        if (!hat.isEmpty())
+            details << (hat == "none" ? "without a hat" : "wearing " + article(hat) + hat);
+        if (!bag.isEmpty())
+            details << (bag == "none" ? "without a bag" : "carrying a " + bag);
         if (!details.isEmpty())
             text += ", " + details.join(", ");
         return text + ".";
     }
     QString text() const {
-        return mode->currentIndex() == Person ? person_text() : input->text().trimmed();
+        return current_mode() == Person ? person_text() : input->text().trimmed();
     }
-    bool empty() const {
-        return mode->currentIndex() == Image ? image.rgb.empty() : text().isEmpty();
-    }
+    bool empty() const { return current_mode() == Image ? image.rgb.empty() : text().isEmpty(); }
     void changed(bool clear, bool immediate) {
         debounce.stop();
         if (invalidate)
             invalidate(clear || empty());
         if (empty())
             return;
-        if (mode->currentIndex() == Text && input->composing)
+        if (current_mode() == Text && input->composing)
             return;
         if (immediate) {
             if (submit)

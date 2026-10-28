@@ -1,6 +1,7 @@
 #pragma once
 #include "backend/controller.hpp"
 #include "amdva/streaming/playback.hpp"
+#include <QImage>
 #include <QWidget>
 namespace amdva::nvr {
 class SearchPage final : public QWidget {
@@ -11,6 +12,7 @@ class SearchPage final : public QWidget {
     void leave();
     streaming::TimelinePlaybackStatus playback_status() const;
     std::string renderer_status() const;
+    QImage grab_video() const;
     uint64_t presented() const;
     std::future<void> release();
 

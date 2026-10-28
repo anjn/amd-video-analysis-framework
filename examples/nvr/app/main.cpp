@@ -3,11 +3,12 @@
 #include <QSurfaceFormat>
 #include <iostream>
 int main(int argc, char **argv) {
-    if (argc != 2) {
-        std::cerr << "Usage: amdva-nvr CONFIG.json\n";
+    const bool fullscreen = argc == 3 && std::string(argv[1]) == "--fullscreen";
+    if (argc != 2 && !fullscreen) {
+        std::cerr << "Usage: amdva-nvr [--fullscreen] CONFIG.json\n";
         return 1;
     }
-    const std::string config = argv[1];
+    const std::string config = argv[argc - 1];
     amdva::nvr::initialize_runtime();
     QSurfaceFormat format;
     format.setRenderableType(QSurfaceFormat::OpenGLES);
@@ -31,7 +32,10 @@ int main(int argc, char **argv) {
         }
         amdva::nvr::Controller controller(options);
         amdva::nvr::Window window(controller, options, config);
-        window.show();
+        if (fullscreen)
+            window.showFullScreen();
+        else
+            window.show();
         return app.exec();
     } catch (const std::exception &e) {
         std::cerr << "NVR initialization failed: " << e.what() << "\n";

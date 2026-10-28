@@ -325,7 +325,8 @@ void Tiles::draw_detection_overlay(const OverlayFrame &overlay, const QRectF &vi
         border(5);
         gl_->glUniform4f(pen, color[0], color[1], color[2], .4f);
         border(3);
-        if ((!playback_ && cell_count_ > 1 && focus_ < 0) || !object.tracking_id)
+        if ((!playback_ && cell_count_ > 1 && focus_ < 0) || !object.tracking_id ||
+            !object_labels)
             continue;
         QString text;
         if (object.tracking_id)
@@ -375,6 +376,50 @@ void Tiles::draw_detection_overlay(const OverlayFrame &overlay, const QRectF &vi
     gl_->glDisable(GL_BLEND);
 }
 
+void Tiles::draw_zoom(GLuint texture, float u, float v, float source_aspect) {
+    const double gap = 6;
+    const QRectF area(0, height() * zoom_split + gap, width(), height() * (1 - zoom_split) - gap);
+    if (area.width() < 8 || area.height() < 8)
+        return;
+    const float ax = -1, ay = float(1 - 2 * area.top() / height()), aw = 2,
+                ah = float(2 * area.height() / height());
+    if (focus_run_.empty() || !focus_seen_) {
+        draw_text_overlay(focus_run_.empty() ? "Zoom needs person tracking" : "Finding person…",
+                          ax, ay, aw, ah, false, false, QColor(200, 200, 200), 16);
+        return;
+    }
+    // A 16:9-of-the-area crop around the person, eased between frames to avoid jitter.
+    const auto &b = focus_box_;
+    double ch = std::clamp(double(b.h) * 1.6, .15, 1.), cw = ch * area.width() / area.height() /
+                                                              source_aspect;
+    if (cw > 1) {
+        ch /= cw;
+        cw = 1;
+    }
+    const QRectF target(std::clamp(b.x + b.w / 2 - cw / 2, 0., 1 - cw),
+                        std::clamp(b.y + b.h / 2 - ch / 2, 0., 1 - ch), cw, ch);
+    if (!zoom_valid_)
+        zoom_crop_ = target;
+    else {
+        const double k = .2;
+        zoom_crop_ = QRectF(zoom_crop_.x() + (target.x() - zoom_crop_.x()) * k,
+                            zoom_crop_.y() + (target.y() - zoom_crop_.y()) * k,
+                            zoom_crop_.width() + (target.width() - zoom_crop_.width()) * k,
+                            zoom_crop_.height() + (target.height() - zoom_crop_.height()) * k);
+    }
+    zoom_valid_ = true;
+    const auto &c = zoom_crop_;
+    const float s0 = float(c.left()) * u, s1 = float(c.right()) * u, t0 = float(c.top()) * v,
+                t1 = float(c.bottom()) * v;
+    const float quad[] = {ax,      ay,      s0, t0, ax + aw, ay,      s1, t0,
+                          ax,      ay - ah, s0, t1, ax + aw, ay - ah, s1, t1};
+    gl_->glUseProgram(image_program_);
+    gl_->glActiveTexture(GL_TEXTURE0);
+    gl_->glBindTexture(GL_TEXTURE_2D, texture);
+    gl_->glUniform1i(gl_->glGetUniformLocation(image_program_, "image"), 0);
+    vertices(quad, 4, 4);
+    gl_->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
 void Tiles::draw_pause(const QRectF &rect) {
     const float half = rect.height() * .1f;
     const float cx = rect.center().x(), cy = rect.center().y();
@@ -444,8 +489,17 @@ void Tiles::draw_recorded(const std::string &channel, const std::string &session
     if (!chosen || at - chosen->time_ms >= chosen->valid_ms)
         return;
     OverlayFrame overlay{1, 1, {}, {}};
-    for (const auto &o : chosen->objects)
+    for (const auto &o : chosen->objects) {
+        if (!focus_run_.empty() &&
+            (chosen->run != focus_run_ || chosen->session != focus_session_ ||
+             o.person != focus_person_))
+            continue;
         overlay.objects.push_back({o.box, "", o.person, {}});
+    }
+    if (!focus_run_.empty() && !overlay.objects.empty()) {
+        focus_box_ = overlay.objects.front().box;
+        focus_seen_ = true;
+    }
     displayed_analysis_objects_ = overlay.objects.size();
     draw_detection_overlay(overlay, rect);
 }
@@ -620,10 +674,26 @@ void Tiles::paintGL() {
                           (s.channel.empty() || s.preview[image].generation != s.generation)))
             continue;
         auto &p = s.preview[image];
-        const float cellw = 2.f / side, cellh = 2.f / side;
+        if (playback_ && zoom_view && p.original_width && p.original_height) {
+            // Decode at a resolution where the zoomed crop is not upscaled. Coarse steps
+            // avoid rebuilding the scaler while the crop eases between frames.
+            double needed = 1;
+            if (zoom_valid_) {
+                const double dpr = devicePixelRatio();
+                needed = std::max(width() * dpr / (zoom_crop_.width() * p.original_width),
+                                  height() * (1 - zoom_split) * dpr /
+                                      (zoom_crop_.height() * p.original_height));
+            }
+            const double factor = needed <= .5 ? .5 : needed <= .75 ? .75 : 1.;
+            s.target_width = std::max(s.target_width, unsigned(p.original_width * factor));
+            s.target_height = std::max(s.target_height, unsigned(p.original_height * factor));
+        }
+        // The search player keeps the lower part of the window for the zoomed view.
+        const float region = playback_ && zoom_view ? zoom_split : 1.f;
+        const float cellw = 2.f / side, cellh = 2.f * region / side;
         const float aspect = float(p.width) / p.height, available = float(width()) / height();
         float w = cellw, h = cellh;
-        if (aspect > available)
+        if (aspect > available / region)
             h = w * available / aspect;
         else
             w = h * aspect / available;
@@ -678,24 +748,41 @@ void Tiles::paintGL() {
                 overlay = held_overlay_[index];
             else
                 held_overlay_[index] = overlay;
-            if (overlay.width && overlay.height)
+            // Detection boxes would hide what is being selected for image search.
+            if (overlay.width && overlay.height && !dragging_)
                 draw_detection_overlay(overlay,
                                        QRectF((x + 1) * width() / 2, (1 - y) * height() / 2,
                                               w * width() / 2, h * height() / 2));
         }
-        if (playback_)
+        if (playback_ && !dragging_)
             draw_recorded(p.recording_channel, p.recording_session, p.wall_time_ms,
                           p.recording_start_ms, p.recording_end_ms, video_rect_);
+        if (playback_ && zoom_view)
+            draw_zoom(textures_[index][image].texture, u, v, aspect);
         if (dragging_) {
             auto rect =
                 QRectF(selection_start_, selection_end_).normalized().intersected(video_rect_);
-            float a = 2 * rect.left() / width() - 1, b = 1 - 2 * rect.top() / height(),
-                  c = 2 * rect.right() / width() - 1, d = 1 - 2 * rect.bottom() / height();
-            float points[] = {a, b, c, b, c, d, a, d};
+            // Translucent fill with a thick border, both in logical pixels.
+            auto fill = [&](const QRectF &r) {
+                float a = 2 * r.left() / width() - 1, b = 1 - 2 * r.top() / height(),
+                      c = 2 * r.right() / width() - 1, d = 1 - 2 * r.bottom() / height();
+                float points[] = {a, b, c, b, a, d, c, d};
+                vertices(points, 4, 2);
+                gl_->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+            };
+            const auto pen = gl_->glGetUniformLocation(box_program_, "pen");
+            const double t = 3;
             gl_->glUseProgram(box_program_);
-            gl_->glUniform4f(gl_->glGetUniformLocation(box_program_, "pen"), 1, .8f, 0, 1);
-            vertices(points, 4, 2);
-            gl_->glDrawArrays(GL_LINE_LOOP, 0, 4);
+            gl_->glEnable(GL_BLEND);
+            gl_->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            gl_->glUniform4f(pen, 1, .8f, 0, .25f);
+            fill(rect);
+            gl_->glUniform4f(pen, 1, .8f, 0, 1);
+            fill({rect.left() - t / 2, rect.top() - t / 2, rect.width() + t, t});
+            fill({rect.left() - t / 2, rect.bottom() - t / 2, rect.width() + t, t});
+            fill({rect.left() - t / 2, rect.top() + t / 2, t, rect.height() - t});
+            fill({rect.right() - t / 2, rect.top() + t / 2, t, rect.height() - t});
+            gl_->glDisable(GL_BLEND);
         }
         if (playback_ && p.wall_time_ms) {
             draw_text_overlay(
@@ -884,6 +971,11 @@ void Tiles::mouseReleaseEvent(QMouseEvent *e) {
     if (!dragging_) {
         frozen_ = false;
         const auto index = picked(e->position());
+        if (immediate_click) {
+            if (activated)
+                activated(index, false);
+            return;
+        }
         click_timer_->disconnect();
         connect(click_timer_, &QTimer::timeout, this, [this, index] {
             if (activated)

@@ -78,6 +78,25 @@ std::vector<SearchGroup> group_search_results(std::vector<SearchObservation> hit
         groups.resize(50);
     return groups;
 }
+bool prune_search_group(SearchGroup &g,
+                        const std::function<bool(const std::string &)> &present) {
+    const auto before = g.images.size();
+    g.images.erase(std::remove_if(g.images.begin(), g.images.end(),
+                                  [&](const auto &o) { return !present(o.recording); }),
+                   g.images.end());
+    if (g.images.size() == before)
+        return false;
+    if (!g.images.empty()) {
+        g.from_ms = g.to_ms = g.images.front().time_ms;
+        g.similarity = 0;
+        for (const auto &o : g.images) {
+            g.from_ms = std::min(g.from_ms, o.time_ms);
+            g.to_ms = std::max(g.to_ms, o.time_ms);
+            g.similarity = std::max(g.similarity, o.similarity);
+        }
+    }
+    return true;
+}
 struct SearchCropper::Impl {
     VaSession va;
     VASurfaceID converted{VA_INVALID_SURFACE};

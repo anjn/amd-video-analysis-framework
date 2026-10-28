@@ -46,6 +46,18 @@ class Tiles final : public QOpenGLWindow {
     std::string camera_name;
     std::function<void()> selection_cancelled;
     size_t displayed_analysis_objects() const { return displayed_analysis_objects_; }
+    // Search player options: recorded boxes of one person only (empty run shows every box),
+    // no tracking labels, and a zoomed view of that person below the video.
+    void focus(std::string run, std::string session, uint64_t person) {
+        focus_run_ = std::move(run);
+        focus_session_ = std::move(session);
+        focus_person_ = person;
+        focus_seen_ = zoom_valid_ = false;
+        update();
+    }
+    bool object_labels{true}, zoom_view{}, immediate_click{};
+    // Share of the window height used by the video when zoom_view is set.
+    static constexpr float zoom_split = .56f;
 
     bool selection_busy() const { return extracting_.valid(); }
     QRectF displayed_video_rect() const { return video_rect_; }
@@ -95,6 +107,12 @@ class Tiles final : public QOpenGLWindow {
     AnalysisCache analysis_cache_;
     std::future<AnalysisCache> analysis_query_;
     size_t displayed_analysis_objects_{};
+    std::string focus_run_, focus_session_;
+    uint64_t focus_person_{};
+    bool focus_seen_{}, zoom_valid_{};
+    Detection focus_box_{};
+    QRectF zoom_crop_;
+    void draw_zoom(GLuint texture, float u, float v, float source_aspect);
     std::array<OverlayFrame, 16> held_overlay_;
 
     QPointF selection_start_, selection_end_;

@@ -23,6 +23,7 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QSaveFile>
+#include <QShortcut>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QStackedWidget>
@@ -295,6 +296,14 @@ struct Window::Vms {
         load_ui();
         w.setWindowTitle("AMD Video Management System");
         w.resize(1500, 950);
+        auto *fullscreen = new QShortcut(QKeySequence(Qt::Key_F11), &w);
+        fullscreen->setContext(Qt::ApplicationShortcut);
+        QObject::connect(fullscreen, &QShortcut::activated, &w, [this] {
+            if (w.isFullScreen())
+                w.showNormal();
+            else
+                w.showFullScreen();
+        });
         auto *root = new QWidget;
         auto *outer = new QVBoxLayout(root);
         w.setCentralWidget(root);
@@ -358,6 +367,8 @@ struct Window::Vms {
         split->setStretchFactor(1, 1);
         live_layout->addWidget(split, 1);
         tabs->addTab(live_page, "Live");
+        search_page = new SearchPage(w.controller_);
+        tabs->addTab(search_page, "Search");
         timeline_panel = new QWidget;
         auto *rl = new QVBoxLayout(timeline_panel);
         timeline_panel->setMinimumWidth(165);
@@ -517,8 +528,6 @@ struct Window::Vms {
         w.summary_->setWordWrap(true);
         ml->addWidget(w.summary_);
         tabs->addTab(manage, "Cameras");
-        search_page = new SearchPage(w.controller_);
-        tabs->addTab(search_page, "Search");
         tabs->addTab(
             new AiPage(
                 w.controller_, w.options_,

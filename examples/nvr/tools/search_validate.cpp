@@ -2,8 +2,7 @@
 #include "search_page.hpp"
 #include "window.hpp"
 #include <QApplication>
-#include <QCheckBox>
-#include <QComboBox>
+#include <QAbstractButton>
 #include <QFile>
 #include <QKeyEvent>
 #include <QLineEdit>
@@ -14,6 +13,7 @@
 #include <QTimer>
 #include <dlfcn.h>
 #include <iostream>
+#include <map>
 using namespace amdva::nvr;
 int main(int argc, char **argv) {
     if (argc != 2 && (argc != 3 || std::string(argv[2]) != "--exercise-deletion")) {
@@ -37,6 +37,7 @@ int main(int argc, char **argv) {
         if (!service)
             throw std::runtime_error("Search disabled");
         auto *tabs = window.findChild<QTabWidget *>("vms-tabs");
+        const int search_tab = tabs->indexOf(window.findChild<QWidget *>("search-page"));
         auto *input = window.findChild<QLineEdit *>("search-text");
 
         auto audit = reinterpret_cast<void (*)()>(dlsym(RTLD_DEFAULT, "amdva_audit_start"));
@@ -45,7 +46,28 @@ int main(int argc, char **argv) {
         auto errors =
             reinterpret_cast<unsigned long long (*)()>(dlsym(RTLD_DEFAULT, "amdva_audit_errors"));
         QTimer timer;
-        int tick = 0, stage = 0;
+        int tick = 0, stage = 0, region_tick = 0, strip_tick = 0;
+        int64_t loop_peak = 0;
+        int unrelated_tick = 0, unrelated_cards = 0;
+        QPointF drag_end;
+        auto capture_live = [&](const char *name) {
+            if (qEnvironmentVariableIsSet("AMDVA_VALIDATE_CAPTURE"))
+                window.live_view()->grabFramebuffer().save(QString::fromStdString(
+                    (std::filesystem::path(argv[1]).parent_path() / name).string()));
+        };
+        auto click_video = [&] {
+            auto *video = window.windowHandle()->findChild<QWindow *>("search-video-renderer");
+            if (!video)
+                throw std::runtime_error("Missing search video renderer");
+            const QPointF at(video->width() / 2., video->height() / 4.);
+            QMouseEvent press(QEvent::MouseButtonPress, at, at, Qt::LeftButton, Qt::LeftButton,
+                              Qt::NoModifier);
+            QMouseEvent release(QEvent::MouseButtonRelease, at, at, Qt::LeftButton,
+                                Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(video, &press);
+            QApplication::sendEvent(video, &release);
+        };
+        bool region_logged = false;
         uint64_t request = 0;
         int64_t last = 0, observation_id = 0;
         int deletion_start = 0;
@@ -73,13 +95,13 @@ int main(int argc, char **argv) {
                         window.live_view()->grabFramebuffer().save(QString::fromStdString(
                             (std::filesystem::path(argv[1]).parent_path() / "person-overlay.png")
                                 .string()));
-                    tabs->setCurrentIndex(2);
-                    auto *mode = window.findChild<QComboBox *>("search-mode");
+                    tabs->setCurrentIndex(search_tab);
+                    auto *mode = window.findChild<QPushButton *>("search-mode-person");
                     if (!mode)
                         throw std::runtime_error("Missing search modes");
-                    mode->setCurrentIndex(2);
-                    window.findChild<QCheckBox *>("search-person-lower-2")->click();
-                    window.findChild<QCheckBox *>("search-person-lower-color-10")->click();
+                    mode->click();
+                    window.findChild<QAbstractButton *>("search-person-lower-3")->click();
+                    window.findChild<QAbstractButton *>("search-person-lower-color-10")->click();
                     stage = 9;
                 } else if (stage == 9) {
                     auto r = service->result();
@@ -93,7 +115,7 @@ int main(int argc, char **argv) {
                             (std::filesystem::path(argv[1]).parent_path() / "person-search.png")
                                 .string()));
                         input->setText("a person wearing a purple skirt");
-                        window.findChild<QComboBox *>("search-mode")->setCurrentIndex(1);
+                        window.findChild<QPushButton *>("search-mode-text")->click();
                         // Exercise debounce rather than mode-switch submission.
                         input->setText("a person wearing a purple skirt outdoors");
                         stage = 1;
@@ -137,16 +159,79 @@ int main(int argc, char **argv) {
                                   << " best=" << r.groups.front().similarity << std::endl;
                         request = r.request;
                         last = r.groups.front().from_ms;
-                        stage = 3;
+                        unrelated_tick = tick;
+                        stage = 16;
                     }
+                } else if (stage == 16 || stage == 17) {
+                    // Retention deletes old recordings all the time; the shown results must
+                    // only lose the cards whose images were all in the deleted recording.
+                    const auto text = window.findChild<QLabel *>("search-status")->text();
+                    int cards = 0;
+                    for (auto *b : window.findChildren<QAbstractButton *>())
+                        cards += b->objectName().startsWith("search-result-");
+                    if (stage == 16 && cards) {
+                        const auto groups = service->result().groups;
+                        std::map<std::string, size_t> used;
+                        for (const auto &g : groups)
+                            for (const auto &im : g.images)
+                                used[im.recording]++;
+                        // Prefer a recording outside the results, else the least used one.
+                        std::string victim;
+                        size_t fewest = SIZE_MAX;
+                        for (const auto &rec : controller.recordings())
+                            if (rec.state == "finalized" && used[rec.name] < fewest) {
+                                victim = rec.name;
+                                fewest = used[rec.name];
+                            }
+                        if (victim.empty())
+                            throw std::runtime_error("No finalized recording to delete");
+                        unrelated_cards = 0;
+                        for (const auto &g : groups)
+                            unrelated_cards += std::any_of(
+                                g.images.begin(), g.images.end(),
+                                [&](const auto &im) { return im.recording != victim; });
+                        if (!unrelated_cards)
+                            throw std::runtime_error("Every result is in one recording");
+                        DeletionJob job;
+                        job.pending.push_back(victim);
+                        job.total = 1;
+                        controller.recording_catalog().delete_batch(job);
+                        if (job.deleted != 1)
+                            throw std::runtime_error("Could not delete " + victim);
+                        std::cout << "Deleted " << victim << " used by " << fewest
+                                  << " result images; " << cards << " cards" << std::endl;
+                        unrelated_tick = tick;
+                        stage = 17;
+                    } else if (stage == 17 && tick > unrelated_tick + 8) {
+                        if (cards != unrelated_cards ||
+                            !text.startsWith(QString::number(cards) + " "))
+                            throw std::runtime_error("Deletion changed results: " +
+                                                     text.toStdString() + " cards=" +
+                                                     std::to_string(cards));
+                        std::cout << "PASS: retention-style deletion kept " << cards << " results"
+                                  << std::endl;
+                        stage = 3;
+                    } else if (tick > unrelated_tick + 50)
+                        throw std::runtime_error("Results did not appear");
                 } else if (stage == 3) {
-                    auto *card = window.findChild<QWidget *>("search-result-0");
-                    if (card) {
-                        auto buttons = card->findChildren<QPushButton *>();
-                        if (!buttons.empty()) {
-                            buttons.front()->click();
-                            stage = 4;
+                    // Prefer a result with several images so the strip can be exercised.
+                    // Cards removed by the deletion above keep their result index.
+                    const auto groups = service->result().groups;
+                    QAbstractButton *card = nullptr;
+                    for (size_t i = 0; i < groups.size(); ++i)
+                        if (auto *c = window.findChild<QAbstractButton *>(
+                                QString("search-result-%1").arg(i))) {
+                            if (!card || groups[i].images.size() >= 2)
+                                card = c;
+                            if (groups[i].images.size() >= 2)
+                                break;
                         }
+                    if (card) {
+                        card->click();
+                        if (!card->isChecked() ||
+                            !window.findChild<QWidget *>("search-player")->isVisible())
+                            throw std::runtime_error("Selecting a result did not open the player");
+                        stage = 4;
                     }
                 } else if (stage == 4) {
                     auto *page =
@@ -164,13 +249,74 @@ int main(int argc, char **argv) {
                     }
                     if (page && page->playback_status().frames > 3 && page->presented() > 3) {
                         std::cout << "Card frames=" << page->playback_status().frames << std::endl;
-                        tabs->setCurrentIndex(0);
-                        window.live_view()->activated(0, true);
-                        auto *timeline = dynamic_cast<RecordingTimeline *>(
-                            window.findChild<QWidget *>("recording-timeline"));
-                        timeline->seek_requested(last);
-                        stage = 5;
+                        // A second strip image replays from its own tracklet.
+                        if (auto *image = window.findChild<QAbstractButton *>("search-strip-1")) {
+                            image->click();
+                            if (!image->isChecked())
+                                throw std::runtime_error("Strip image was not selected");
+                            strip_tick = tick;
+                            stage = 10;
+                            return;
+                        }
+                        stage = 11;
                     }
+                } else if (stage == 10) {
+                    auto *page =
+                        dynamic_cast<SearchPage *>(window.findChild<QWidget *>("search-page"));
+                    auto p = page->playback_status();
+                    if (!p.error.empty())
+                        throw std::runtime_error("Strip playback: " + p.error);
+                    // Capture once the person's box is on screen (or give up waiting).
+                    const bool person = page->renderer_status().find(" objects=0 ") ==
+                                        std::string::npos;
+                    if (tick > strip_tick + 5 && p.frames > 3 && page->presented() > 3 &&
+                        (person || tick > strip_tick + 25)) {
+                        std::cout << "PASS: strip image playback frames=" << p.frames << std::endl;
+                        page->grab_video().save(QString::fromStdString(
+                            (std::filesystem::path(argv[1]).parent_path() / "search-video.png")
+                                .string()));
+                        click_video();
+                        strip_tick = tick;
+                        stage = 12;
+                    }
+                } else if (stage == 12 || stage == 13) {
+                    // Clicking the video pauses, and a second click resumes.
+                    auto *page =
+                        dynamic_cast<SearchPage *>(window.findChild<QWidget *>("search-page"));
+                    const auto state = page->playback_status().state;
+                    const bool want_paused = stage == 12;
+                    if ((state == "paused") == want_paused) {
+                        std::cout << "PASS: video click " << (want_paused ? "paused" : "resumed")
+                                  << std::endl;
+                        if (stage == 12)
+                            click_video();
+                        strip_tick = tick;
+                        stage = stage == 12 ? 13 : 14;
+                    } else if (tick > strip_tick + 15) {
+                        throw std::runtime_error("Video click did not toggle playback: " + state);
+                    }
+                } else if (stage == 14) {
+                    // Playback loops over the tracklet instead of stopping at its end.
+                    auto *page =
+                        dynamic_cast<SearchPage *>(window.findChild<QWidget *>("search-page"));
+                    const auto position = page->playback_status().position_ms;
+                    if (position && loop_peak && position + 500 < loop_peak) {
+                        std::cout << "PASS: playback looped from " << loop_peak << " to "
+                                  << position << std::endl;
+                        stage = 11;
+                    } else if (tick > strip_tick + 100) {
+                        throw std::runtime_error("Playback did not loop");
+                    }
+                    loop_peak = std::max(loop_peak, position);
+                } else if (stage == 11) {
+                    window.grab().save(QString::fromStdString(
+                        (std::filesystem::path(argv[1]).parent_path() / "search-ui.png").string()));
+                    tabs->setCurrentIndex(0);
+                    window.live_view()->activated(0, true);
+                    auto *timeline = dynamic_cast<RecordingTimeline *>(
+                        window.findChild<QWidget *>("recording-timeline"));
+                    timeline->seek_requested(last);
+                    stage = 5;
                 } else if (stage == 5 && window.recording_view()->displayed_playback_time() > 0) {
                     auto *v = window.recording_view();
                     auto rect = v->displayed_video_rect();
@@ -193,12 +339,23 @@ int main(int argc, char **argv) {
                     QMouseEvent release(QEvent::MouseButtonRelease, b, b, Qt::LeftButton,
                                         Qt::NoButton, Qt::NoModifier);
                     QApplication::sendEvent(v, &release);
+                    region_tick = tick;
                     stage = 6;
                 } else if (stage == 6) {
-                    if (window.findChild<QComboBox *>("search-mode")->currentIndex() != 0)
+                    // The region crop finishes asynchronously before switching modes.
+                    if (!window.findChild<QPushButton *>("search-mode-image")->isChecked()) {
+                        if (tick < region_tick + 25)
+                            return;
                         throw std::runtime_error("Region search did not select image mode");
+                    }
+                    if (!region_logged) {
+                        std::cout << "Image mode after " << tick - region_tick << " ticks"
+                                  << std::endl;
+                        region_logged = true;
+                    }
                     auto r = service->result();
-                    if (tabs->currentIndex() == 2 && r.request > request && !r.groups.empty()) {
+                    if (tabs->currentIndex() == search_tab && r.request > request &&
+                        !r.groups.empty()) {
                         if (errors && errors())
                             throw std::runtime_error("Copy audit violations");
                         std::cout << "PASS: live collection, English/Japanese search, result "
@@ -240,9 +397,24 @@ int main(int argc, char **argv) {
                                      Qt::NoModifier);
                     QMouseEvent release(QEvent::MouseButtonRelease, b, b, Qt::LeftButton,
                                         Qt::NoButton, Qt::NoModifier);
+                    capture_live("live-before-drag.png");
                     QApplication::sendEvent(v, &press);
                     QApplication::sendEvent(v, &move);
+                    drag_end = b;
+                    // grabFramebuffer() reads the last painted frame, so capture the
+                    // selection on the next tick before releasing.
+                    if (qEnvironmentVariableIsSet("AMDVA_VALIDATE_CAPTURE")) {
+                        stage = 18;
+                        return;
+                    }
                     QApplication::sendEvent(v, &release);
+                    ++live_drag_checks;
+                    stage = 6;
+                } else if (stage == 18) {
+                    capture_live("live-dragging.png");
+                    QMouseEvent release(QEvent::MouseButtonRelease, drag_end, drag_end,
+                                        Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+                    QApplication::sendEvent(window.live_view(), &release);
                     ++live_drag_checks;
                     stage = 6;
                 } else if (stage == 7 && tick > deletion_start + 10) {
@@ -263,8 +435,24 @@ int main(int argc, char **argv) {
                             if (counter)
                                 std::cout << name << "=" << counter() << std::endl;
                         }
-                        app.quit();
+                        deletion_start = tick;
+                        stage = 15;
                     }
+                } else if (stage == 15 && tick > deletion_start + 8) {
+                    // Deletion prunes the shown results instead of clearing them all.
+                    const auto text = window.findChild<QLabel *>("search-status")->text();
+                    int cards = 0;
+                    for (auto *b : window.findChildren<QAbstractButton *>())
+                        cards += b->objectName().startsWith("search-result-");
+                    if (text.contains("Recordings changed") ||
+                        !(cards ? text.startsWith(QString::number(cards) + " ")
+                                : text.contains("deleted")))
+                        throw std::runtime_error("Search results after deletion: " +
+                                                 text.toStdString() + " cards=" +
+                                                 std::to_string(cards));
+                    std::cout << "PASS: deletion pruned results; cards=" << cards << " status="
+                              << text.toStdString() << std::endl;
+                    app.quit();
                 }
             } catch (const std::exception &e) {
                 std::cerr << e.what() << std::endl;

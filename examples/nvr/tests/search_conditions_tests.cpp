@@ -17,6 +17,8 @@ int main(int argc, char **argv) {
     QApplication app(argc, argv);
     try {
         SearchConditions c;
+        require(c.current_mode() == SearchConditions::Person, "Person search is the default");
+        c.set_mode(SearchConditions::Text);
         int calls = 0, invalidations = 0;
         bool clear = false;
         QString last;
@@ -54,12 +56,13 @@ int main(int argc, char **argv) {
         wait(420);
         require(calls == 3 && last == QString::fromUtf8("赤い服"), "IME commit searches");
         c.input->setText("stale");
-        c.mode->setCurrentIndex(SearchConditions::Person);
+        c.set_mode(SearchConditions::Person);
         wait(420);
         require(calls == 3 && clear, "Mode change cancels text debounce and clears results");
+        int before = 0;
         auto check = [&](const char *name) {
-            auto *box = c.findChild<QCheckBox *>(name);
-            require(box, "Missing person checkbox");
+            auto *box = c.findChild<QAbstractButton *>(name);
+            require(box, "Missing person condition");
             box->click();
         };
         check("search-person-upper-color-3");
@@ -70,18 +73,51 @@ int main(int argc, char **argv) {
         check("search-person-upper-0");
         check("search-person-age-1");
         require(last == "A young adult, wearing blue T-shirt.", "Stable combined description");
+        check("search-person-gender-1");
+        require(last == "A young woman, wearing blue T-shirt.", "Gender combines with age");
+        check("search-person-age-3");
+        check("search-person-gender-0");
+        require(last.startsWith("An older man,"), "Article follows the age word");
+        check("search-person-age-any");
+        require(last.startsWith("A man,"), "Gender alone names the subject");
+        before = calls;
         check("search-person-upper-color-4");
-        require(!last.contains("blue") && last.contains("T-shirt"),
-                "Selected checkbox can be unset");
+        require(calls == before + 1 && !last.contains("blue") && last.contains("T-shirt"),
+                "Clicking the selected swatch returns to any");
+        check("search-person-upper-color-4");
+        check("search-person-upper-color-any");
+        require(calls == before + 3 && !last.contains("blue"), "Any unsets a condition");
+        check("search-person-upper-0");
+        require(c.findChild<QAbstractButton *>("search-person-upper-any")->isChecked() &&
+                    !last.contains("T-shirt"),
+                "Clicking the selected radio returns to any");
+        check("search-person-upper-0");
+        check("search-person-age-0");
+        require(last.startsWith("A teenage boy,"), "Teenager combines with gender");
+        check("search-person-gender-any");
+        check("search-person-age-any");
+        check("search-person-build-1");
+        check("search-person-hair-1");
+        check("search-person-hair-length-2");
+        check("search-person-hat-1");
+        check("search-person-bag-0");
+        require(last == "A person, with an average build, with long dark brown hair, wearing "
+                        "T-shirt, wearing a beanie, without a bag.",
+                "Build, hair, hat and bag phrases");
+        require(c.findChild<QAbstractButton *>("search-person-glasses-0")->text() == "none" &&
+                    !c.findChild<QAbstractButton *>("search-person-glasses-2"),
+                "None follows any and sunglasses are removed");
+        for (auto *b : c.findChildren<QAbstractButton *>())
+            require(b->text() != "child", "Child age removed");
         c.findChild<QPushButton *>("search-person-clear")->click();
         require(c.person_text().isEmpty() && clear, "Clear resets all attributes");
-        int before = calls;
-        c.mode->setCurrentIndex(SearchConditions::Image);
+        before = calls;
+        c.findChild<QPushButton *>("search-mode-image")->click();
         require(calls == before && c.empty(), "Empty image mode gives no query");
         c.image = {1, 1, {0, 0, 0}};
         c.changed(true, true);
         require(calls == before + 1, "Region image submits immediately");
-        c.mode->setCurrentIndex(SearchConditions::Text);
+        c.findChild<QPushButton *>("search-mode-text")->click();
         require(last == "stale", "Text conditions survive mode changes");
         c.input->setText("leaving");
         c.debounce.stop();

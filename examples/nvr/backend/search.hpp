@@ -59,6 +59,9 @@ Detection search_crop(Detection box, unsigned width, unsigned height, float marg
 std::pair<unsigned, unsigned> search_dimensions(unsigned width, unsigned height, unsigned limit);
 std::vector<uint8_t> search_letterbox(const SearchImage &, unsigned size);
 std::vector<SearchGroup> group_search_results(std::vector<SearchObservation>);
+// Drops images whose recording is gone and refreshes the group's time span and similarity.
+// Returns whether anything was removed; a group may become empty.
+bool prune_search_group(SearchGroup &, const std::function<bool(const std::string &)> &present);
 // GPU crop/resize with bounded RGB readback; no CPU mapping of source video.
 class SearchCropper {
   public:

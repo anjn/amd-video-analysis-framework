@@ -37,6 +37,9 @@ selects the EGL integration. An AMD hardware OpenGL ES 3 context and DMA-BUF
 import are required. Software rendering is rejected. No CPU image upload fallback
 is provided.
 
+Add `--fullscreen` before the config path to start in full-screen mode, for
+example for demonstrations. F11 switches between full-screen and windowed mode.
+
 Use **Live** to assign cameras to fixed 1/4/9/16-view tiles and double-click a
 tile for single-view focus with a coverage timeline, in-place hover preview,
 recording playback and a Back to Live action. **Cameras** provides add/edit/remove,

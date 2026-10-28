@@ -79,6 +79,25 @@ int main() {
         b.h = 30;
         b = search_crop(b, 100, 20, .1);
         require(b.x == 0 && b.y == 2 && b.w == 23 && b.h == 18, "Clipped margin");
+        {
+            SearchGroup g{"a", "A", 0, 30000, .9, {}};
+            for (int i = 0; i < 4; ++i) {
+                SearchObservation o;
+                o.time_ms = i * 10000;
+                o.similarity = .6 + i * .1;
+                o.recording = i < 2 ? "old.mkv" : "new.mkv";
+                g.images.push_back(o);
+            }
+            auto present = [](const std::string &name) { return name != "old.mkv"; };
+            require(prune_search_group(g, present) && g.images.size() == 2 &&
+                        g.from_ms == 20000 && g.to_ms == 30000 &&
+                        std::abs(g.similarity - .9) < 1e-9,
+                    "Pruning removes deleted recordings and refreshes the span");
+            require(!prune_search_group(g, present), "Unrelated deletions keep results");
+            require(prune_search_group(g, [](const std::string &) { return false; }) &&
+                        g.images.empty(),
+                    "A fully deleted group becomes empty");
+        }
         std::vector<SearchObservation> hits;
         for (int i = 0; i <= 7; ++i) {
             SearchObservation o;
