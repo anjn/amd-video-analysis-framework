@@ -275,7 +275,10 @@ class SearchConditions : public QWidget {
     static QString article(const QString &word) {
         return QString("aeiou").contains(word.front()) ? "an " : "a ";
     }
-    QString person_text() const {
+    // The displayed description includes "without ..." phrases. CLIP-style text encoders
+    // treat negation as the mentioned object, so the query omits them (negations = false)
+    // and subtracts negatives() instead.
+    QString person_text(bool negations = true) const {
         if (std::all_of(attributes.begin(), attributes.end(),
                         [](const auto &a) { return a.group->checkedId() <= 0; }))
             return {};
@@ -307,11 +310,11 @@ class SearchConditions : public QWidget {
         if (!lower.isEmpty() || !lower_color.isEmpty())
             details << "wearing " + (lower_color.isEmpty() ? "" : lower_color + " ") +
                            (lower.isEmpty() ? "lower-body clothing" : lower);
-        if (!glasses.isEmpty())
+        if (!glasses.isEmpty() && (negations || glasses != "none"))
             details << (glasses == "none" ? "without glasses" : "wearing " + glasses);
-        if (!hat.isEmpty())
+        if (!hat.isEmpty() && (negations || hat != "none"))
             details << (hat == "none" ? "without a hat" : "wearing " + article(hat) + hat);
-        if (!bag.isEmpty())
+        if (!bag.isEmpty() && (negations || bag != "none"))
             details << (bag == "none" ? "without a bag" : "carrying a " + bag);
         if (!details.isEmpty())
             text += ", " + details.join(", ");
@@ -319,6 +322,22 @@ class SearchConditions : public QWidget {
     }
     QString text() const {
         return current_mode() == Person ? person_text() : input->text().trimmed();
+    }
+    QString query_text() const {
+        return current_mode() == Person ? person_text(false) : input->text().trimmed();
+    }
+    // Descriptions of what a "none" choice excludes, subtracted from the query embedding.
+    QStringList negatives() const {
+        QStringList out;
+        if (current_mode() != Person || person_text().isEmpty())
+            return out;
+        if (value("glasses") == "none")
+            out << "A person wearing glasses.";
+        if (value("hat") == "none")
+            out << "A person wearing a hat.";
+        if (value("bag") == "none")
+            out << "A person carrying a bag.";
+        return out;
     }
     bool empty() const { return current_mode() == Image ? image.rgb.empty() : text().isEmpty(); }
     void changed(bool clear, bool immediate) {

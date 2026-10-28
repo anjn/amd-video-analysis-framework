@@ -233,8 +233,14 @@ struct SearchPage::Impl {
             return;
         request = conditions->current_mode() == SearchConditions::Image
                       ? service->image(conditions->image)
-                      : service->text(conditions->text().toStdString());
+                      : service->text(conditions->query_text().toStdString(), negatives());
         status->setText("Searching…");
+    }
+    std::vector<std::string> negatives() const {
+        std::vector<std::string> out;
+        for (const auto &text : conditions->negatives())
+            out.push_back(text.toStdString());
+        return out;
     }
     void load_thumbnail(QLabel *label, int64_t id, QSize size) {
         label->setProperty("thumbnail-size", size);

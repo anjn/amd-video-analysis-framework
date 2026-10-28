@@ -98,6 +98,19 @@ int main() {
                         g.images.empty(),
                     "A fully deleted group becomes empty");
         }
+        {
+            std::array<float, 768> person{}, glasses{};
+            person[0] = .8f;
+            person[1] = .6f;
+            glasses[1] = 1;
+            const auto q = compose_text_query(person, {glasses}, .5f);
+            double norm = 0;
+            for (float v : q)
+                norm += double(v) * v;
+            require(std::abs(norm - 1) < 1e-6 && q[1] < .6f * q[0] / .8f,
+                    "Negatives are subtracted and the query stays normalized");
+            require(compose_text_query(person, {}) == person, "No negatives keeps the query");
+        }
         std::vector<SearchObservation> hits;
         for (int i = 0; i <= 7; ++i) {
             SearchObservation o;

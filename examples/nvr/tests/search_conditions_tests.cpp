@@ -107,6 +107,16 @@ int main(int argc, char **argv) {
         require(c.findChild<QAbstractButton *>("search-person-glasses-0")->text() == "none" &&
                     !c.findChild<QAbstractButton *>("search-person-glasses-2"),
                 "None follows any and sunglasses are removed");
+        // "none" stays in the description but becomes a subtracted negative in the query.
+        check("search-person-glasses-0");
+        require(last.contains("without glasses") && !c.query_text().contains("glasses") &&
+                    c.negatives() == QStringList{"A person wearing glasses.",
+                                                 "A person carrying a bag."},
+                "Negated attributes become negatives");
+        check("search-person-glasses-1");
+        require(c.query_text().contains("wearing eyeglasses") &&
+                    c.negatives() == QStringList{"A person carrying a bag."},
+                "Positive attributes stay in the query");
         for (auto *b : c.findChildren<QAbstractButton *>())
             require(b->text() != "child", "Child age removed");
         c.findChild<QPushButton *>("search-person-clear")->click();

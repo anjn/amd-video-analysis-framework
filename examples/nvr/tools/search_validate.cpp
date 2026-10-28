@@ -103,6 +103,8 @@ int main(int argc, char **argv) {
                     mode->click();
                     window.findChild<QAbstractButton *>("search-person-lower-3")->click();
                     window.findChild<QAbstractButton *>("search-person-lower-color-10")->click();
+                    // "none" is searched as a subtracted negative description.
+                    window.findChild<QAbstractButton *>("search-person-hat-0")->click();
                     stage = 9;
                 } else if (stage == 9) {
                     auto r = service->result();

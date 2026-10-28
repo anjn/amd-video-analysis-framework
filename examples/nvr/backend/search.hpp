@@ -62,6 +62,13 @@ std::vector<SearchGroup> group_search_results(std::vector<SearchObservation>);
 // Drops images whose recording is gone and refreshes the group's time span and similarity.
 // Returns whether anything was removed; a group may become empty.
 bool prune_search_group(SearchGroup &, const std::function<bool(const std::string &)> &present);
+// CLIP-style text encoders read "without X" as X. A negated attribute is instead described
+// positively and subtracted: normalize(positive - weight * sum(negatives)). Cosine similarity
+// is linear in the query, so each image scores sim(positive) - weight * sum(sim(negative)).
+inline constexpr float negative_query_weight = .5f;
+std::array<float, 768> compose_text_query(const std::array<float, 768> &positive,
+                                          const std::vector<std::array<float, 768>> &negatives,
+                                          float weight = negative_query_weight);
 // GPU crop/resize with bounded RGB readback; no CPU mapping of source video.
 class SearchCropper {
   public:
@@ -107,7 +114,8 @@ class SearchService {
     SearchService(SearchIndex &, GstVaDisplay *, SearchOptions, std::shared_ptr<AiRuntime> = {});
     ~SearchService();
     void submit(const Frame &, const std::string &channel, const std::vector<Detection> &);
-    uint64_t text(std::string);
+    // Negatives are positive descriptions of excluded attributes; see compose_text_query.
+    uint64_t text(std::string, std::vector<std::string> negatives = {});
     uint64_t image(SearchImage);
     void cancel();
     SearchResult result() const;

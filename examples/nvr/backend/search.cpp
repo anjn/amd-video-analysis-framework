@@ -97,6 +97,23 @@ bool prune_search_group(SearchGroup &g,
     }
     return true;
 }
+std::array<float, 768> compose_text_query(const std::array<float, 768> &positive,
+                                          const std::vector<std::array<float, 768>> &negatives,
+                                          float weight) {
+    auto out = positive;
+    for (const auto &negative : negatives)
+        for (size_t i = 0; i < out.size(); ++i)
+            out[i] -= weight * negative[i];
+    double norm = 0;
+    for (float v : out)
+        norm += double(v) * v;
+    if (norm <= 0)
+        throw std::invalid_argument("Negative query cancels the positive query");
+    const float scale = float(1 / std::sqrt(norm));
+    for (auto &v : out)
+        v *= scale;
+    return out;
+}
 struct SearchCropper::Impl {
     VaSession va;
     VASurfaceID converted{VA_INVALID_SURFACE};
@@ -446,7 +463,16 @@ struct SearchService::Impl {
         uint64_t id{};
         std::string text;
         SearchImage image;
+        std::vector<std::string> negatives;
     };
+    template <class Encode>
+    static std::array<float, 768> text_query(const Request &r, Encode encode) {
+        std::vector<std::array<float, 768>> negatives;
+        for (const auto &text : r.negatives)
+            negatives.push_back(encode(text));
+        const auto positive = encode(r.text);
+        return negatives.empty() ? positive : compose_text_query(positive, negatives);
+    }
     Request query;
     uint64_t serial{};
     SearchResult result;
@@ -721,7 +747,9 @@ struct SearchService::Impl {
                     std::array<float, 768> gpu{}, npu{};
                     if (request.image.rgb.empty()) {
                         // CPU text encoder does not consume the GPU gate.
-                        gpu = model.mobileclip->text(request.text);
+                        gpu = text_query(request, [&](const std::string &text) {
+                            return model.mobileclip->text(text);
+                        });
                         npu = gpu;
                     } else {
                         const std::vector<SearchImage> input{request.image};
@@ -974,16 +1002,24 @@ struct SearchService::Impl {
                         {
                             auto lease = runtime->acquire(AiRuntime::Query);
                             auto t = Clock::now();
-                            if (model.combined) {
-                                auto queries = model.combined_query(
-                                    request.image.rgb.empty() ? nullptr : &request.image,
-                                    request.text);
+                            if (model.combined && request.image.rgb.empty()) {
+                                // Text is the same CPU encoder for both image backends.
+                                embedding = npu_embedding =
+                                    text_query(request, [&](const std::string &text) {
+                                        return model.combined_query(nullptr, text).first;
+                                    });
+                            } else if (model.combined) {
+                                auto queries = model.combined_query(&request.image, {});
                                 embedding = queries.first;
                                 npu_embedding = queries.second;
                             } else
                                 embedding =
                                     request.image.rgb.empty()
-                                        ? model.encode(nullptr, request.text, options.image_size)
+                                        ? text_query(request,
+                                                     [&](const std::string &text) {
+                                                         return model.encode(nullptr, text,
+                                                                             options.image_size);
+                                                     })
                                         : model.encode_batch({request.image}, options).front();
                             runtime->record(
                                 request.image.rgb.empty() ? "Text query" : "Image query", "",
@@ -1093,7 +1129,7 @@ void SearchService::submit(const Frame &f, const std::string &channel,
     p.cv.notify_all();
 }
 
-uint64_t SearchService::text(std::string text) {
+uint64_t SearchService::text(std::string text, std::vector<std::string> negatives) {
     auto &p = *impl_;
     std::lock_guard<std::mutex> l(p.mutex);
     auto id = ++p.serial;
@@ -1103,7 +1139,7 @@ uint64_t SearchService::text(std::string text) {
             id, p.status.error.empty() ? "Search unavailable or empty query" : p.status.error, {}};
         return id;
     }
-    p.query = {id, std::move(text), {}};
+    p.query = {id, std::move(text), {}, std::move(negatives)};
     p.cv.notify_one();
     return id;
 }
