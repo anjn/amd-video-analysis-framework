@@ -92,6 +92,42 @@ build/examples/nvr/amdva-streams artifacts/nvr/nvr-local.json 20
 
 人物検索には、EmbeddingGemma 2 または MobileCLIP2 のネイティブランタイムが別途必要です。検索結果を同じ人物ごとのカードにまとめるには、さらに ReID モデル（OSNet）を用意します。準備の手順と設定項目は [人物検索](../dev/nvr/nvr-search.ja.md) を参照してください。
 
+## 仕組み
+
+NVR デモは、このフレームワークの部品、GStreamer の標準の要素、NVR デモ独自の実装を組み合わせて作っています。次の図は、カメラの映像がどう処理され、それぞれの処理がどのハードウェアで動くかを示します。各ハードウェアについては [仕組み](concepts.ja.md) の「Ryzen AI APU のハードウェア」を参照してください。人物検索の埋め込み（Embedding）は、MobileCLIP2 を NPU で計算する設定（`"embedding_model": "mobileclip2-s2"`、`"mobileclip_backend": "npu"`）の場合を示しています。
+
+[![NVR デモの処理の流れとハードウェア](images/nvr-architecture-ja.svg)](images/nvr-architecture-ja.svg)
+
+図をクリックすると拡大して表示します。箱の色は処理を実行するハードウェア、右上の札は部品の提供元を表します。矢印の色はデータの受け渡し方で、緑は GPU のメモリのままの受け渡し（ゼロコピー）、赤は CPU と GPU または NPU の間のコピー、灰色は CPU のメモリにある圧縮データやメタデータです。
+
+**受信と録画**: 受信した圧縮データを、CPU がそのまま MKV ファイルに書き込みます。映像をデコードしないので負荷が小さく、画面に表示していないカメラも録画を続けます。録画の再エンコードを設定したカメラは、デコードした映像を GPU で縮小し、VCN でエンコードしてから録画します（[再エンコード録画](../dev/nvr/vms.ja.md)）。
+
+**ライブ表示と物体検出**: VCN でデコードした映像は、GPU のメモリから出ないまま、VPE で縮小と色の変換をされ、画面の表示（OpenGL ES）と物体検出（HIP、MIGraphX）に使われます。CPU に戻るのは検出結果（1 フレームあたり 8 KB）だけで、それを使って ID を割り当て、検出枠を描きます。
+
+**人物追跡と検索**: 人物の特徴量（ReID）の前処理、検索用画像の保存、NPU への受け渡しは CPU で行うため、ここで初めて映像を CPU にコピーします。コピーするのは、GPU で人物の部分だけを切り出して縮小した小さな画像（最大 384×384）で、フレーム全体はコピーしません。ReID のモデルは GPU で、埋め込みのモデルは別のプロセスから NPU で動かします。検索の文章の埋め込みとベクトル検索は CPU で行います。
+
+**再生**: 録画ファイルを CPU が読み込み、そこから先はライブ表示と同じく、VCN、VPE、GPU の間をゼロコピーで受け渡します。
+
+| 処理 | ハードウェア | データの受け渡し | 提供元 |
+| --- | --- | --- | --- |
+| RTSP の受信 | CPU | 圧縮データ（CPU のメモリ） | GStreamer の `rtspsrc` と、フレームワークの `RtspIngest` |
+| 録画 | CPU | 圧縮データのまま書き込み | GStreamer の `splitmuxsink` と、フレームワークの `SegmentRecorder`、`Catalog` |
+| デコード | VCN | 映像を GPU のメモリ（NV12）に出力 | GStreamer の `vah264dec`、`vah265dec` |
+| 表示用の縮小と色の変換 | VPE | ゼロコピー | フレームワーク |
+| 画面の表示、検出枠と文字の描画 | GPU（OpenGL ES） | ゼロコピー | NVR デモ |
+| 推論の入力への縮小 | VPE | ゼロコピー | フレームワーク |
+| 正規化、推論（YOLO）、検出枠の絞り込み | GPU（HIP、MIGraphX） | ゼロコピー。検出結果だけ CPU に読み戻し（8 KB） | フレームワーク |
+| ID の割り当て | CPU | メタデータだけ | フレームワーク（`gvatrack`） |
+| 人物の切り出し | VPE、GPU（HIP） | 切り出した画像だけ CPU にコピー（最大 384×384） | NVR デモ |
+| ReID | CPU、GPU（MIGraphX） | 入力を GPU に、特徴量（1 人 2 KB）を CPU にコピー | NVR デモ |
+| 人物の対応付け、解析結果の保存 | CPU | — | NVR デモ、フレームワークの `Catalog` |
+| 埋め込み（MobileCLIP2） | CPU（前処理）、NPU | 画像を別プロセスに渡し、入力を NPU にコピー | NVR デモ、ONNX Runtime と Ryzen AI ソフトウェア |
+| 検索用画像の保存、ベクトル検索、文章の埋め込み | CPU | — | NVR デモ、SQLite と sqlite-vec |
+| 再エンコード | GPU（縮小）、VCN | ゼロコピー。圧縮データだけ CPU へ | フレームワークの `Transcoder` と `amdencode`、GStreamer の `vapostproc` |
+| 再生、タイムラインのプレビュー | CPU（読み込み）、VCN、VPE、GPU | 読み込み以降はゼロコピー | フレームワークの `PlaybackSession`、GStreamer の `matroskademux` |
+
+提供元の「フレームワーク」は、このリポジトリの GStreamer プラグインと SDK ライブラリ（[SDK でアプリケーションに組み込む](sdk.ja.md)）、「NVR デモ」は `examples/nvr` の実装です。推論は MIGraphX、NPU での推論は ONNX Runtime と Ryzen AI ソフトウェアを使います。埋め込みに既定の EmbeddingGemma 2 を使う場合や、MobileCLIP2 を GPU で動かす場合は、埋め込みも GPU で計算します。処理の詳しい構成は [NVR の開発者向け情報](../dev/nvr/README.ja.md) を参照してください。
+
 ## さらに詳しく
 
 - 設定項目、処理の構成、検証結果: [NVR の開発者向け情報](../dev/nvr/README.ja.md)

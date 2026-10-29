@@ -1,7 +1,27 @@
-<!-- source: docs/guide/concepts.ja.md b034c635696d38d7154e7a182342cd1277d1245b -->
+<!-- source: docs/guide/concepts.ja.md 3115d739d30e0aab76fe4a92e8fc12db1e0a7e82 -->
 # Concepts
 
-This framework keeps decoded video in GPU memory all the way through processing. The CPU handles only compressed video data and small metadata such as detection results; it never copies or converts pixels. This page describes the data flow, the roles of the elements, models, metadata and the library structure.
+This framework keeps decoded video in GPU memory all the way through processing. In the framework's elements, the CPU handles only compressed video data and small metadata such as detection results; it never copies or converts pixels. Applications may add copies for their own processing; for example, person search in the [NVR demo](nvr-demo.md) reads cropped person images back to the CPU. This page describes the target hardware, the data flow, the roles of the elements, models, metadata and the library structure.
+
+## Ryzen AI APU hardware
+
+This framework targets AMD Ryzen AI APUs. An APU is a processor that combines several kinds of compute units on one chip. The Ryzen AI 9 HX 370 used for validation has the following five.
+
+| Unit | On the validation machine | Good at | Used in this framework for |
+| --- | --- | --- | --- |
+| CPU | Zen 5 and Zen 5c, 12 cores, 24 threads | General-purpose processing | Network reception, writing recordings, metadata processing, application control |
+| GPU | Radeon 890M (gfx1150) | Massively parallel computation and rendering | Pre- and postprocessing with HIP, inference with MIGraphX, display with OpenGL ES |
+| NPU | XDNA 2 | Neural network inference at low power | Embedding computation for person search in the NVR demo, through the Vitis AI execution provider of ONNX Runtime |
+| VCN | VCN 4.0.5 | Video encoding and decoding | H.264/H.265/AV1 decoding and encoding, through VA-API |
+| VPE | VPE 6.1.0 | Video scaling, color space conversion and cropping | Conversion to the inference input size, scaling and color conversion for display, through VA-API video processing |
+
+VCN (Video Core Next) and VPE (Video Processing Engine) are dedicated video circuits. VPE converts the NV12 video that the decoder outputs into the BGRA format used for inference and display, scaling it to the required size at the same time. GPU shaders can do the same work, but leaving it to VPE keeps the GPU free for inference and rendering. The framework checks at startup that VPE actually ran (see the check in [Installation](install.md)) and never falls back to GPU shaders or the CPU when VPE cannot do the work.
+
+### Shared memory and zero-copy
+
+In an APU, all compute units share the same main memory (DRAM). Using a mechanism called DMA-BUF, a decoded video buffer can be handed between VCN, VPE and the GPU (HIP, OpenGL ES) as the same memory. Handing data over without duplicating it in this way is called "zero-copy".
+
+Duplicating (copying) data between compute units, on the other hand, uses memory bandwidth and time even though it stays within the same DRAM. One 2560×1440 frame is about 5.5 MB (NV12), so copying sixteen 30 fps cameras would move 2.6 GB per second. Avoiding these copies is key to performance with many cameras.
 
 ## Data flow
 

@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 940" font-family="'Noto Sans CJK JP','Noto Sans JP','Hiragino Sans','Yu Gothic',sans-serif" font-size="13" role="img" aria-labelledby="t">
+  <title id="t">NVR デモの処理の流れとハードウェア</title>
+  <defs>
+    <marker id="z" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#188038"/></marker>
+    <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#d93025"/></marker>
+    <marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#80868b"/></marker>
+  </defs>
+  <rect width="980" height="940" fill="#ffffff"/>
+  <text x="20" y="30" font-size="18" font-weight="bold" fill="#202124">NVR デモの処理の流れとハードウェア</text>
+  <text x="20" y="64" font-size="12" font-weight="bold" fill="#5f6368">録画</text>
+  <line x1="20" y1="166" x2="960" y2="166" stroke="#e8eaed" stroke-width="1"/>
+  <text x="20" y="186" font-size="12" font-weight="bold" fill="#5f6368">ライブ表示</text>
+  <line x1="20" y1="286" x2="960" y2="286" stroke="#e8eaed" stroke-width="1"/>
+  <text x="20" y="306" font-size="12" font-weight="bold" fill="#5f6368">物体検出</text>
+  <line x1="20" y1="422" x2="960" y2="422" stroke="#e8eaed" stroke-width="1"/>
+  <text x="20" y="442" font-size="12" font-weight="bold" fill="#5f6368">人物追跡</text>
+  <line x1="20" y1="530" x2="960" y2="530" stroke="#e8eaed" stroke-width="1"/>
+  <text x="20" y="550" font-size="12" font-weight="bold" fill="#5f6368">検索（Embedding）</text>
+  <line x1="20" y1="660" x2="960" y2="660" stroke="#e8eaed" stroke-width="1"/>
+  <text x="20" y="680" font-size="12" font-weight="bold" fill="#5f6368">再生</text>
+  <path d="M250,196 L250,50 L730,50 L730,74" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <text x="490" y="45" text-anchor="middle" font-size="11" fill="#3c4043">受信したまま録画（再エンコードしない場合）</text>
+  <path d="M410,196 L410,132" fill="none" stroke="#188038" stroke-width="4" stroke-linejoin="round" marker-end="url(#z)"/>
+  <text x="416" y="166" text-anchor="start" font-size="11" fill="#3c4043">再エンコード時</text>
+  <path d="M480,103 L500,103" fill="none" stroke="#188038" stroke-width="4" stroke-linejoin="round" marker-end="url(#z)"/>
+  <path d="M640,103 L660,103" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <path d="M800,103 L820,103" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <path d="M160,225 L180,225" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <path d="M320,225 L340,225" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <path d="M480,225 L500,225" fill="none" stroke="#188038" stroke-width="4" stroke-linejoin="round" marker-end="url(#z)"/>
+  <path d="M640,225 L660,225" fill="none" stroke="#188038" stroke-width="4" stroke-linejoin="round" marker-end="url(#z)"/>
+  <path d="M800,225 L820,225" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <path d="M410,254 L410,316" fill="none" stroke="#188038" stroke-width="4" stroke-linejoin="round" marker-end="url(#z)"/>
+  <path d="M480,345 L500,345" fill="none" stroke="#188038" stroke-width="4" stroke-linejoin="round" marker-end="url(#z)"/>
+  <path d="M640,345 L660,345" fill="none" stroke="#188038" stroke-width="4" stroke-linejoin="round" marker-end="url(#z)"/>
+  <path d="M800,345 L820,345" fill="none" stroke="#d93025" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#c)"/>
+  <text x="810" y="308" text-anchor="middle" font-size="11" fill="#d93025" font-weight="bold">検出結果 8 KB</text>
+  <path d="M890,316 L890,280 L730,280 L730,254" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <text x="810" y="275" text-anchor="middle" font-size="11" fill="#3c4043">検出枠・ID</text>
+  <path d="M352,254 L352,266 L330,266 L330,436 L250,436 L250,452" fill="none" stroke="#188038" stroke-width="4" stroke-linejoin="round" marker-end="url(#z)"/>
+  <path d="M320,481 L340,481" fill="none" stroke="#188038" stroke-width="4" stroke-linejoin="round" marker-end="url(#z)"/>
+  <path d="M890,374 L890,422 L444,422 L444,452" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <text x="687" y="417" text-anchor="middle" font-size="11" fill="#3c4043">人物の枠</text>
+  <path d="M480,481 L500,481" fill="none" stroke="#d93025" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#c)"/>
+  <text x="490" y="526" text-anchor="middle" font-size="11" fill="#d93025" font-weight="bold">切り出し ≤384×384</text>
+  <path d="M640,481 L660,481" fill="none" stroke="#d93025" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#c)"/>
+  <text x="650" y="444" text-anchor="middle" font-size="11" fill="#d93025" font-weight="bold">テンソル</text>
+  <path d="M800,481 L820,481" fill="none" stroke="#d93025" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#c)"/>
+  <text x="810" y="526" text-anchor="middle" font-size="11" fill="#d93025" font-weight="bold">特徴量 2 KB/人</text>
+  <path d="M540,510 L540,560" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <text x="534" y="550" text-anchor="end" font-size="11" fill="#3c4043">プロセス間で受け渡し</text>
+  <path d="M640,589 L660,589" fill="none" stroke="#d93025" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#c)"/>
+  <text x="650" y="634" text-anchor="middle" font-size="11" fill="#d93025" font-weight="bold">テンソル 768 KB</text>
+  <path d="M800,589 L820,589" fill="none" stroke="#d93025" stroke-width="2.5" stroke-linejoin="round" marker-end="url(#c)"/>
+  <text x="810" y="552" text-anchor="middle" font-size="11" fill="#d93025" font-weight="bold">埋め込み 2 KB</text>
+  <path d="M890,510 L890,560" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <text x="896" y="548" text-anchor="start" font-size="11" fill="#3c4043">人物 ID</text>
+  <path d="M924,690 L924,618" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <text x="930" y="670" text-anchor="start" font-size="11" fill="#3c4043">クエリ</text>
+  <path d="M160,719 L180,719" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <path d="M320,719 L340,719" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <path d="M480,719 L500,719" fill="none" stroke="#188038" stroke-width="4" stroke-linejoin="round" marker-end="url(#z)"/>
+  <path d="M640,719 L660,719" fill="none" stroke="#188038" stroke-width="4" stroke-linejoin="round" marker-end="url(#z)"/>
+  <path d="M860,618 L860,656 L760,656 L760,690" fill="none" stroke="#80868b" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#d)"/>
+  <text x="810" y="651" text-anchor="middle" font-size="11" fill="#3c4043">検索結果から再生</text>
+  <rect x="20" y="196" width="140" height="58" rx="8" fill="#ffffff" stroke="#9aa0a6" stroke-width="1.6"/>
+  <text x="90" y="221" text-anchor="middle" font-weight="bold" fill="#202124">RTSP カメラ</text>
+  <text x="90" y="238" text-anchor="middle" font-size="10.5" fill="#3c4043">H.264 / H.265</text>
+  <rect x="180" y="196" width="140" height="58" rx="8" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6"/>
+  <text x="250" y="227" text-anchor="middle" font-weight="bold" fill="#202124">受信</text>
+  <text x="250" y="244" text-anchor="middle" font-size="10.5" fill="#3c4043">rtspsrc / RtspIngest</text>
+  <rect x="222.2" y="200" width="93.8" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="269.1" y="210.5" text-anchor="middle" font-size="9.5" fill="#202124">GStreamer + FW</text>
+  <rect x="340" y="196" width="140" height="58" rx="8" fill="#feefe3" stroke="#c26401" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <text x="410" y="227" text-anchor="middle" font-weight="bold" fill="#202124">デコード</text>
+  <text x="410" y="244" text-anchor="middle" font-size="10.5" fill="#3c4043">vah264dec / vah265dec</text>
+  <rect x="413.2" y="200" width="62.8" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="444.6" y="210.5" text-anchor="middle" font-size="9.5" fill="#202124">GStreamer</text>
+  <rect x="340" y="74" width="140" height="58" rx="8" fill="#e6f4ea" stroke="#188038" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <text x="410" y="105" text-anchor="middle" font-weight="bold" fill="#202124">縮小</text>
+  <text x="410" y="122" text-anchor="middle" font-size="10.5" fill="#3c4043">vapostproc</text>
+  <rect x="413.2" y="78" width="62.8" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="444.6" y="88.5" text-anchor="middle" font-size="9.5" fill="#202124">GStreamer</text>
+  <rect x="500" y="74" width="140" height="58" rx="8" fill="#feefe3" stroke="#c26401" stroke-width="1.6"/>
+  <text x="570" y="105" text-anchor="middle" font-weight="bold" fill="#202124">エンコード</text>
+  <text x="570" y="122" text-anchor="middle" font-size="10.5" fill="#3c4043">amdencode</text>
+  <rect x="616.6" y="78" width="19.4" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="626.3" y="88.5" text-anchor="middle" font-size="9.5" fill="#202124">FW</text>
+  <rect x="660" y="74" width="140" height="58" rx="8" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6"/>
+  <text x="730" y="105" text-anchor="middle" font-weight="bold" fill="#202124">録画</text>
+  <text x="730" y="122" text-anchor="middle" font-size="10.5" fill="#3c4043">SegmentRecorder</text>
+  <rect x="702.2" y="78" width="93.8" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="749.1" y="88.5" text-anchor="middle" font-size="9.5" fill="#202124">GStreamer + FW</text>
+  <rect x="820" y="74" width="140" height="58" rx="8" fill="#ffffff" stroke="#9aa0a6" stroke-width="1.6"/>
+  <text x="890" y="99" text-anchor="middle" font-weight="bold" fill="#202124">録画ファイル</text>
+  <text x="890" y="116" text-anchor="middle" font-size="10.5" fill="#3c4043">MKV・カタログ（SQLite）</text>
+  <rect x="500" y="196" width="140" height="58" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.6"/>
+  <text x="570" y="227" text-anchor="middle" font-weight="bold" fill="#202124">縮小・色変換</text>
+  <text x="570" y="244" text-anchor="middle" font-size="10.5" fill="#3c4043">VA 映像処理 → BGRA</text>
+  <rect x="616.6" y="200" width="19.4" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="626.3" y="210.5" text-anchor="middle" font-size="9.5" fill="#202124">FW</text>
+  <rect x="660" y="196" width="140" height="58" rx="8" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+  <text x="730" y="227" text-anchor="middle" font-weight="bold" fill="#202124">タイル描画</text>
+  <text x="730" y="244" text-anchor="middle" font-size="10.5" fill="#3c4043">OpenGL ES・枠と文字</text>
+  <rect x="770.4" y="200" width="25.6" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="783.2" y="210.5" text-anchor="middle" font-size="9.5" fill="#202124">App</text>
+  <rect x="820" y="196" width="140" height="58" rx="8" fill="#ffffff" stroke="#9aa0a6" stroke-width="1.6"/>
+  <text x="890" y="230" text-anchor="middle" font-weight="bold" fill="#202124">画面</text>
+  <rect x="340" y="316" width="140" height="58" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.6"/>
+  <text x="410" y="347" text-anchor="middle" font-weight="bold" fill="#202124">縮小 640×640</text>
+  <text x="410" y="364" text-anchor="middle" font-size="10.5" fill="#3c4043">VA 映像処理 → BGRA</text>
+  <rect x="456.6" y="320" width="19.4" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="466.3" y="330.5" text-anchor="middle" font-size="9.5" fill="#202124">FW</text>
+  <rect x="500" y="316" width="140" height="58" rx="8" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+  <text x="570" y="347" text-anchor="middle" font-weight="bold" fill="#202124">正規化</text>
+  <text x="570" y="364" text-anchor="middle" font-size="10.5" fill="#3c4043">HIP → テンソル</text>
+  <rect x="616.6" y="320" width="19.4" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="626.3" y="330.5" text-anchor="middle" font-size="9.5" fill="#202124">FW</text>
+  <rect x="660" y="316" width="140" height="58" rx="8" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+  <text x="730" y="347" text-anchor="middle" font-weight="bold" fill="#202124">YOLO 推論</text>
+  <text x="730" y="364" text-anchor="middle" font-size="10.5" fill="#3c4043">MIGraphX・NMS</text>
+  <rect x="776.6" y="320" width="19.4" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="786.3" y="330.5" text-anchor="middle" font-size="9.5" fill="#202124">FW</text>
+  <rect x="820" y="316" width="140" height="58" rx="8" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6"/>
+  <text x="890" y="347" text-anchor="middle" font-weight="bold" fill="#202124">ID 追跡</text>
+  <text x="890" y="364" text-anchor="middle" font-size="10.5" fill="#3c4043">gvatrack</text>
+  <rect x="936.6" y="320" width="19.4" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="946.3" y="330.5" text-anchor="middle" font-size="9.5" fill="#202124">FW</text>
+  <rect x="180" y="452" width="140" height="58" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.6"/>
+  <text x="250" y="483" text-anchor="middle" font-weight="bold" fill="#202124">色変換</text>
+  <text x="250" y="500" text-anchor="middle" font-size="10.5" fill="#3c4043">VA 映像処理 → BGRA</text>
+  <rect x="290.4" y="456" width="25.6" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="303.2" y="466.5" text-anchor="middle" font-size="9.5" fill="#202124">App</text>
+  <rect x="340" y="452" width="140" height="58" rx="8" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+  <text x="410" y="483" text-anchor="middle" font-weight="bold" fill="#202124">人物の切り出し</text>
+  <text x="410" y="500" text-anchor="middle" font-size="10.5" fill="#3c4043">HIP で切り出し・縮小</text>
+  <rect x="450.4" y="456" width="25.6" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="463.2" y="466.5" text-anchor="middle" font-size="9.5" fill="#202124">App</text>
+  <rect x="500" y="452" width="140" height="58" rx="8" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6"/>
+  <text x="570" y="483" text-anchor="middle" font-weight="bold" fill="#202124">ReID 前処理</text>
+  <text x="570" y="500" text-anchor="middle" font-size="10.5" fill="#3c4043">縮小・正規化</text>
+  <rect x="610.4" y="456" width="25.6" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="623.2" y="466.5" text-anchor="middle" font-size="9.5" fill="#202124">App</text>
+  <rect x="660" y="452" width="140" height="58" rx="8" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+  <text x="730" y="483" text-anchor="middle" font-weight="bold" fill="#202124">ReID</text>
+  <text x="730" y="500" text-anchor="middle" font-size="10.5" fill="#3c4043">OSNet（MIGraphX）</text>
+  <rect x="770.4" y="456" width="25.6" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="783.2" y="466.5" text-anchor="middle" font-size="9.5" fill="#202124">App</text>
+  <rect x="820" y="452" width="140" height="58" rx="8" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6"/>
+  <text x="890" y="483" text-anchor="middle" font-weight="bold" fill="#202124">人物の対応付け</text>
+  <text x="890" y="500" text-anchor="middle" font-size="10.5" fill="#3c4043">解析結果を保存</text>
+  <rect x="930.4" y="456" width="25.6" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="943.2" y="466.5" text-anchor="middle" font-size="9.5" fill="#202124">App</text>
+  <rect x="500" y="560" width="140" height="58" rx="8" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6"/>
+  <text x="570" y="591" text-anchor="middle" font-weight="bold" fill="#202124">Embedding 前処理</text>
+  <text x="570" y="608" text-anchor="middle" font-size="10.5" fill="#3c4043">別プロセス・256×256</text>
+  <rect x="610.4" y="564" width="25.6" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="623.2" y="574.5" text-anchor="middle" font-size="9.5" fill="#202124">App</text>
+  <rect x="660" y="560" width="140" height="58" rx="8" fill="#e8f0fe" stroke="#1967d2" stroke-width="1.6"/>
+  <text x="730" y="591" text-anchor="middle" font-weight="bold" fill="#202124">Embedding</text>
+  <text x="730" y="608" text-anchor="middle" font-size="10.5" fill="#3c4043">MobileCLIP2</text>
+  <rect x="770.4" y="564" width="25.6" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="783.2" y="574.5" text-anchor="middle" font-size="9.5" fill="#202124">App</text>
+  <rect x="820" y="560" width="140" height="58" rx="8" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6"/>
+  <text x="890" y="591" text-anchor="middle" font-weight="bold" fill="#202124">検索 DB</text>
+  <text x="890" y="608" text-anchor="middle" font-size="10.5" fill="#3c4043">PNG・SQLite・sqlite-vec</text>
+  <rect x="930.4" y="564" width="25.6" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="943.2" y="574.5" text-anchor="middle" font-size="9.5" fill="#202124">App</text>
+  <rect x="820" y="690" width="140" height="58" rx="8" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6"/>
+  <text x="890" y="721" text-anchor="middle" font-weight="bold" fill="#202124">テキストの埋め込み</text>
+  <text x="890" y="738" text-anchor="middle" font-size="10.5" fill="#3c4043">検索クエリ</text>
+  <rect x="930.4" y="694" width="25.6" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="943.2" y="704.5" text-anchor="middle" font-size="9.5" fill="#202124">App</text>
+  <rect x="20" y="690" width="140" height="58" rx="8" fill="#ffffff" stroke="#9aa0a6" stroke-width="1.6"/>
+  <text x="90" y="715" text-anchor="middle" font-weight="bold" fill="#202124">録画ファイル</text>
+  <text x="90" y="732" text-anchor="middle" font-size="10.5" fill="#3c4043">（上と同じ）</text>
+  <rect x="180" y="690" width="140" height="58" rx="8" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <text x="250" y="721" text-anchor="middle" font-weight="bold" fill="#202124">デマックス</text>
+  <text x="250" y="738" text-anchor="middle" font-size="10.5" fill="#3c4043">matroskademux</text>
+  <rect x="253.2" y="694" width="62.8" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="284.6" y="704.5" text-anchor="middle" font-size="9.5" fill="#202124">GStreamer</text>
+  <rect x="340" y="690" width="140" height="58" rx="8" fill="#feefe3" stroke="#c26401" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <text x="410" y="721" text-anchor="middle" font-weight="bold" fill="#202124">デコード</text>
+  <text x="410" y="738" text-anchor="middle" font-size="10.5" fill="#3c4043">vah26xdec / vaav1dec</text>
+  <rect x="413.2" y="694" width="62.8" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="444.6" y="704.5" text-anchor="middle" font-size="9.5" fill="#202124">GStreamer</text>
+  <rect x="500" y="690" width="140" height="58" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.6"/>
+  <text x="570" y="721" text-anchor="middle" font-weight="bold" fill="#202124">縮小・色変換</text>
+  <text x="570" y="738" text-anchor="middle" font-size="10.5" fill="#3c4043">VA 映像処理 → BGRA</text>
+  <rect x="616.6" y="694" width="19.4" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="626.3" y="704.5" text-anchor="middle" font-size="9.5" fill="#202124">FW</text>
+  <rect x="660" y="690" width="140" height="58" rx="8" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+  <text x="730" y="721" text-anchor="middle" font-weight="bold" fill="#202124">再生画面</text>
+  <text x="730" y="738" text-anchor="middle" font-size="10.5" fill="#3c4043">OpenGL ES・拡大表示</text>
+  <rect x="770.4" y="694" width="25.6" height="14" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="783.2" y="704.5" text-anchor="middle" font-size="9.5" fill="#202124">App</text>
+  <rect x="20" y="760" width="940" height="160" rx="10" fill="#fafafa" stroke="#dadce0"/>
+  <text x="40" y="784" font-weight="bold" fill="#202124">ハードウェア（箱の色）</text>
+  <rect x="40" y="798" width="26" height="16" rx="4" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.6"/>
+  <text x="74" y="811" font-size="12" fill="#202124">CPU</text>
+  <rect x="40" y="820" width="26" height="16" rx="4" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+  <text x="74" y="833" font-size="12" fill="#202124">GPU（HIP・MIGraphX・OpenGL ES）</text>
+  <rect x="40" y="842" width="26" height="16" rx="4" fill="#feefe3" stroke="#c26401" stroke-width="1.6"/>
+  <text x="74" y="855" font-size="12" fill="#202124">VCN（動画の符号化・復号）</text>
+  <rect x="40" y="864" width="26" height="16" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.6"/>
+  <text x="74" y="877" font-size="12" fill="#202124">VPE（映像処理エンジン）</text>
+  <rect x="40" y="886" width="26" height="16" rx="4" fill="#e8f0fe" stroke="#1967d2" stroke-width="1.6"/>
+  <text x="74" y="899" font-size="12" fill="#202124">NPU</text>
+  <text x="330" y="784" font-weight="bold" fill="#202124">提供元（右上の札）</text>
+  <rect x="330" y="798" width="19.4" height="16" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="339.7" y="810" text-anchor="middle" font-size="10" fill="#202124">FW</text>
+  <text x="408" y="811" font-size="12" fill="#202124">このフレームワーク</text>
+  <rect x="330" y="824" width="62.8" height="16" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8" stroke-dasharray="4 3"/>
+  <text x="361.4" y="836" text-anchor="middle" font-size="10" fill="#202124">GStreamer</text>
+  <text x="408" y="837" font-size="12" fill="#202124">GStreamer の標準要素（破線）</text>
+  <rect x="330" y="850" width="25.6" height="16" rx="3" fill="#ffffff" stroke="#5f6368" stroke-width="0.8"/>
+  <text x="342.8" y="862" text-anchor="middle" font-size="10" fill="#202124">App</text>
+  <text x="408" y="863" font-size="12" fill="#202124">NVR デモの実装</text>
+  <text x="670" y="784" font-weight="bold" fill="#202124">データの受け渡し（矢印）</text>
+  <path d="M670,806 L718,806" stroke="#188038" stroke-width="4" marker-end="url(#z)"/>
+  <text x="730" y="810" font-size="12" fill="#202124">GPU メモリのまま（ゼロコピー）</text>
+  <path d="M670,832 L718,832" stroke="#d93025" stroke-width="2.5" marker-end="url(#c)"/>
+  <text x="730" y="836" font-size="12" fill="#202124">CPU と GPU/NPU の間のコピー</text>
+  <path d="M670,858 L718,858" stroke="#80868b" stroke-width="1.5" marker-end="url(#d)"/>
+  <text x="730" y="862" font-size="12" fill="#202124">圧縮データ・メタデータ（CPU）</text>
+  <text x="330" y="890" font-size="12" fill="#3c4043">CPU・GPU・NPU・VCN・VPE は同じメモリ（DRAM）を共有</text>
+</svg>

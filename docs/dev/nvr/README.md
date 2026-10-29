@@ -206,14 +206,15 @@ Selection changes reuse these pools, including across camera reconnects.
 
 Preview conversion runs separately from inference. Each source keeps only its
 latest decoded buffer. HIP packs RGB NCHW directly into the corresponding slice
-of a reusable device batch arena. There is no per-frame tensor concatenation or
-H2D/D2D tensor copy. The scheduler rotates across eligible sources, waits at most
+of a reusable device batch arena; the shared batch executor then copies each slice
+GPU-to-GPU into its own batch input. There is no host-to-device tensor copy. The scheduler rotates across eligible sources, waits at most
 20 ms for a batch, uses batch 1 for a single image, and fills unused slots of a
 larger batch with a HIP kernel. Only valid slots produce results. Postprocessing
 is performed independently per image on the GPU. Allocator layout probes may
 derive a newly-created, never-rendered test surface to discover pitches; they do not map or transfer frame pixels. The copy auditor
 counts these separately and still rejects derivation of any rendered surface.
-Each valid image reads back a 7204-byte compact detection structure; frame pixels remain on the GPU.
+Each valid image reads back an 8404-byte compact detection structure (up to 300
+boxes with their candidate index) as marked metadata; frame pixels remain on the GPU.
 
 AI starts at 5 FPS per selected channel. Measured batch service time and frame
 age adjust sampling, up to 30 FPS per channel, with a 200 ms age target. These
