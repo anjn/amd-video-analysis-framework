@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QAbstractButton>
 #include <QFile>
+#include <QMap>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QMouseEvent>
@@ -50,6 +51,7 @@ int main(int argc, char **argv) {
         int64_t loop_peak = 0;
         bool exiting = false;
         int unrelated_tick = 0, unrelated_cards = 0;
+        QMap<QString, QAbstractButton *> unaffected;
         QPointF drag_end;
         auto capture_live = [&](const char *name) {
             if (qEnvironmentVariableIsSet("AMDVA_VALIDATE_CAPTURE"))
@@ -201,6 +203,10 @@ int main(int argc, char **argv) {
                         controller.recording_catalog().delete_batch(job);
                         if (job.deleted != 1)
                             throw std::runtime_error("Could not delete " + victim);
+                        unaffected.clear();
+                        for (auto *b : window.findChildren<QAbstractButton *>())
+                            if (b->objectName().startsWith("search-result-"))
+                                unaffected[b->objectName()] = b;
                         std::cout << "Deleted " << victim << " used by " << fewest
                                   << " result images; " << cards << " cards" << std::endl;
                         unrelated_tick = tick;
@@ -211,8 +217,16 @@ int main(int argc, char **argv) {
                             throw std::runtime_error("Deletion changed results: " +
                                                      text.toStdString() + " cards=" +
                                                      std::to_string(cards));
-                        std::cout << "PASS: retention-style deletion kept " << cards << " results"
-                                  << std::endl;
+                        // Surviving cards are updated in place, not rebuilt (no flicker).
+                        int kept = 0;
+                        for (auto *b : window.findChildren<QAbstractButton *>())
+                            if (b->objectName().startsWith("search-result-")) {
+                                if (unaffected.value(b->objectName()) != b)
+                                    throw std::runtime_error("Deletion rebuilt result cards");
+                                kept++;
+                            }
+                        std::cout << "PASS: retention-style deletion kept " << kept
+                                  << " results in place" << std::endl;
                         stage = 3;
                     } else if (tick > unrelated_tick + 50)
                         throw std::runtime_error("Results did not appear");

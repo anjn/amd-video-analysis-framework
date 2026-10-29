@@ -87,6 +87,15 @@ struct SearchPage::Impl {
     bool interval_active{}, looping{};
     std::string focused;
     std::chrono::steady_clock::time_point reopened, pruned;
+    // Widgets of one result card, kept so deletion can update it in place.
+    struct CardView {
+        QToolButton *card{};
+        QLabel *photo{}, *time{}, *score{};
+        QProgressBar *bar{};
+        int64_t image{};
+    };
+    std::vector<CardView> views;
+    std::string playing_track;
     bool people{};
     struct Pictures {
         std::vector<std::pair<uint64_t, std::vector<uint8_t>>> values;
@@ -312,10 +321,8 @@ struct SearchPage::Impl {
             delete item->widget();
             delete item;
         }
-        double best = 1e-6;
-        for (const auto &g : groups)
-            if (!g.images.empty())
-                best = std::max(best, g.similarity);
+        views.assign(groups.size(), {});
+        const double best = best_similarity();
         for (size_t i = 0; i < groups.size(); ++i) {
             const auto &g = groups[i];
             if (g.images.empty())
@@ -340,23 +347,23 @@ struct SearchPage::Impl {
             font.setBold(true);
             name->setFont(font);
             l->addWidget(name);
-            l->addWidget(passive_label(
-                QString("%1 · %2 s")
-                    .arg(short_time(g.from_ms))
-                    .arg(std::max<int64_t>(1, (g.to_ms - g.from_ms + 999) / 1000))));
+            auto *time = passive_label();
+            l->addWidget(time);
             auto *score = new QHBoxLayout;
             auto *bar = new QProgressBar;
             bar->setAttribute(Qt::WA_TransparentForMouseEvents);
             bar->setRange(0, 100);
-            bar->setValue(int(std::clamp(100 * g.similarity / best, 0., 100.)));
             bar->setTextVisible(false);
             bar->setFixedHeight(6);
             bar->setStyleSheet("QProgressBar{border:none;background:palette(midlight);"
                                "border-radius:3px}"
                                "QProgressBar::chunk{background:#1565c0;border-radius:3px}");
             score->addWidget(bar, 1);
-            score->addWidget(passive_label(QString::number(g.similarity, 'f', 2)));
+            auto *value = passive_label();
+            score->addWidget(value);
             l->addLayout(score);
+            views[i] = {card, photo, time, value, bar, g.images.front().id};
+            describe(i, best);
             card->setFixedSize(card_width, l->sizeHint().height());
             card_group->addButton(card, int(i));
             QObject::connect(card, &QToolButton::clicked, &page, [this, i] { select(int(i)); });
@@ -364,6 +371,23 @@ struct SearchPage::Impl {
         }
         if (active >= 0)
             card_group->button(active)->setChecked(true);
+    }
+    double best_similarity() const {
+        double best = 1e-6;
+        for (const auto &g : groups)
+            if (!g.images.empty())
+                best = std::max(best, g.similarity);
+        return best;
+    }
+    // Text and bar of a card; they change when deletion removes some of its images.
+    void describe(size_t i, double best) {
+        const auto &g = groups[i];
+        auto &v = views[i];
+        v.time->setText(QString("%1 · %2 s")
+                            .arg(short_time(g.from_ms))
+                            .arg(std::max<int64_t>(1, (g.to_ms - g.from_ms + 999) / 1000)));
+        v.bar->setValue(int(std::clamp(100 * g.similarity / best, 0., 100.)));
+        v.score->setText(QString::number(g.similarity, 'f', 2));
     }
     size_t remaining() const {
         return size_t(std::count_if(groups.begin(), groups.end(),
@@ -381,21 +405,70 @@ struct SearchPage::Impl {
         const auto present = [&catalog](const std::string &name) {
             return catalog.recording_present(name);
         };
-        bool changed = false, active_changed = false;
+        std::vector<size_t> changed;
         for (size_t i = 0; i < groups.size(); ++i)
-            if (!groups[i].images.empty() && prune_search_group(groups[i], present)) {
-                changed = true;
-                active_changed |= int(i) == active;
-            }
-        if (!changed)
+            if (!groups[i].images.empty() && prune_search_group(groups[i], present))
+                changed.push_back(i);
+        if (changed.empty())
             return;
-        const int selected = active;
-        if (active_changed)
-            stop_player();
-        build_cards();
-        if (active_changed && !groups[size_t(selected)].images.empty())
-            select(selected);
+        // Update in place: rebuilding every card would reload all thumbnails and
+        // flicker each time retention deletes an old segment.
+        for (auto i : changed) {
+            auto &v = views[i];
+            if (groups[i].images.empty()) {
+                if (int(i) == active)
+                    stop_player();
+                card_group->removeButton(v.card);
+                grid->removeWidget(v.card);
+                v.card->deleteLater();
+                v = {};
+            } else if (v.image != groups[i].images.front().id) {
+                v.image = groups[i].images.front().id;
+                load_thumbnail(v.photo, v.image, v.photo->size());
+            }
+        }
+        const double best = best_similarity();
+        for (size_t i = 0; i < groups.size(); ++i)
+            if (views[i].card)
+                describe(i, best);
+        if (active >= 0 &&
+            std::find(changed.begin(), changed.end(), size_t(active)) != changed.end())
+            prune_player();
         show_count();
+    }
+    // The selected result lost images: drop their strip buttons, and replay only when
+    // the tracklet being played is gone.
+    void prune_player() {
+        const auto &g = groups[size_t(active)];
+        auto kept = [&g](qlonglong id) {
+            return std::any_of(g.images.begin(), g.images.end(),
+                               [id](const auto &im) { return im.id == id; });
+        };
+        for (auto *b : strip_group->buttons())
+            if (!kept(b->property("image-id").toLongLong())) {
+                strip_group->removeButton(b);
+                strip->removeWidget(b);
+                b->deleteLater();
+            }
+        player_title->setText(title(g));
+        if (std::none_of(g.images.begin(), g.images.end(),
+                         [this](const auto &im) { return im.track_id == playing_track; }))
+            play(active, 0);
+    }
+    QString title(const SearchGroup &g) const {
+        const auto person = person_number(g);
+        return QString("%1%2 · %3 – %4 · similarity %5")
+            .arg(person.isEmpty() ? "" : "Person " + person + " · ", camera(g),
+                 full_time(g.from_ms), short_time(g.to_ms))
+            .arg(g.similarity, 0, 'f', 3);
+    }
+    // Strip buttons carry the image ID; indexes shift when deletion removes images.
+    size_t image_index(int index, qlonglong id) const {
+        const auto &images = groups[size_t(index)].images;
+        for (size_t n = 0; n < images.size(); ++n)
+            if (images[n].id == id)
+                return n;
+        return 0;
     }
     void select(int index) {
         const auto &g = groups[size_t(index)];
@@ -416,17 +489,14 @@ struct SearchPage::Impl {
                 bl->addWidget(photo);
                 button->setFixedSize(strip_image_width + 6, strip_image_height + 6);
                 load_thumbnail(photo, g.images[n].id, photo->size());
-                strip_group->addButton(button, int(n));
+                button->setProperty("image-id", qlonglong(g.images[n].id));
+                strip_group->addButton(button);
                 strip->insertWidget(strip->count() - 1, button);
-                QObject::connect(button, &QToolButton::clicked, &page,
-                                 [this, index, n] { play(index, n); });
+                QObject::connect(button, &QToolButton::clicked, &page, [this, index, button] {
+                    play(index, image_index(index, button->property("image-id").toLongLong()));
+                });
             }
-            const auto person = person_number(g);
-            player_title->setText(QString("%1%2 · %3 – %4 · similarity %5")
-                                      .arg(person.isEmpty() ? "" : "Person " + person + " · ",
-                                           camera(g), full_time(g.from_ms),
-                                           short_time(g.to_ms))
-                                      .arg(g.similarity, 0, 'f', 3));
+            player_title->setText(title(g));
         }
         if (!player_panel->isVisible()) {
             player_panel->show();
@@ -469,7 +539,10 @@ struct SearchPage::Impl {
             start = std::max<int64_t>(0, start - (shortest - (end - start)) / 2);
             end = start + shortest;
         }
-        strip_group->button(int(image))->setChecked(true);
+        for (auto *b : strip_group->buttons())
+            if (b->property("image-id").toLongLong() == g.images[image].id)
+                b->setChecked(true);
+        playing_track = g.images[image].track_id;
         active = index;
         interval_active = looping = true;
         restart();
