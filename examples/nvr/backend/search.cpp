@@ -558,131 +558,175 @@ struct SearchService::Impl {
                 status.state = "ready";
                 cv.notify_all();
             }
+            // Jobs hold one frame per camera. A batch of them shares one GPU lease and one
+            // ReID call, so fewer lease hand-offs with detection and fuller ReID batches.
+            constexpr size_t batch_jobs = 8;
             for (;;) {
-                Job job;
+                std::vector<Job> batch;
                 {
                     std::unique_lock<std::mutex> l(mutex);
                     cv.wait(l, [&] { return stopping || !jobs.empty(); });
                     if (stopping)
                         break;
-                    job = std::move(jobs.front());
-                    jobs.pop_front();
+                    while (!jobs.empty() && batch.size() < batch_jobs) {
+                        batch.push_back(std::move(jobs.front()));
+                        jobs.pop_front();
+                    }
                     runtime->queue("Tracking queue", "", jobs.size());
                 }
-                try {
-                    std::vector<SearchImage> images;
-                    std::vector<PersonDetection> detections;
-                    {
-                        // VA decoders hand frames on before decoding finishes. Wait here,
-                        // not under the GPU lease, so encode-heavy video engine queues do
-                        // not hold up detection and the other cameras' tracking.
-                        auto synced = Clock::now();
-                        va_check(vaSyncSurface(static_cast<VADisplay>(
-                                                   gst_va_display_get_va_dpy(display)),
-                                               gst_va_buffer_get_surface(gst_sample_get_buffer(
-                                                   job.frame.sample.get()))),
-                                 "Tracking frame decode");
-                        runtime->record("Decoded frame wait", job.channel, elapsed(synced));
-                        auto lease = runtime->acquire(AiRuntime::Tracking);
-                        const double waited = elapsed(job.queued);
+                std::vector<std::vector<SearchImage>> crops(batch.size());
+                std::vector<std::vector<PersonDetection>> people(batch.size());
+                std::vector<std::string> failed(batch.size());
+                // VA decoders hand frames on before decoding finishes. Wait here, not under
+                // the GPU lease, so encode-heavy video engine queues do not hold up
+                // detection and the other cameras' tracking.
+                for (auto &job : batch) {
+                    auto synced = Clock::now();
+                    auto *buffer = gst_sample_get_buffer(job.frame.sample.get());
+                    va_check(vaSyncSurface(
+                                 static_cast<VADisplay>(gst_va_display_get_va_dpy(display)),
+                                 gst_va_buffer_get_surface(buffer)),
+                             "Tracking frame decode");
+                    runtime->record("Decoded frame wait", job.channel, elapsed(synced));
+                }
+                {
+                    auto lease = runtime->acquire(AiRuntime::Tracking);
+                    std::vector<SearchImage> all;
+                    for (size_t j = 0; j < batch.size(); ++j) {
+                        auto &job = batch[j];
+                        try {
+                            const double waited = elapsed(job.queued);
+                            auto t = Clock::now();
+                            std::vector<Detection> boxes;
+                            for (auto box : job.boxes)
+                                boxes.push_back(search_crop(box, job.frame.width,
+                                                            job.frame.height, reid ? 0 : .1f));
+                            crops[j] = cropper.crop_many(
+                                gst_va_buffer_get_surface(
+                                    gst_sample_get_buffer(job.frame.sample.get())),
+                                job.frame.width, job.frame.height, boxes);
+                            runtime->record("Person crop", job.channel, elapsed(t), waited,
+                                            crops[j].size());
+                            for (auto box : job.boxes)
+                                people[j].push_back({box, {}});
+                            if (reid)
+                                all.insert(all.end(), crops[j].begin(), crops[j].end());
+                        } catch (const std::exception &e) {
+                            failed[j] = e.what();
+                        }
+                    }
+                    if (reid && !all.empty()) {
+                        try {
+                            auto features = reid->encode_many(all);
+                            size_t offset = 0;
+                            for (size_t j = 0; j < batch.size(); ++j) {
+                                if (!failed[j].empty())
+                                    continue;
+                                for (auto &person : people[j])
+                                    person.feature = features[offset++];
+                                // Shares of the batched call, by images.
+                                const double share = double(crops[j].size()) / all.size();
+                                if (crops[j].empty())
+                                    continue;
+                                runtime->record("ReID preprocess", batch[j].channel,
+                                                reid->prepare_ms * share, 0, crops[j].size());
+                                runtime->record("ReID inference + transfer", batch[j].channel,
+                                                reid->inference_ms * share, 0, crops[j].size());
+                            }
+                        } catch (const std::exception &e) {
+                            for (auto &f : failed)
+                                if (f.empty())
+                                    f = e.what();
+                        }
+                    }
+                }
+                for (size_t j = 0; j < batch.size(); ++j) {
+                    auto &job = batch[j];
+                    auto &images = crops[j];
+                    auto &detections = people[j];
+                    try {
+                        if (!failed[j].empty())
+                            throw std::runtime_error(failed[j]);
+                        auto &tracker = trackers[job.channel];
+                        if (sessions[job.channel] != job.frame.recording_session) {
+                            tracker.reset();
+                            sessions[job.channel] = job.frame.recording_session;
+                        }
+                        if (!tracker)
+                            tracker = std::make_unique<PersonTracker>();
                         auto t = Clock::now();
-                        std::vector<Detection> crops;
-                        for (auto box : job.boxes)
-                            crops.push_back(search_crop(box, job.frame.width, job.frame.height,
-                                                        reid ? 0 : .1f));
-                        images = cropper.crop_many(gst_va_buffer_get_surface(gst_sample_get_buffer(
-                                                       job.frame.sample.get())),
-                                                   job.frame.width, job.frame.height, crops);
-                        runtime->record("Person crop", job.channel, elapsed(t), waited,
-                                        images.size());
-                        for (auto box : job.boxes)
-                            detections.push_back({box, {}});
-                        if (reid && !images.empty()) {
-                            auto features = reid->encode_many(images);
-                            for (size_t i = 0; i < features.size(); ++i)
-                                detections[i].feature = features[i];
-                            runtime->record("ReID preprocess", job.channel, reid->prepare_ms, 0,
-                                            images.size());
-                            runtime->record("ReID inference + transfer", job.channel,
-                                            reid->inference_ms, 0, images.size());
+                        auto identities = tracker->update(job.frame.wall_time_ms, detections);
+                        runtime->record(
+                            "Tracking association", job.channel, elapsed(t),
+                            std::chrono::duration<double, std::milli>(t - job.frame.received)
+                                .count(),
+                            detections.size());
+                        PersonTrackFrame frame;
+                        frame.generation = job.frame.generation;
+                        frame.width = job.frame.width;
+                        frame.height = job.frame.height;
+                        frame.captured = job.frame.received;
+                        RecordedAnalysis recorded{job.channel,
+                                                  job.frame.recording_session,
+                                                  run_id,
+                                                  job.frame.wall_time_ms,
+                                                  unsigned(std::min(2000., 2000. / runtime->fps())),
+                                                  {}};
+                        for (size_t i = 0; i < detections.size(); ++i) {
+                            if (reid && !identities[i].confirmed)
+                                continue;
+                            auto b = detections[i].box;
+                            b.x /= job.frame.width;
+                            b.w /= job.frame.width;
+                            b.y /= job.frame.height;
+                            b.h /= job.frame.height;
+                            recorded.objects.push_back(
+                                {b, reid ? identities[i].person : 0,
+                                 reid ? identities[i].track : 0});
                         }
-                    }
-                    auto &tracker = trackers[job.channel];
-                    if (sessions[job.channel] != job.frame.recording_session) {
-                        tracker.reset();
-                        sessions[job.channel] = job.frame.recording_session;
-                    }
-                    if (!tracker)
-                        tracker = std::make_unique<PersonTracker>();
-                    auto t = Clock::now();
-                    auto identities = tracker->update(job.frame.wall_time_ms, detections);
-                    runtime->record(
-                        "Tracking association", job.channel, elapsed(t),
-                        std::chrono::duration<double, std::milli>(t - job.frame.received).count(),
-                        detections.size());
-                    PersonTrackFrame frame;
-                    frame.generation = job.frame.generation;
-                    frame.width = job.frame.width;
-                    frame.height = job.frame.height;
-                    frame.captured = job.frame.received;
-                    RecordedAnalysis recorded{job.channel,
-                                              job.frame.recording_session,
-                                              run_id,
-                                              job.frame.wall_time_ms,
-                                              unsigned(std::min(2000., 2000. / runtime->fps())),
-                                              {}};
-                    for (size_t i = 0; i < detections.size(); ++i) {
-                        if (reid && !identities[i].confirmed)
-                            continue;
-                        auto b = detections[i].box;
-                        b.x /= job.frame.width;
-                        b.w /= job.frame.width;
-                        b.y /= job.frame.height;
-                        b.h /= job.frame.height;
-                        recorded.objects.push_back(
-                            {b, reid ? identities[i].person : 0, reid ? identities[i].track : 0});
-                    }
-                    catalog.enqueue_analysis(std::move(recorded));
-                    std::lock_guard<std::mutex> lock(mutex);
-                    for (size_t i = 0; i < detections.size(); ++i) {
-                        const auto &identity = identities[i];
-                        auto box = detections[i].box;
-                        if (reid && identity.confirmed)
-                            frame.objects.push_back({box, identity.person});
-                        if ((reid && (!identity.confirmed || box.score < .5f)) ||
-                            box.h < job.frame.height * options.min_person_height)
-                            continue;
-                        SearchObservation o;
-                        o.channel = job.channel;
-                        o.session = job.frame.recording_session;
-                        o.time_ms = job.frame.wall_time_ms;
-                        o.box = box;
-                        o.model = key;
-                        o.reid = detections[i].feature;
-                        std::string id = run_id + "/" + o.channel + "/" + o.session + "/";
-                        if (reid) {
-                            o.person_id = id + std::to_string(identity.person);
-                            o.track_id = id + std::to_string(identity.track);
-                            id = o.person_id;
-                        } else
-                            id += std::to_string(i);
-                        if (!pending.count(id) && pending.size() >= options.queue_limit) {
-                            ++status.dropped;
-                            runtime->queue("Embedding queue", "", pending.size(), 1);
-                            continue;
+                        catalog.enqueue_analysis(std::move(recorded));
+                        std::lock_guard<std::mutex> lock(mutex);
+                        for (size_t i = 0; i < detections.size(); ++i) {
+                            const auto &identity = identities[i];
+                            auto box = detections[i].box;
+                            if (reid && identity.confirmed)
+                                frame.objects.push_back({box, identity.person});
+                            if ((reid && (!identity.confirmed || box.score < .5f)) ||
+                                box.h < job.frame.height * options.min_person_height)
+                                continue;
+                            SearchObservation o;
+                            o.channel = job.channel;
+                            o.session = job.frame.recording_session;
+                            o.time_ms = job.frame.wall_time_ms;
+                            o.box = box;
+                            o.model = key;
+                            o.reid = detections[i].feature;
+                            std::string id = run_id + "/" + o.channel + "/" + o.session + "/";
+                            if (reid) {
+                                o.person_id = id + std::to_string(identity.person);
+                                o.track_id = id + std::to_string(identity.track);
+                                id = o.person_id;
+                            } else
+                                id += std::to_string(i);
+                            if (!pending.count(id) && pending.size() >= options.queue_limit) {
+                                ++status.dropped;
+                                runtime->queue("Embedding queue", "", pending.size(), 1);
+                                continue;
+                            }
+                            auto queued = pending.count(id) ? pending[id].queued : Clock::now();
+                            pending[id] = {std::move(o), std::move(images[i]), queued,
+                                           Clock::now()};
                         }
-                        auto queued = pending.count(id) ? pending[id].queued : Clock::now();
-                        pending[id] = {std::move(o), std::move(images[i]), queued, Clock::now()};
+                        if (reid)
+                            track_frames[job.channel] = std::move(frame);
+                        status.pending = pending.size();
+                        runtime->queue("Embedding queue", "", pending.size());
+                        cv.notify_all();
+                    } catch (const std::exception &e) {
+                        std::lock_guard<std::mutex> l(mutex);
+                        status.error = e.what();
+                        status.dropped += job.boxes.size();
                     }
-                    if (reid)
-                        track_frames[job.channel] = std::move(frame);
-                    status.pending = pending.size();
-                    runtime->queue("Embedding queue", "", pending.size());
-                    cv.notify_all();
-                } catch (const std::exception &e) {
-                    std::lock_guard<std::mutex> l(mutex);
-                    status.error = e.what();
-                    status.dropped += job.boxes.size();
                 }
             }
         } catch (const std::exception &e) {

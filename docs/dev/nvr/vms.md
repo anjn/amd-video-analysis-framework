@@ -128,13 +128,14 @@ before taking the GPU lease they share, so a slow decode no longer holds the lea
 while the GPU idles; the wait is reported as **Decoded frame wait** (about 0.15 ms
 with engine headroom). Every 2 s the controller also lowers a frame-rate cap shared
 by all transcoders (factor 0.7, at least 5 fps) while that wait averages more than
-2 ms, and raises it by 2 fps while it stays under 0.5 ms, until it is removed. On
-the Radeon 890M with sixteen 1440p30 HEVC cameras on screen and person tracking on
-all of them, four re-encoded cameras settle near 10 fps with detection at its full
-rate (68 updates/s) and tracking at about 90% of detection (99% without
-re-encoding; the remainder is the detection and tracking work sharing one GPU
-lease). Without any cap, the same load recorded at about 18 fps but detection fell
-to 76% of its rate. A camera re-encodes at its
+2 ms, and raises it by 2 fps while it stays under 0.5 ms, until it is removed. The tracking worker takes up to eight
+queued frames (one per camera) at a time, crops them under one lease and runs ReID
+for all their people in one call, which halves lease hand-offs with detection and
+fills ReID batches. On the Radeon 890M with sixteen 1440p30 HEVC cameras on screen
+and person tracking on all of them, tracking keeps up with detection and drops no
+frames (it dropped about one per second before batching); with four re-encoded
+cameras, encoding settles near 20 fps, detection runs at 95% of its full 68
+updates/s and tracking at 100% of detection. A camera re-encodes at its
 full rate with about 10 ms delay when the engine has headroom. If the input backlog
 still exceeds its limit, the Recording column shows **encoder overloaded; waiting
 for keyframe** and the recording restarts at the next keyframe.
