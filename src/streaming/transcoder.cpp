@@ -96,6 +96,11 @@ Transcoder::Transcoder(GstVaDisplay *display, Options options, GstCaps *caps)
     decoder_ = gst_bin_get_by_name(GST_BIN(pipeline_), "decode");
     frames_ = gst_bin_get_by_name(GST_BIN(pipeline_), "frames");
     gst_app_src_set_caps(GST_APP_SRC(input_), caps);
+    auto *pending = gst_bin_get_by_name(GST_BIN(pipeline_), "pending");
+    auto *pad = gst_element_get_static_pad(pending, "sink");
+    gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER, throttle, this, nullptr);
+    gst_object_unref(pad);
+    gst_object_unref(pending);
     g_object_set(input_, "max-bytes", guint64(options_.queue_limit_bytes), nullptr);
     if (gst_element_set_state(pipeline_, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
         poll();
@@ -133,6 +138,24 @@ bool Transcoder::push(GstSample *sample) {
     while (pushed_.size() > 512)
         pushed_.erase(pushed_.begin());
     return gst_app_src_push_buffer(GST_APP_SRC(input_), b) == GST_FLOW_OK;
+}
+void Transcoder::max_fps(double fps) {
+    min_interval_ = fps > 0 ? GstClockTime(GST_SECOND / fps) : 0;
+}
+GstPadProbeReturn Transcoder::throttle(GstPad *, GstPadProbeInfo *info, gpointer data) {
+    auto &t = *static_cast<Transcoder *>(data);
+    const auto interval = t.min_interval_.load();
+    const auto pts = GST_BUFFER_PTS(GST_PAD_PROBE_INFO_BUFFER(info));
+    if (!interval || !GST_CLOCK_TIME_IS_VALID(pts)) {
+        t.last_kept_ = pts;
+        return GST_PAD_PROBE_OK;
+    }
+    // A small tolerance keeps exact divisors of the camera rate (15 of 30 fps).
+    if (GST_CLOCK_TIME_IS_VALID(t.last_kept_) && pts > t.last_kept_ &&
+        pts - t.last_kept_ < interval - interval / 8)
+        return GST_PAD_PROBE_DROP;
+    t.last_kept_ = pts;
+    return GST_PAD_PROBE_OK;
 }
 GstSample *Transcoder::pull() {
     auto *encoded = gst_app_sink_try_pull_sample(GST_APP_SINK(output_), 0);

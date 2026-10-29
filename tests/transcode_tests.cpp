@@ -112,13 +112,17 @@ int main() {
             };
             unsigned pushed = 0;
             while (auto *sample = gst_app_sink_try_pull_sample(GST_APP_SINK(input), GST_SECOND)) {
-                if (!transcoder)
+                if (!transcoder) {
                     transcoder = std::make_unique<Transcoder>(
                         display,
                         Transcoder::Options{codec, RateControl::VBR, 1500,
                                             codec == RecordCodec::AV1 ? 0u : 720u, 30,
                                             16ull << 20, share},
                         gst_sample_get_caps(sample));
+                    // H.264 output also checks the frame-rate cap: half of 30 fps.
+                    if (codec == RecordCodec::H264)
+                        transcoder->max_fps(15);
+                }
                 require(transcoder->push(sample), "Transcoder refused a sample");
                 // Camera pace: the encoder queue drops frames when fed faster than real time.
                 std::this_thread::sleep_for(std::chrono::milliseconds(33));
@@ -126,13 +130,14 @@ int main() {
                 gst_sample_unref(sample);
                 drain();
             }
+            const unsigned expected = codec == RecordCodec::H264 ? (pushed + 1) / 2 : pushed;
             for (auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-                 std::chrono::steady_clock::now() < deadline && encoded < pushed;)
+                 std::chrono::steady_clock::now() < deadline && encoded < expected;)
                 drain(), std::this_thread::sleep_for(std::chrono::milliseconds(10));
             gst_object_unref(input);
             gst_element_set_state(source, GST_STATE_NULL);
             gst_object_unref(source);
-            require(recorder != nullptr && encoded + 2 >= pushed,
+            require(recorder != nullptr && encoded + 2 >= expected && encoded <= expected + 2,
                     std::string(name) + ": encoded " + std::to_string(encoded) + " of " +
                         std::to_string(pushed));
             require(recorder->wall_time_ms(first) == received,
@@ -147,7 +152,7 @@ int main() {
             require(recordings.size() == 1 && recordings.front().state == "finalized",
                     std::string(name) + ": recording not finalized");
             const auto [frames, height] = decode(root / name / recordings.front().name, codec);
-            require(frames + 2 >= pushed && height == (codec == RecordCodec::AV1 ? 1088 : 720),
+            require(frames + 2 >= expected && height == (codec == RecordCodec::AV1 ? 1088 : 720),
                     std::string(name) + ": decoded " + std::to_string(frames) + " frames at " +
                         std::to_string(height) + " lines");
             {

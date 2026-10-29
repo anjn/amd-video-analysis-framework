@@ -573,6 +573,16 @@ struct SearchService::Impl {
                     std::vector<SearchImage> images;
                     std::vector<PersonDetection> detections;
                     {
+                        // VA decoders hand frames on before decoding finishes. Wait here,
+                        // not under the GPU lease, so encode-heavy video engine queues do
+                        // not hold up detection and the other cameras' tracking.
+                        auto synced = Clock::now();
+                        va_check(vaSyncSurface(static_cast<VADisplay>(
+                                                   gst_va_display_get_va_dpy(display)),
+                                               gst_va_buffer_get_surface(gst_sample_get_buffer(
+                                                   job.frame.sample.get()))),
+                                 "Tracking frame decode");
+                        runtime->record("Decoded frame wait", job.channel, elapsed(synced));
                         auto lease = runtime->acquire(AiRuntime::Tracking);
                         const double waited = elapsed(job.queued);
                         auto t = Clock::now();

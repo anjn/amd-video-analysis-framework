@@ -121,7 +121,8 @@ keyframe interval. AV1 sizes snap to a width multiple of 64 and a height multipl
 thread and drain `pull()` on the same thread into a `SegmentRecorder` opened with
 the first output's caps. The four-frame queue before the encoder drops the oldest
 frame when the video engine falls behind, so the output frame rate drops instead of
-the decode stalling; `encoded()` counts the output. `false` from `push()` means the
+the decode stalling; `encoded()` counts the output. `max_fps()` caps the encoded
+frame rate while running, to leave video engine time to other decoders. `false` from `push()` means the
 input backlog limit was still reached, and the caller restarts at the next keyframe.
 With `Options::frames`, `frames()` is an appsink of the decoded NV12 VAMemory frames
 (latest only) so a display or analysis consumer shares the decode. The

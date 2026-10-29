@@ -541,6 +541,7 @@ struct Controller::Channel {
         };
         transcoder = std::make_unique<Transcoder>(controller.display_, std::move(options), caps);
         decode_timing->attach_decoder(transcoder->decoder());
+        transcoder->max_fps(controller.transcode_fps_limit_);
         auto *pad = gst_element_get_static_pad(transcoder->frames(), "sink");
         gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_QUERY_DOWNSTREAM, allocation, nullptr, nullptr);
         gst_object_unref(pad);
@@ -1197,6 +1198,10 @@ void Controller::loop() {
                 reclaim_pending_ = false;
                 reclaim_at_ = Clock::now() + std::chrono::seconds(5);
             }
+            if (Clock::now() >= transcode_rate_at_) {
+                pace_transcoding();
+                transcode_rate_at_ = Clock::now() + std::chrono::seconds(2);
+            }
             const double elapsed = std::chrono::duration<double>(Clock::now() - stats_at).count();
             std::vector<Status> snapshot;
             for (auto &c : channels_)
@@ -1512,6 +1517,19 @@ void Controller::gpu_loop() {
                 continue;
             }
             waiting = {};
+            // Decoders hand frames on before they finish; wait for them before taking the
+            // GPU lease that tracking shares, or a busy video engine stalls both.
+            for (auto &item : items) {
+                const auto synced = Clock::now();
+                auto *buffer = gst_sample_get_buffer(item.frame.sample.get());
+                va_check(vaSyncSurface(
+                             static_cast<VADisplay>(gst_va_display_get_va_dpy(display_)),
+                             gst_va_buffer_get_surface(buffer)),
+                         "Detection frame decode");
+                ai_runtime_->record("Decoded frame wait", item.channel,
+                                    std::chrono::duration<double, std::milli>(Clock::now() - synced)
+                                        .count());
+            }
             const auto waiting_gpu = Clock::now();
             auto gpu_lease = ai_runtime_->acquire(AiRuntime::Tracking);
             const auto started = Clock::now();
@@ -1748,6 +1766,31 @@ void Controller::recording_duration(const std::string &name, int64_t ns) {
 }
 std::vector<std::pair<std::string, std::string>> Controller::recording_cameras() const {
     return catalog_->cameras();
+}
+// Encoding keeps the video engine busy, so decodes finish later and detection and
+// tracking wait for decoded frames ("Decoded frame wait", about 0.15 ms when the
+// engine has headroom) while GPU load drops. Live analysis has priority: while that
+// wait is long, lower the frame rate every transcoder encodes; raise it again once
+// decodes are prompt.
+void Controller::pace_transcoding() {
+    const bool transcoding = std::any_of(channels_.begin(), channels_.end(), [](const auto &c) {
+        return !c->removed && c->transcoder;
+    });
+    double wait = -1;
+    for (const auto &m : ai_runtime_->snapshot())
+        if (m.camera.empty() && m.stage == "Decoded frame wait" && m.samples)
+            wait = m.mean_ms;
+    if (!transcoding || wait < 0)
+        return;
+    const double full = 30;
+    auto &limit = transcode_fps_limit_;
+    if (wait > 2)
+        limit = std::max(5., (limit > 0 ? limit : full) * .7);
+    else if (wait < .5 && limit > 0 && (limit += 2) >= full)
+        limit = 0;
+    for (auto &c : channels_)
+        if (!c->removed && c->transcoder)
+            c->transcoder->max_fps(limit);
 }
 void Controller::update_source(Source source) {
     source.uri = validated_uri(source.uri);

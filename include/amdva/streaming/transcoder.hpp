@@ -2,6 +2,7 @@
 #include "amdva/streaming/recorder.hpp"
 #include <gst/gst.h>
 #include <gst/va/gstvadisplay.h>
+#include <atomic>
 #include <functional>
 #include <map>
 #include <string>
@@ -54,6 +55,10 @@ class Transcoder {
     std::string error() const { return error_; }
     // Moving average of the time from push() to pull() of the same PTS.
     double latency_ms() const { return latency_ms_; }
+    // Encodes at most this many frames per second (0: all); frames in between are
+    // dropped before the encoder. Callable while running, for example to leave video
+    // engine time to decoders that live analysis waits on.
+    void max_fps(double fps);
     // Access units pulled so far. Fewer than pushed when the video engine fell behind
     // and frames were dropped before the encoder.
     uint64_t encoded() const { return encoded_; }
@@ -73,6 +78,9 @@ class Transcoder {
     GstElement *frames_{};
     std::map<GstClockTime, gint64> pushed_;
     double latency_ms_{};
+    static GstPadProbeReturn throttle(GstPad *, GstPadProbeInfo *, gpointer);
+    std::atomic<GstClockTime> min_interval_{0}; // Read on the streaming thread.
+    GstClockTime last_kept_{GST_CLOCK_TIME_NONE};
     uint64_t encoded_{};
     std::string error_;
 };

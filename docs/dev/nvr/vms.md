@@ -119,10 +119,22 @@ camera's separate display decoder is not started. Each re-encoded camera adds an
 encode, and its full-rate decode when it is hidden, to the video engine. When the
 engine cannot keep up, frames are dropped before the encoder instead of the decode
 falling behind, so the recording continues at a lower frame rate (shown in the
-encoder line) and the timestamps stay those of the camera. On the Radeon 890M with
-sixteen 1440p30 HEVC cameras on screen, which keep the video engine near 100%, four
-re-encoded cameras record at about 22 fps with about 170 ms encode delay, and all
-sixteen at about 10 fps with about 250 ms, continuously. A camera re-encodes at its
+encoder line) and the timestamps stay those of the camera. Encoding also delays the decodes that analysis waits on: VA decoders hand frames on
+before they are decoded, so with the engine full of encode work, detection
+preprocessing on sixteen 1440p cameras went from 4 ms to 34 ms and person tracking
+fell to a quarter of the detection rate while GPU load dropped. Two measures keep live
+analysis first. Detection and tracking wait for their frame to finish decoding
+before taking the GPU lease they share, so a slow decode no longer holds the lease
+while the GPU idles; the wait is reported as **Decoded frame wait** (about 0.15 ms
+with engine headroom). Every 2 s the controller also lowers a frame-rate cap shared
+by all transcoders (factor 0.7, at least 5 fps) while that wait averages more than
+2 ms, and raises it by 2 fps while it stays under 0.5 ms, until it is removed. On
+the Radeon 890M with sixteen 1440p30 HEVC cameras on screen and person tracking on
+all of them, four re-encoded cameras settle near 10 fps with detection at its full
+rate (68 updates/s) and tracking at about 90% of detection (99% without
+re-encoding; the remainder is the detection and tracking work sharing one GPU
+lease). Without any cap, the same load recorded at about 18 fps but detection fell
+to 76% of its rate. A camera re-encodes at its
 full rate with about 10 ms delay when the engine has headroom. If the input backlog
 still exceeds its limit, the Recording column shows **encoder overloaded; waiting
 for keyframe** and the recording restarts at the next keyframe.

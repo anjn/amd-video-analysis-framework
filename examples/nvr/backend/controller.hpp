@@ -170,6 +170,10 @@ class Controller {
     std::unique_ptr<SearchIndex> search_index_;
     std::unique_ptr<ResultPublisher> publisher_;
     std::unique_ptr<SearchService> search_;
+    // Frame rate cap shared by all transcoders (0: none); see pace_transcoding().
+    double transcode_fps_limit_{};
+    Clock::time_point transcode_rate_at_{};
+    void pace_transcoding();
     std::atomic<bool> inference_ready_{false}, status_ready_{false};
     std::atomic<unsigned> last_batch_{0};
     std::atomic<double> batch_ms_{0};
