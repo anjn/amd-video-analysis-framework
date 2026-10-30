@@ -1,4 +1,4 @@
-<!-- source: docs/guide/nvr-demo.ja.md 3ca321613291e20e32cc891bbdd10415e3cb02ca -->
+<!-- source: docs/guide/nvr-demo.ja.md 410d4b4207750d164858d21b57de829afbd1f5eb -->
 # NVR demo
 
 The NVR demo is a sample network video recorder built with this framework. It records all registered RTSP cameras while showing up to 16 of them on the desktop, and runs person and vehicle detection and tracking on the cameras being displayed. Recordings can be played back from a timeline, and if you prepare a native embedding model, you can also search for people by text or image.
