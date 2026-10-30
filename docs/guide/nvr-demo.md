@@ -1,4 +1,4 @@
-<!-- source: docs/guide/nvr-demo.ja.md 410d4b4207750d164858d21b57de829afbd1f5eb -->
+<!-- source: docs/guide/nvr-demo.ja.md e98425ba9ef3d62972b9719bd9ec3540d8e1dca0 -->
 # NVR demo
 
 The NVR demo is a sample network video recorder built with this framework. It records all registered RTSP cameras while showing up to 16 of them on the desktop, and runs person and vehicle detection and tracking on the cameras being displayed. Recordings can be played back from a timeline, and if you prepare a native embedding model, you can also search for people by text or image.
@@ -10,9 +10,9 @@ The NVR demo is a sample network video recorder built with this framework. It re
 | Tab | What you can do |
 | --- | --- |
 | Live | Assign cameras to tiles in 1-, 4-, 9- or 16-way splits and view them. Bounding boxes and tracking IDs are drawn as an overlay |
-| Cameras | Add, edit and delete cameras, set the recording retention period and delete recordings |
 | Search | Search for people by text, an image region, or attributes such as clothing (requires separate setup) |
 | AI Statistics | Opens in Simple view: four cards with a one-minute trend for video decode, GPU AI inference, NPU AI inference and person tracking. Detailed view shows inference processing time, detection frequency and queue status |
+| Cameras | Add, edit and delete cameras, set the recording retention period and delete recordings |
 
 Double-click a tile to switch to single view, where you can play back recordings from the vertical timeline on the left.
 

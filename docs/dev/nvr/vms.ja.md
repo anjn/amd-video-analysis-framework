@@ -1,7 +1,7 @@
-<!-- source: docs/dev/nvr/vms.md ec5fff73f3071c5026f4dac42333328ecef642b3 -->
+<!-- source: docs/dev/nvr/vms.md aa858ecb8ec310c5a52d3a10c4f911b391585922 -->
 # デスクトップの映像管理
 
-NVR デスクトップには **Live**、**Cameras**、**Search**、**AI Statistics** の各ページがあります。UI には Qt Widgets と既存のハードウェア EGL レンダラーを使います。RTSP の受信、録画、再接続、選択中のカメラの解析、任意で有効にできるバックグラウンド解析は、`amdva_streaming` 上に構築した Qt に依存しない NVR バックエンド（`backend/`）のサービスです。
+NVR デスクトップには **Live**、**Search**、**AI Statistics**、**Cameras** の各ページがあります。UI には Qt Widgets と既存のハードウェア EGL レンダラーを使います。RTSP の受信、録画、再接続、選択中のカメラの解析、任意で有効にできるバックグラウンド解析は、`amdva_streaming` 上に構築した Qt に依存しない NVR バックエンド（`backend/`）のサービスです。
 
 ## ライブ監視
 

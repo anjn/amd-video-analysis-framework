@@ -1,6 +1,6 @@
 # Desktop video management
 
-The NVR desktop now has **Live**, **Cameras**, **Search** and **AI Statistics** pages. It uses
+The NVR desktop now has **Live**, **Search**, **AI Statistics** and **Cameras** pages. It uses
 Qt Widgets and the existing hardware EGL renderer. RTSP reception, recording,
 reconnection, selected-camera analytics and optional background analytics are
 services of the Qt-free NVR backend (`backend/`), built on `amdva_streaming`.

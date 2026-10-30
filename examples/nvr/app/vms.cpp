@@ -593,7 +593,8 @@ struct Window::Vms {
         w.summary_->setWordWrap(true);
         ml->addWidget(w.summary_);
         tabs->addTab(manage, "Cameras");
-        tabs->addTab(
+        tabs->insertTab(
+            tabs->indexOf(search_page) + 1,
             new AiPage(
                 w.controller_, w.options_,
                 [this](double fps, unsigned interval, unsigned gpu_budget, unsigned npu_budget) {
