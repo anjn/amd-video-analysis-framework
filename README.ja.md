@@ -6,7 +6,7 @@ AMD の APU で動く、GStreamer ベースの映像解析フレームワーク�
 
 ## デモ
 
-<!-- NVR デモの動画をここに置く -->
+[![NVR デモの紹介動画（YouTube）](https://img.youtube.com/vi/QlGT5R7RIhc/maxresdefault.jpg)](https://www.youtube.com/watch?v=QlGT5R7RIhc)
 
 複数のカメラを録画しながら検出結果を表示する NVR デモの内容と起動方法は、[NVR デモ](docs/guide/nvr-demo.ja.md) を参照してください。
 

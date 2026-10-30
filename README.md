@@ -1,4 +1,4 @@
-<!-- source: README.ja.md ed3aac938cdc53cec89a49c57ce22e473ef846e7 -->
+<!-- source: README.ja.md cd098d2f6b02cd1ed6a8c6ce2f97f95b03598fc1 -->
 # AMD Video Analytics Framework
 
 [日本語](README.ja.md)
@@ -7,7 +7,7 @@ A GStreamer-based video analytics framework for AMD APUs. Decoding of camera fee
 
 ## Demo
 
-<!-- Place the NVR demo video here -->
+[![NVR demo introduction video (YouTube)](https://img.youtube.com/vi/QlGT5R7RIhc/maxresdefault.jpg)](https://www.youtube.com/watch?v=QlGT5R7RIhc)
 
 For details and launch instructions of the NVR demo, which records multiple cameras while displaying detection results, see the [NVR demo](docs/guide/nvr-demo.md).
 
