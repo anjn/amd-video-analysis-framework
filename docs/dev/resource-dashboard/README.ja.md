@@ -1,4 +1,4 @@
-<!-- source: docs/dev/resource-dashboard/README.md 1bfcf3811ceec35fae6edd4dd9c4a77e55aa5c0a -->
+<!-- source: docs/dev/resource-dashboard/README.md 340ac33299f10dc5569583e14af3ea143cd16129 -->
 # ハードウェアエンコードによるリソースダッシュボード
 
 `amdva-dashboard` はローカルの AMD APU の計測値を取得し、承認済みの[ダッシュボードの構成](../../../examples/resource-dashboard/index.html) を GPU サーフェス上に描画して、H.264 を RTSP で配信します。ブラウザー、デスクトップセッション、Qt、モデル、推論エンジンはいずれも不要です。HTML は合成データによる見た目のプロトタイプのままで、ネイティブのサーバーは実際の計測値を使い、DEMO バッジを表示しません。
@@ -40,6 +40,7 @@ build-dashboard/examples/resource-dashboard/amdva-dashboard --power-max-w 48
 | `--power-max-w` | `48` | Power バーのスケール（ワット単位、正の有限値） |
 | `--font` | 自動 | フォントファイル。`AMDVA_ROOT` が設定されていればローカルのロック済み DejaVu Sans Bold を優先し、次に Fontconfig を使います |
 | `--duration-seconds` | 無制限 | 指定時間後に終了する任意設定。テストに便利です |
+| `--cpu-name`、`--gpu-name` | 自動検出 | `/proc/cpuinfo` の CPU 名と libdrm の GPU の製品名の代わりに表示する文字列。表示できる ASCII 文字で 120 文字まで |
 
 解像度は 1920 × 1080、プログレッシブ、NV12、BT.709 リミテッドレンジです。H.264 には
 B フレームがなく、キーフレーム間隔は最大 1 秒です。音声はありません。不正なコマンドライン値は拒否されます。`--help` は GPU の初期化を必要としません。Power のスケールは表示だけを変更し、マシンの電力制限は変更しません。スケールを超える実際の計測値も、バーを上限まで振り切った状態で表示されます。

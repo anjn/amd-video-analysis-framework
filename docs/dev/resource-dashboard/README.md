@@ -49,6 +49,7 @@ HIP inference and links neither Qt nor MIGraphX.
 | `--power-max-w` | `48` | Positive finite Power bar scale in watts |
 | `--font` | automatic | Font file; local locked DejaVu Sans Bold is preferred when `AMDVA_ROOT` is set, then Fontconfig |
 | `--duration-seconds` | unlimited | Optional timed shutdown, useful for tests |
+| `--cpu-name`, `--gpu-name` | detected | Text shown instead of the CPU name from `/proc/cpuinfo` and the GPU marketing name from libdrm; printable ASCII, up to 120 characters |
 
 Resolution is 1920 × 1080, progressive, NV12, BT.709 limited range. H.264 has
 no B frames and a one-second maximum keyframe interval. Audio is absent.

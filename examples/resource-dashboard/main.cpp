@@ -21,6 +21,8 @@ using namespace amdva::dashboard;
 namespace {
 struct Options {
     std::string bind{"0.0.0.0"}, mount{"/dashboard"}, node{"/dev/dri/renderD128"}, font;
+    // Display names; empty uses the detected CPU and GPU names.
+    std::string cpu_name, gpu_name;
     unsigned port{8554}, fps{10}, bitrate{4000}, seconds{};
     double power{48};
 };
@@ -32,7 +34,8 @@ Options parse(int argc, char **argv) {
             std::cout
                 << "Usage: amdva-dashboard [--bind ADDRESS] [--port 8554] [--mount /dashboard]\n  "
                    "[--render-node /dev/dri/renderD128] [--fps 10] [--bitrate-kbps 4000]\n  "
-                   "[--power-max-w 48] [--font FILE] [--duration-seconds N]\n";
+                   "[--power-max-w 48] [--font FILE] [--duration-seconds N]\n  "
+                   "[--cpu-name TEXT] [--gpu-name TEXT]\n";
             std::exit(0);
         }
         if (i + 1 == argc)
@@ -69,6 +72,14 @@ Options parse(int argc, char **argv) {
             o.power = number();
         else if (arg == "--duration-seconds")
             o.seconds = integer(86400);
+        else if (arg == "--cpu-name" || arg == "--gpu-name") {
+            // The glyph atlas holds printable ASCII only.
+            if (value.size() > 120 || std::any_of(value.begin(), value.end(), [](char c) {
+                    return c < 32 || c > 126;
+                }))
+                throw std::runtime_error(arg + " must be printable ASCII, up to 120 characters");
+            (arg == "--cpu-name" ? o.cpu_name : o.gpu_name) = value;
+        }
         else
             throw std::runtime_error("Unknown option: " + arg);
     }
@@ -197,8 +208,12 @@ void Media::start() {
                 GstBuffer *buffer{};
                 {
                     std::lock_guard<std::mutex> lock(app.render_mutex);
-                    buffer = app.renderer.frame(snapshot, app.monitor.cpu_name(),
-                                                app.monitor.gpu_name());
+                    buffer = app.renderer.frame(
+                        snapshot,
+                        app.options.cpu_name.empty() ? app.monitor.cpu_name()
+                                                     : app.options.cpu_name,
+                        app.options.gpu_name.empty() ? app.monitor.gpu_name()
+                                                     : app.options.gpu_name);
                 }
                 if (!buffer) {
                     app.skipped++;
