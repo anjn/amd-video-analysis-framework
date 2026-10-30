@@ -12,7 +12,7 @@ The NVR demo is a sample network video recorder built with this framework. It re
 | Live | Assign cameras to tiles in 1-, 4-, 9- or 16-way splits and view them. Bounding boxes and tracking IDs are drawn as an overlay |
 | Cameras | Add, edit and delete cameras, set the recording retention period and delete recordings |
 | Search | Search for people by text, an image region, or attributes such as clothing (requires separate setup) |
-| AI Statistics | Shows inference processing time, detection frequency and queue status |
+| AI Statistics | Opens in Simple view: four cards with a one-minute trend for video decode, GPU AI inference, NPU AI inference and person tracking. Detailed view shows inference processing time, detection frequency and queue status |
 
 Double-click a tile to switch to single view, where you can play back recordings from the vertical timeline on the left.
 
