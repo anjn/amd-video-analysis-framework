@@ -1,4 +1,6 @@
 #include "ai_page.hpp"
+#include "ai_overview.hpp"
+#include <QButtonGroup>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFile>
@@ -8,7 +10,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
+#include <QPushButton>
 #include <QSpinBox>
+#include <QStackedWidget>
 #include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -21,7 +25,29 @@ AiPage::AiPage(Controller &controller, const Options &options,
                QWidget *parent)
     : QWidget(parent) {
     setObjectName("ai-statistics");
-    auto *layout = new QVBoxLayout(this);
+    auto *page = new QVBoxLayout(this);
+    auto *views = new QHBoxLayout;
+    auto *view_group = new QButtonGroup(this);
+    const char *view_names[][2]{{"ai-view-simple", "Simple"}, {"ai-view-detailed", "Detailed"}};
+    for (int i = 0; i < 2; ++i) {
+        auto *button = new QPushButton(view_names[i][1]);
+        button->setObjectName(view_names[i][0]);
+        button->setCheckable(true);
+        view_group->addButton(button, i);
+        views->addWidget(button);
+    }
+    views->addStretch();
+    page->addLayout(views);
+    auto *stack = new QStackedWidget;
+    auto *overview = new AiOverview;
+    auto *detailed = new QWidget;
+    stack->addWidget(overview);
+    stack->addWidget(detailed);
+    page->addWidget(stack, 1);
+    view_group->button(0)->setChecked(true);
+    connect(view_group, &QButtonGroup::idClicked, stack, &QStackedWidget::setCurrentIndex);
+    auto *layout = new QVBoxLayout(detailed);
+    layout->setContentsMargins(0, 0, 0, 0);
     auto *form = new QFormLayout;
     auto *fps = new QDoubleSpinBox;
     fps->setObjectName("ai-frequency");
@@ -175,7 +201,7 @@ AiPage::AiPage(Controller &controller, const Options &options,
     connect(
         timer, &QTimer::timeout, this,
         [&, state, table, camera, detail, fps, interval, model, gpu_budget, npu_budget,
-         active_model] {
+         active_model, stack, overview, startup = options] {
             const bool ready = controller.status_ready() && controller.fatal().empty();
             fps->setEnabled(ready);
             model->setEnabled(ready);
@@ -186,6 +212,17 @@ AiPage::AiPage(Controller &controller, const Options &options,
                 return;
             auto runtime = controller.ai_runtime();
             auto metrics = runtime->snapshot();
+            auto sources = controller.status();
+            std::map<std::string, PersonTrackFrame> tracks;
+            if (auto *search = controller.search_service())
+                for (const auto &s : sources)
+                    tracks[s.source.id] = search->tracks(s.source.id);
+            // The trend keeps advancing while the detailed tables are shown.
+            overview->push(summarize_overview(sources, controller.telemetry(), metrics, tracks,
+                                              startup, !controller.fatal().empty(),
+                                              Clock::now()));
+            if (stack->currentWidget() == overview)
+                return;
             QString text = QString("Requested %1 Hz · embedding requested %2 s / effective %3 s · "
                                    "priority: tracking → query → collection")
                                .arg(runtime->fps())
@@ -255,7 +292,6 @@ AiPage::AiPage(Controller &controller, const Options &options,
                 for (int c = 0; c < row.size(); ++c)
                     set(table, i, c, row[c]);
             }
-            auto sources = controller.status();
             camera->setRowCount(sources.size());
             for (size_t i = 0; i < sources.size(); ++i) {
                 const auto &s = sources[i];
@@ -267,9 +303,7 @@ AiPage::AiPage(Controller &controller, const Options &options,
                         if (m.stage == "Tracking association")
                             tracking = m.rate;
                     }
-                PersonTrackFrame f;
-                if (auto *search = controller.search_service())
-                    f = search->tracks(s.source.id);
+                const auto &f = tracks[s.source.id];
                 set(camera, i, 0,
                     QString::fromStdString(s.source.name.empty() ? s.source.id : s.source.name));
                 set(camera, i, 1, QString::number(detection, 'f', 2));
